@@ -1,0 +1,14 @@
+{
+  "W2955868579": {
+    "title": "Neural Machine Reading Comprehension: Methods and Trends",
+    "reason": "OpenAlex title belongs to an unrelated physics paper; corrected from arXiv 1907.01118 source"
+  },
+  "W2965373594": {
+    "title": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+    "reason": "OpenAlex title belongs to an unrelated linguistics paper; corrected from arXiv 1907.11692 source"
+  },
+  "W3027879771": {
+    "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+    "reason": "OpenAlex title unrelated; arXiv 2005.11401 source carries a placeholder title, so set from the published version"
+  }
+}
