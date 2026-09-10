@@ -1,159 +1,183 @@
 # Ontology Specification
 
-Resolution of [#5 — Curate the ontology (5–10 entities, 8–15 relations)](https://github.com/ImmoP/knowledge_graph_rag/issues/5). This document pins the **`ontology.yaml` schema** and the **recommended entity/relation vocabulary**. The actual instances (which `Method` is which, which `Dataset` is which) are populated in the implementing authoring ticket — the user authors the ontology.
+Resolution of [#5 — Curate the ontology (5–10 entities, 8–15 relations)](https://github.com/ImmoP/knowledge_graph_rag/issues/5). This document pins the **`ontology.yaml` schema**, the **frozen v1 vocabulary**, and the **validation rules**. The actual instances (which `Method` is which, which `Dataset` is which) and the real-corpus `examples` are populated in the implementing authoring ticket.
 
-`ontology.yaml` is the authoritative machine-readable schema. The extraction prompt template and the Neo4j ingestion contract both read from it; the schema is not duplicated in Python code. Per the standing preferences, the ontology is hand-curated, driven by what the eval set needs to ask about (not completeness), and Author-entity type is excluded unless a benchmark path requires it.
+`ontology.yaml` is the authoritative machine-readable schema. The extraction contract ([#7](https://github.com/ImmoP/knowledge_graph_rag/issues/7)) and the Neo4j ingestion contract ([#9](https://github.com/ImmoP/knowledge_graph_rag/issues/9)) read vocabulary, endpoints, and population modes from it. The schema is **not** duplicated in Python code.
 
-## 1. Scope discipline
+## 1. Frozen v1 vocabulary
 
-Every entity type and every relation type MUST satisfy two gates before being added:
+The following type names and relation names are the authoritative v1 vocabulary. Implementation tickets may populate instances and improve real examples, but **MUST NOT** silently add, remove, rename, or change endpoint types.
 
-1. **Eval-set gate:** at least one category of held-out question (1-hop, 2-hop, or 3+) becomes expressible as a `evidence_path` traversal because this type exists. Adding a type that no question would ever traverse is a defect.
-2. **Extraction gate:** at least one feasible extraction prompt template (per [#7](https://github.com/ImmoP/knowledge_graph_rag/issues/7)) can identify instances of this type from paper text. Adding a type that no extraction prompt can reliably populate is a defect.
+### 1.1 Entity types (6, inside the 5–10 budget)
 
-The implementing authoring ticket records, for each entity and relation type, the eval-set question pattern that motivated it and the extraction prompt that populates it. The validation tool (see §4) refuses to ship an `ontology.yaml` whose types don't satisfy both gates.
+| Name      | Population mode | Definition                                                                                       |
+|-----------|-----------------|--------------------------------------------------------------------------------------------------|
+| `document`| structural      | A paper in the corpus. Identity is the manifest `openalex_id` (e.g. `W1522301498`).              |
+| `chunk`   | structural      | A derived chunk from a document, per the chunk-record spec ([#2](https://github.com/ImmoP/knowledge_graph_rag/issues/2)). Identity is `chunk_id` (e.g. `c_a1b2c3d4e5f60718`). |
+| `method`  | extracted       | A named retrieval / generation / representation method discussed in the corpus.                  |
+| `dataset` | extracted       | A named evaluation dataset used or introduced in the corpus.                                     |
+| `metric`  | extracted       | A named retrieval or QA evaluation metric.                                                       |
+| `task`    | extracted       | A named retrieval / QA / generation task.                                                        |
 
-## 2. Recommended entity types
+### 1.2 Relation types (10, inside the 8–15 budget)
 
-The recommended starter set, sized to fit the 5–10 entity-type budget:
+| Name             | From → To            | Population mode | Definition                                                                                |
+|------------------|----------------------|-----------------|-------------------------------------------------------------------------------------------|
+| `CITES`          | `document` → `document` | structural   | Document A references Document B in its bibliography. Direction: citing → cited.          |
+| `PROPOSES`       | `document` → `method`   | extracted    | Document introduces or originates a method.                                                |
+| `INTRODUCES`     | `document` → `dataset`  | extracted    | Document releases or proposes a dataset.                                                  |
+| `EVALUATES_ON`   | `document` → `dataset`  | extracted    | Document reports experimental results on a dataset.                                       |
+| `USES_METHOD`    | `document` → `method`   | extracted    | Document applies or builds on a method without originating it.                            |
+| `REPORTS_METRIC` | `document` → `metric`   | extracted    | Document reports a metric in its results.                                                 |
+| `EXTENDS`        | `method` → `method`     | extracted    | Method A builds on or generalises method B.                                               |
+| `EVALUATED_ON`   | `method` → `dataset`    | derived      | A method's empirical evaluation is on a dataset. Derived from `Document EVALUATES_ON Dataset` when the proposing document evaluates on the dataset. |
+| `USED_FOR_TASK`  | `dataset` → `task`      | extracted    | A dataset supports or is standard for a task.                                             |
+| `MEASURES`       | `metric` → `task`       | extracted    | A metric evaluates performance on a task.                                                 |
 
-| # | Type        | Definition                                                                                       | Example instances from corpus (illustrative)                          | Eval-set motivation                                                      |
-|---|-------------|--------------------------------------------------------------------------------------------------|----------------------------------------------------------------------|--------------------------------------------------------------------------|
-| 1 | `Document`  | A paper in the corpus. Identity is the manifest `openalex_id` (e.g. `W1522301498`).             | every paper in `data/manifest.jsonl`                                | Source node for citation traversal and per-paper relations               |
-| 2 | `Chunk`     | A derived chunk from a document, per the chunk-record spec ([#2](https://github.com/ImmoP/knowledge_graph_rag/issues/2)). Identity is `chunk_id` (e.g. `c_a1b2c3d4e5f60718`). | every chunk in `data/derived/chunks.jsonl`                           | Evidence-text carrier; every retrieval result is a `Chunk`               |
-| 3 | `Method`    | A named retrieval / generation / representation method discussed in the corpus.                 | `BM25`, `DPR`, `ColBERT`, `RAG`, `REALM`, `Self-RAG`, `FLARE`         | 1-hop and 2-hop questions about which paper proposes which method        |
-| 4 | `Dataset`   | A named evaluation dataset used or introduced in the corpus.                                     | `Natural Questions`, `TriviaQA`, `MS-MARCO`, `HotpotQA`, `SQuAD`, `BEIR` | 2-hop questions about which paper evaluates on which dataset              |
-| 5 | `Metric`    | A named retrieval or QA evaluation metric.                                                       | `Recall@k`, `MRR`, `NDCG`, `Exact Match`, `F1`                       | 1-hop questions about which metric a paper reports; 3-hop compositional  |
-| 6 | `Task`      | A named retrieval / QA / generation task.                                                        | `Open-Domain QA`, `Multi-Hop QA`, `Passage Retrieval`, `Re-ranking`  | 2-hop / 3-hop questions linking datasets → tasks, methods → tasks        |
+### 1.3 Excluded types and why
 
-**Total: 6 entity types**, inside the 5–10 budget with room for one or two more if the implementing authoring ticket finds a real need.
+- **`author`:** excluded per user standing preference. Adding author would be easy to extract but no benchmark path requires traversing authors in this corpus.
+- **`concept`, `finding`, `claim`, `benchmark`, `topic`, `theme`:** excluded as junk-drawer risks. Anything that would land in `concept` should be classified more specifically as `method`, `task`, or `dataset`. Anything that would land in `finding` is expressible as a `(method) -[EVALUATED_ON]-> (dataset)` triple plus a numeric score attached to the relation. The validation tool forbids these names.
 
-### 2.1 Excluded types and why
+### 1.4 Vocabulary change rule
 
-- **`Author`:** excluded per user instruction. Adding Author would be easy to extract but no benchmark path requires traversing authors in this corpus.
-- **`Concept`, `Finding`, `Claim`:** excluded as junk-drawer risk. Anything that would land in `Concept` should be classified more specifically as `Method`, `Task`, or `Dataset`. Anything that would land in `Finding` is expressible as a `(Method) -[EVALUATED_ON]-> (Dataset)` triple plus a numeric score attached to the relation.
-- **`Benchmark`:** not added. A "benchmark" in this corpus is a `(Task, Dataset, Metric)` composition; modelling it as a separate entity would duplicate structure and complicate retrieval. Implementations may compose these three types at query time.
+Any change to the v1 vocabulary (adding a type, removing a type, renaming, changing endpoints, changing population mode) requires:
 
-### 2.2 Adding a 7th or 8th type
+1. An **ontology version bump** in `ontology.yaml` (`version: 1` → `version: 2`, …).
+2. **Regeneration of dependent extraction and graph artifacts** — the extraction pipeline must be re-run, the Neo4j graph must be re-ingested, and the chunk–entity / doc–entity maps must be rebuilt.
+3. **Benchmark metadata** recording the ontology version and the SHA256 of `ontology.yaml` at the time of the benchmark run.
 
-If during implementing authoring the user identifies a category that no current type captures and that supports a real benchmark question, they may add a type. The validation tool (per §4) enforces both gates and refuses types that fail them.
+Silent vocabulary changes are forbidden. This rule is what makes benchmark reports comparable across runs.
 
-## 3. Recommended relation types
+## 2. Population modes
 
-The recommended starter set, sized to fit the 8–15 relation-type budget:
+Every entity and relation type carries exactly one `population_mode`:
 
-| #  | Relation                          | From → To              | Definition                                                                                  | Example instances from corpus (illustrative)                                                                                                  |
-|----|-----------------------------------|------------------------|---------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| 1  | `CITES`                           | `Document` → `Document` | Document A references Document B in its bibliography. Direction: citing → cited.            | `(W1522301498) -[CITES]-> (W_HISTORICAL_RMSPROP)`                                                                                            |
-| 2  | `PROPOSES`                        | `Document` → `Method`  | Document introduces or originates a method.                                                  | `(W1522301498) -[PROPOSES]-> (Adam Optimizer)`                                                                                                |
-| 3  | `INTRODUCES`                      | `Document` → `Dataset` | Document releases or proposes a dataset.                                                    | `(W_NQ_PAPER) -[INTRODUCES]-> (Natural Questions)`                                                                                            |
-| 4  | `EVALUATES_ON`                    | `Document` → `Dataset` | Document reports experimental results on a dataset.                                         | `(W_SELF_RAG) -[EVALUATES_ON]-> (PopQA)`                                                                                                      |
-| 5  | `USES_METHOD`                     | `Document` → `Method`  | Document applies or builds on a method without originating it. Distinct from `PROPOSES`.     | `(W_RETRO) -[USES_METHOD]-> (ColBERT)`                                                                                                        |
-| 6  | `REPORTS_METRIC`                  | `Document` → `Metric`  | Document reports a metric in its results.                                                   | `(W_RAG_PAPER) -[REPORTS_METRIC]-> (Exact Match)`                                                                                            |
-| 7  | `EXTENDS`                         | `Method` → `Method`    | Method A builds on or generalises method B.                                                 | `(Adam) -[EXTENDS]-> (RMSProp)`                                                                                                               |
-| 8  | `EVALUATED_ON`                    | `Method` → `Dataset`   | A method's empirical evaluation is on a dataset. (Derivable from `Document EVALUATES_ON Dataset` when the document proposes the method.) | `(RAG) -[EVALUATED_ON]-> (Natural Questions)`                                                                                                 |
-| 9  | `USED_FOR_TASK`                   | `Dataset` → `Task`     | A dataset supports or is standard for a task.                                               | `(HotpotQA) -[USED_FOR_TASK]-> (Multi-Hop QA)`                                                                                                |
-| 10 | `MEASURES`                        | `Metric` → `Task`      | A metric evaluates performance on a task.                                                   | `(Recall@k) -[MEASURES]-> (Passage Retrieval)`                                                                                                |
+| Mode         | Meaning                                                                                                    | Required field                                  |
+|--------------|------------------------------------------------------------------------------------------------------------|-------------------------------------------------|
+| `structural` | Produced deterministically from canonical project artifacts or citation-resolution data, not by an LLM.   | `source` (deterministic source / procedure)     |
+| `extracted`  | Populated by an LLM via a named prompt template; the only mode that may call the `LLMProvider`.            | `extraction_prompt` (named template reference)  |
+| `derived`    | Computed deterministically from other graph facts at query time or at ingestion time, never by an LLM.     | `derivation` (the derivation rule)              |
 
-**Total: 10 relation types**, inside the 8–15 budget.
+Only `extracted` modes require an extraction prompt template. The earlier spec's blanket requirement that every type has an `extraction_prompt` was wrong; `document`, `chunk`, `CITES`, and `EVALUATED_ON` are not LLM-extracted.
 
-### 3.1 Why each relation earns a slot
+### 2.1 Why each v1 type has the mode it does
 
-- `CITES` is the citation-graph backbone. Without it, document-to-document traversal collapses to "any paper that mentions another paper's title," which is noisier than citations.
-- `PROPOSES` vs `USES_METHOD`: a 1-hop question like "Which paper first proposed method X?" requires distinguishing origin from application. Without both, the answer collapses to whatever the retriever finds first.
-- `EVALUATES_ON` (Document → Dataset) vs `EVALUATED_ON` (Method → Dataset): the document-level relation is what the extraction prompt naturally emits ("In this paper we evaluate on NQ"); the method-level relation is a derived closure used by retrieval. The implementing ingestion contract (per #9) may either store both or derive the method-level one at query time, but the ontology exposes both so the retrieval contract (#11) can reason about either path.
-- `EXTENDS` is the only method-to-method relation; it captures the lineage that motivates 3+ hop questions like "what earlier method did Adam generalise, and on what dataset was the earlier method first evaluated?"
-- `USED_FOR_TASK` and `MEASURES` give dataset→task and metric→task closures. Together with `EVALUATED_ON` they support 3-hop questions of the form "what dataset, task, and metric does method X involve?" — the kind of compositional question the eval set needs.
+- **`document` is structural** because paper identity comes from `data/manifest.jsonl` (a canonical artifact), not from extraction.
+- **`chunk` is structural** because chunk identity and text come from `data/derived/chunks.jsonl` (a canonical artifact, per [#2](https://github.com/ImmoP/knowledge_graph_rag/issues/2)).
+- **`CITES` is structural** because the citation graph is parsed from the bibliography, not extracted by an LLM. (A small LLM call to clean or normalise bibliography entries is permissible as a pre-processing step, but the citation edges themselves come from the structured bibliography.)
+- **`EVALUATED_ON` is derived** because it is the closure of `document PROPOSES method` × `document EVALUATES_ON dataset`: when the same document both proposes a method and evaluates on a dataset, the corresponding `(method, dataset)` pair gets an `EVALUATED_ON` edge. The LLM does not independently emit `EVALUATED_ON` triples.
 
-### 3.2 Excluded relations and why
+### 2.2 Why no type is `extracted` for non-named entities
 
-- **`AUTHORED_BY` (Document → Author):** excluded because Author is excluded.
-- **`CO_OCCURS_WITH` (Entity → Entity):** excluded as too noisy. Co-occurrence is what an LLM would emit by default; the ontology refuses it.
-- **`SIMILAR_TO` (Method → Method):** excluded as vague. Method-to-method relations should be specific (`EXTENDS`); "similar" is what retrieval explores, not what the graph asserts.
+Methods, datasets, metrics, and tasks are the four `extracted` entity types — they are the things that appear in paper text under named, surface-form mentions. `document`, `chunk`, and `CITES` come from canonical artifacts; `EVALUATED_ON` is a derivation closure. No extracted prompt template is needed for any of those.
 
-### 3.3 Adding a relation
+## 3. Scope discipline
 
-Same gates as §2: any added relation must support a `evidence_path` traversal in the eval set AND be expressible in an extraction prompt template.
+Every `extracted` entity and relation type MUST satisfy two gates before being added to the vocabulary:
+
+1. **Eval-set gate:** at least one category of held-out question (1-hop, 2-hop, or 3+) becomes expressible as an `evidence_path` traversal because this type exists. Adding a type that no question would ever traverse is a defect.
+2. **Extraction gate:** at least one feasible extraction prompt template (per #7) can identify instances of this type from paper text, with measured precision/recall that meets the implementing pipeline's quality bar.
+
+`structural` types satisfy the eval-set gate by construction (they exist because the canonical artifact needs them) and need no extraction gate. `derived` types satisfy the eval-set gate by being a useful closure, and need no extraction gate because they are not LLM-extracted.
 
 ## 4. File schema: `ontology.yaml`
 
-The file is YAML. Top-level keys:
+Top-level keys:
 
 ```yaml
 version: 1
+schema_version: 1
+
 entity_types:
   - name: <snake_case string>
     definition: <one-sentence definition>
+    population_mode: structural | extracted | derived
+    # Required iff population_mode = extracted:
+    extraction_prompt: <named prompt template>
+    # Required iff population_mode = structural:
+    source: <deterministic source or procedure>
+    # Required iff population_mode = derived:
+    derivation: <derivation rule, expressed as a small graph query or pseudocode>
     examples:
-      - <example instance>
-      - <example instance>
-    eval_pattern: <which eval question category motivates this type>
-    extraction_prompt: <which prompt template populates instances of this type>
+      - status: verified | pending_verification
+        instance: <example instance identifier or name>
+        note: <optional, short context for why pending>
 
 relation_types:
   - name: <SCREAMING_SNAKE_CASE string>
     from: <entity type name>
     to: <entity type name>
     definition: <one-sentence definition>
+    population_mode: structural | extracted | derived
+    extraction_prompt: <named prompt template>      # if extracted
+    source: <deterministic source or procedure>     # if structural
+    derivation: <derivation rule>                   # if derived
     examples:
-      - from: <example source instance>
-        relation: <relation name>
+      - status: verified | pending_verification
+        from: <example source instance>
         to: <example target instance>
-    eval_pattern: <which eval question category motivates this relation>
-    extraction_prompt: <which prompt template populates instances of this relation>
+        note: <optional, short context for why pending>
 ```
 
 ### 4.1 Field rules
 
-- `version` is an int, currently `1`. Bumped when the schema shape changes.
+- `version` is the **ontology version** (the vocabulary identity). Bumped only when types are added, removed, renamed, or have endpoints or population modes changed. Bumped even if examples change (well, no — examples don't bump the version; only structural changes do).
+- `schema_version` is the **file-shape version**. Bumped when field names or required-fields change.
 - `entity_types[].name` and `relation_types[].name` are unique within their list.
-- `entity_types[].examples` is non-empty.
 - `relation_types[].from` and `.to` are valid `entity_types[].name` values.
-- `relation_types[].examples` is non-empty; each example's `from` and `to` are example instances of the corresponding entity type.
-- `eval_pattern` is free-form text but must reference one of the hop buckets (`1-hop`, `2-hop`, `3+`) or state "structural" if the relation is needed for traversal plumbing rather than direct retrieval.
-- `extraction_prompt` references a named prompt template (the per-type templates are authored in the extraction contract per #7).
+- Each type's mode-specific field is present iff the type's `population_mode` matches. The validation tool enforces this.
+- `examples` is non-empty for every type.
+- Each example carries a `status` of `verified` or `pending_verification`. A `verified` example is one that the author has confirmed appears in the corpus (paper is in `data/manifest.jsonl`, method/dataset/metric/task is named in that paper's text). A `pending_verification` example is a placeholder the author intends to confirm against the corpus. The validation tool refuses `verified` examples that don't actually exist in the corpus; it allows `pending_verification` examples with a `note` explaining what's pending.
 
 ### 4.2 Author attribution
 
 `ontology.yaml` may include a top-level `notes` field (free-form string) for the author's rationale comments. The validation tool ignores this field.
 
+### 4.3 Authority rule
+
+Vocabulary, endpoints, and population modes are defined **only** in `ontology.yaml`. Code (#7 extraction, #9 ingestion, #11 retrieval) reads these properties from the file at startup. Duplicating any of these in Python is a defect; the validation tooling can lint for it by reading the file.
+
 ## 5. Validation rules (implementing authoring tool)
 
 The implementing authoring tool enforces, before writing `ontology.yaml`:
 
-1. **Schema conformance** against §4. Type checks, required-field presence, list non-emptiness.
-2. **Type-count gate:** 5 ≤ `len(entity_types)` ≤ 10; 8 ≤ `len(relation_types)` ≤ 15. The tool refuses to write outside these ranges.
-3. **Unique names:** `entity_types[].name` and `relation_types[].name` are unique within their lists.
+1. **Schema conformance** against §4. Type checks, required-field presence, mode-specific field presence.
+2. **Size gates:** 5 ≤ `len(entity_types)` ≤ 10; 8 ≤ `len(relation_types)` ≤ 15. Refuses to write outside these ranges.
+3. **Unique names** within each list.
 4. **Endpoint conformance:** every `relation_types[].from` and `.to` is a valid entity type name.
-5. **Examples non-empty** for every type.
-6. **Author exclusion:** no entity type named `Author`. (If a real benchmark path ever requires authors, the schema bump and this rule update are joint work.)
-7. **No junk-drawer type names:** `Concept`, `Finding`, `Claim`, `Benchmark`, `Topic`, `Theme` are forbidden at the type-name level. The validation tool refuses them.
+5. **Population-mode field presence:** every entity and relation type has exactly one mode-specific field (extraction_prompt if extracted, source if structural, derivation if derived). The mode must match the mode-specific field.
+6. **Examples non-empty** for every type.
+7. **Author exclusion:** no entity type named `author` (case-insensitive).
+8. **Junk-drawer exclusion:** `concept`, `finding`, `claim`, `benchmark`, `topic`, `theme` are forbidden at the type-name level (case-insensitive).
+9. **Verified-example corpus check:** every `examples[].status == "verified"` entry must point to corpus data that actually exists. For `document` examples, the openalex_id must be in `data/manifest.jsonl`. For other types, the example's instance name must appear in at least one paper's title or abstract (string match is sufficient for validation; semantic correctness is the implementing extraction ticket's responsibility).
+10. **Pending-verification marker:** every `examples[].status == "pending_verification"` entry MUST carry a non-empty `note` explaining what needs verifying. The authoring tool surfaces these as a to-do list at write time.
 
-The tool also runs a "appears in extraction prompt template" cross-check against the extraction contract (#7): every `entity_types[].extraction_prompt` and `relation_types[].extraction_prompt` must reference a prompt template that exists in the extraction pipeline. The implementing extraction ticket (#7) defines these templates; the authoring tool reads them.
+The tool also runs an "appears in extraction prompt template" cross-check against the extraction contract (#7): every `extracted` type's `extraction_prompt` value must reference a prompt template that exists in the extraction pipeline. The implementing extraction ticket (#7) defines these templates; the authoring tool reads them.
 
 ## 6. Acceptance gate
 
 This spec closes when committed to `docs/specs/ontology.md`. The implementing authoring ticket closes when:
 
 1. `ontology.yaml` conforms to §4.
-2. Every entity type and every relation type satisfies the eval-set gate and the extraction gate (§1).
-3. Every type's `examples` are drawn from the corpus (papers in `data/manifest.jsonl`, methods/datasets/metrics/tasks that actually appear in those papers).
-4. The 5 ≤ entity_types ≤ 10 and 8 ≤ relation_types ≤ 15 size constraints hold.
-5. The validation tool's checks (§5) pass on the file.
-
-The first three gates validate substance; the last two validate shape.
+2. Every `extracted` type satisfies the eval-set gate and the extraction gate (§3).
+3. Every `structural` type has a `source` that names a canonical artifact or procedure that exists.
+4. Every `derived` type has a `derivation` that is implementable as a deterministic graph query or pseudocode.
+5. Every type's `examples` are drawn from the corpus, marked `verified`, with the corpus-instance verification check (§5.9) passing. Pending-verification entries are allowed only with a `note` and must be resolved before the file ships as the canonical benchmark input.
+6. The 5 ≤ entity_types ≤ 10 and 8 ≤ relation_types ≤ 15 size constraints hold.
+7. The validation tool's checks (§5) pass on the file.
 
 ## 7. Downstream coupling
 
-- **#7 extraction contract** reads `entity_types[]` and `relation_types[]` to construct per-type prompt templates. The extraction prompt for each entity type references the type's `examples` as few-shot exemplars.
-- **#8 entity resolution** uses `entity_types[].examples` as known-candidate seeds for the resolution policy.
-- **#9 Neo4j ingestion** reads the relation types as the edge vocabulary; Cypher constraints and uniqueness rules derive from `relation_types[].from` and `.to`.
+- **#7 extraction contract** reads `entity_types[]` (filtered to `population_mode == extracted`) and `relation_types[]` (filtered similarly) to construct per-type prompt templates. The extraction prompt for each type references the type's `verified` examples as few-shot exemplars.
+- **#8 entity resolution** uses `entity_types[].examples` (verified) as known-candidate seeds.
+- **#9 Neo4j ingestion** reads the relation types as the edge vocabulary; Cypher constraints and uniqueness rules derive from `relation_types[].from`, `.to`, and `.population_mode`. `derived` relations are computed at ingestion (or at query time, depending on the implementing choice); they are never LLM-extracted.
 - **#11 graph retrieval** uses the relation types as the traversal relation-filter. Cypher queries are parameterised on the ontology.
-- **#12 hybrid retrieval** consults the ontology for routing decisions ("is the query about a `Method`?").
+- **#12 hybrid retrieval** consults the ontology's entity-type names for routing decisions ("is the query about a `method`?").
 - **#4 evaluation schema** uses the entity-type names as the namespace for `e_<id>` references in evidence paths.
 
-The ontology is therefore a single load-bearing artifact: every retrieval / extraction / ingestion decision reads from it. Any change to `ontology.yaml` requires re-running extraction and re-ingestion.
+The ontology is therefore a single load-bearing artifact. The vocabulary-change rule (§1.4) is what protects the benchmark's reproducibility.
 
 ---
 
-This spec resolves ticket #5. The implementing authoring ticket populates `ontology.yaml` with the recommended starter content from §2 and §3 (or a user-refined version that still satisfies §4–§5), populates the `examples` fields with real corpus instances, and ships the validation tool.
+This spec resolves ticket #5. The implementing authoring ticket populates `ontology.yaml` with verified corpus examples against §4, applies the population-mode-specific fields per §2, and ships the validation tool that enforces §5.
