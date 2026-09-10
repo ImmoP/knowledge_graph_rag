@@ -153,7 +153,7 @@ The implementing authoring tool enforces, before writing `ontology.yaml`:
 9. **Verified-example corpus check:** every `examples[].status == "verified"` entry must point to corpus data that actually exists. For `document` examples, the openalex_id must be in `data/manifest.jsonl`. For other types, the example's instance name must appear in at least one paper's title or abstract (string match is sufficient for validation; semantic correctness is the implementing extraction ticket's responsibility).
 10. **Pending-verification marker:** every `examples[].status == "pending_verification"` entry MUST carry a non-empty `note` explaining what needs verifying. The authoring tool surfaces these as a to-do list at write time.
 
-The tool also runs an "appears in extraction prompt template" cross-check against the extraction contract (#7): every `extracted` type's `extraction_prompt` value must reference a prompt template that exists in the extraction pipeline. The implementing extraction ticket (#7) defines these templates; the authoring tool reads them.
+The tool also runs an "appears in extraction prompt template" cross-check against the extraction contract (#7): every `extracted` type's `extraction_prompt` value must reference a prompt template that exists in the extraction pipeline. Per #7 there are exactly two grouped templates — `extract_entities_v1` and `extract_relations_v1` — and every `extracted` entity type references the former; every `extracted` relation type references the latter. The authoring tool reads the two template files and verifies the references resolve.
 
 ## 6. Acceptance gate
 
@@ -169,7 +169,7 @@ This spec closes when committed to `docs/specs/ontology.md`. The implementing au
 
 ## 7. Downstream coupling
 
-- **#7 extraction contract** reads `entity_types[]` (filtered to `population_mode == extracted`) and `relation_types[]` (filtered similarly) to construct per-type prompt templates. The extraction prompt for each type references the type's `verified` examples as few-shot exemplars.
+- **#7 extraction contract** reads `entity_types[]` (filtered to `population_mode == extracted`) and `relation_types[]` (filtered similarly) to render the two grouped prompt templates (`extract_entities_v1` and `extract_relations_v1`). The templates are grouped — one template per phase, not one per type — so each chunk is sent through the LLM exactly twice. The per-type allowed-name lists and the per-type `verified` examples are rendered into the templates at run time from this file; an ontology edit is the only change needed to keep the templates honest.
 - **#8 entity resolution** uses `entity_types[].examples` (verified) as known-candidate seeds.
 - **#9 Neo4j ingestion** reads the relation types as the edge vocabulary; Cypher constraints and uniqueness rules derive from `relation_types[].from`, `.to`, and `.population_mode`. `derived` relations are computed at ingestion (or at query time, depending on the implementing choice); they are never LLM-extracted.
 - **#11 graph retrieval** uses the relation types as the traversal relation-filter. Cypher queries are parameterised on the ontology.

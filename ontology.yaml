@@ -5,6 +5,17 @@ schema_version: 1
 # Implementation tickets may populate instances and improve real examples,
 # but MUST NOT silently add, remove, rename, or change endpoint types or
 # population modes. Any change requires an ontology version bump per §1.4.
+#
+# Extraction template references (this file's `extraction_prompt` fields)
+# name the two grouped prompt templates from the extraction-contract spec
+# (docs/specs/extraction-contract.md §5):
+#   extract_entities_v1  ->  prompts/extract_entities_v1.txt
+#   extract_relations_v1 ->  prompts/extract_relations_v1.txt
+# All `extracted` entity types share the entity template; all `extracted`
+# relation types share the relations template. The two templates render
+# the per-type allowed-name lists and few-shot examples from this file at
+# run time, so an ontology edit is the only change needed to keep prompts
+# honest.
 
 entity_types:
 
@@ -35,7 +46,7 @@ entity_types:
   - name: method
     definition: A named retrieval, generation, or representation method discussed in the corpus.
     population_mode: extracted
-    extraction_prompt: prompt_entity_method
+    extraction_prompt: extract_entities_v1
     examples:
       - status: verified
         instance: ColBERT
@@ -56,7 +67,7 @@ entity_types:
   - name: dataset
     definition: A named evaluation dataset used or introduced in the corpus.
     population_mode: extracted
-    extraction_prompt: prompt_entity_dataset
+    extraction_prompt: extract_entities_v1
     examples:
       - status: verified
         instance: Natural Questions
@@ -74,7 +85,7 @@ entity_types:
   - name: metric
     definition: A named retrieval or QA evaluation metric.
     population_mode: extracted
-    extraction_prompt: prompt_entity_metric
+    extraction_prompt: extract_entities_v1
     examples:
       - status: pending_verification
         instance: Recall@k
@@ -86,7 +97,7 @@ entity_types:
   - name: task
     definition: A named retrieval, QA, or generation task.
     population_mode: extracted
-    extraction_prompt: prompt_entity_task
+    extraction_prompt: extract_entities_v1
     examples:
       - status: verified
         instance: Open-Domain QA
@@ -120,7 +131,7 @@ relation_types:
     to: method
     definition: Document introduces or originates a method.
     population_mode: extracted
-    extraction_prompt: prompt_relation_proposes_method
+    extraction_prompt: extract_relations_v1
     examples:
       - status: verified
         from: W3021397474
@@ -140,7 +151,7 @@ relation_types:
     to: dataset
     definition: Document releases or proposes a dataset.
     population_mode: extracted
-    extraction_prompt: prompt_relation_introduces_dataset
+    extraction_prompt: extract_relations_v1
     examples:
       - status: verified
         from: W2912924812
@@ -160,7 +171,7 @@ relation_types:
     to: dataset
     definition: Document reports experimental results on a dataset.
     population_mode: extracted
-    extraction_prompt: prompt_relation_evaluates_on
+    extraction_prompt: extract_relations_v1
     examples:
       - status: pending_verification
         from: W3039017601
@@ -176,7 +187,7 @@ relation_types:
     to: method
     definition: Document applies or builds on a method without originating it.
     population_mode: extracted
-    extraction_prompt: prompt_relation_uses_method
+    extraction_prompt: extract_relations_v1
     examples:
       - status: pending_verification
         from: W3207796810
@@ -188,7 +199,7 @@ relation_types:
     to: metric
     definition: Document reports a metric in its results.
     population_mode: extracted
-    extraction_prompt: prompt_relation_reports_metric
+    extraction_prompt: extract_relations_v1
     examples:
       - status: pending_verification
         from: W3039017601
@@ -200,7 +211,7 @@ relation_types:
     to: method
     definition: Method A builds on or generalises method B.
     population_mode: extracted
-    extraction_prompt: prompt_relation_extends_method
+    extraction_prompt: extract_relations_v1
     examples:
       - status: pending_verification
         from: ColBERTv2
@@ -230,7 +241,7 @@ relation_types:
     to: task
     definition: A dataset supports or is standard for a task.
     population_mode: extracted
-    extraction_prompt: prompt_relation_used_for_task
+    extraction_prompt: extract_relations_v1
     examples:
       - status: verified
         from: HotpotQA
@@ -246,7 +257,7 @@ relation_types:
     to: task
     definition: A metric evaluates performance on a task.
     population_mode: extracted
-    extraction_prompt: prompt_relation_measures
+    extraction_prompt: extract_relations_v1
     examples:
       - status: verified
         from: Recall@k
@@ -264,3 +275,9 @@ notes: |
   and abstracts; relation examples marked pending_verification require extraction-ticket
   verification against full paper text. Author entity type intentionally excluded per
   user standing preference.
+
+  Per-type `extraction_prompt` values were collapsed from per-type names
+  (`prompt_entity_method`, `prompt_relation_proposes_method`, etc.) to
+  the two grouped template names during #7's lock-step update
+  (docs/specs/extraction-contract.md §5). The vocabulary and population
+  modes are unchanged; only the template-reference surface changed.
