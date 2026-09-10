@@ -65,8 +65,10 @@ Only `extracted` modes require an extraction prompt template. The earlier spec's
 
 - **`document` is structural** because paper identity comes from `data/manifest.jsonl` (a canonical artifact), not from extraction.
 - **`chunk` is structural** because chunk identity and text come from `data/derived/chunks.jsonl` (a canonical artifact, per [#2](https://github.com/ImmoP/knowledge_graph_rag/issues/2)).
-- **`CITES` is structural** because the citation graph is parsed from the bibliography, not extracted by an LLM. (A small LLM call to clean or normalise bibliography entries is permissible as a pre-processing step, but the citation edges themselves come from the structured bibliography.)
+- **`CITES` is structural** because v1 derives the in-corpus citation graph deterministically from `data/raw/openalex/<work>.json` `referenced_works`, canonicalises IDs through `data/aliases.json`, and retains only canonical targets in `data/manifest.jsonl`. No LLM is involved.
 - **`EVALUATED_ON` is derived** because it is the closure of `document PROPOSES method` × `document EVALUATES_ON dataset`: when the same document both proposes a method and evaluates on a dataset, the corresponding `(method, dataset)` pair gets an `EVALUATED_ON` edge. The LLM does not independently emit `EVALUATED_ON` triples.
+
+Under the #9 Neo4j label projection, the illustrative witness match is `MATCH (d:Document)-[:PROPOSES]->(m:Entity:Method), (d)-[:EVALUATES_ON]->(ds:Entity:Dataset)`. This is only the label-consistent expression of the existing derivation; it does not change the vocabulary, endpoints, population mode, semantics, or ontology version.
 
 ### 2.2 Why no type is `extracted` for non-named entities
 

@@ -119,7 +119,7 @@ relation_types:
     to: document
     definition: Document A references Document B in its bibliography. Direction: citing -> cited.
     population_mode: structural
-    source: parsed from each document's bibliography (the implementing ingest pipeline walks the bibliography and emits one edge per cited openalex_id). No LLM call in the citation-graph construction.
+    source: data/raw/openalex/<work>.json referenced_works canonicalized through data/aliases.json; retain only canonical IDs in data/manifest.jsonl, remove alias-created self-loops, and deduplicate citing -> cited pairs. No LLM call.
     examples:
       - status: pending_verification
         from: W3015883388
@@ -227,8 +227,8 @@ relation_types:
       For each (document, method, dataset) such that document -[PROPOSES]-> method
       AND document -[EVALUATES_ON]-> dataset, emit (method) -[EVALUATED_ON]-> (dataset).
       Equivalent Cypher:
-        MATCH (d:document)-[:PROPOSES]->(m:method),
-              (d)-[:EVALUATES_ON]->(ds:dataset)
+        MATCH (d:Document)-[:PROPOSES]->(m:Entity:Method),
+              (d)-[:EVALUATES_ON]->(ds:Entity:Dataset)
         MERGE (m)-[:EVALUATED_ON]->(ds);
     examples:
       - status: pending_verification
