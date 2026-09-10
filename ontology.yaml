@@ -1,0 +1,188 @@
+version: 1
+
+# Recommended starter ontology. Authored during Wayfinder resolution of #5.
+# The implementing authoring ticket refines `examples` with real corpus
+# instances and may add or remove types if §1's eval-set and extraction
+# gates still hold.
+#
+# Schema spec: docs/specs/ontology.md
+# Validation tool: per §5 of the spec.
+
+entity_types:
+  - name: document
+    definition: A paper in the corpus. Identity is the manifest openalex_id (e.g. W1522301498).
+    examples:
+      - W1522301498
+      - W2964121744
+    eval_pattern: 1-hop source node for every per-paper relation; structural for all hop buckets.
+    extraction_prompt: not extracted; identity comes from data/manifest.jsonl.
+
+  - name: chunk
+    definition: A derived chunk from a document, per the chunk-record spec (#2). Identity is chunk_id (c_<16 hex>).
+    examples:
+      - c_a1b2c3d4e5f60718
+    eval_pattern: structural; every retrieval result is a Chunk and the eval schema references chunk_ids.
+    extraction_prompt: not extracted; identity and text come from data/derived/chunks.jsonl.
+
+  - name: method
+    definition: A named retrieval, generation, or representation method discussed in the corpus.
+    examples:
+      - BM25
+      - DPR
+      - ColBERT
+      - RAG
+      - REALM
+      - Self-RAG
+      - FLARE
+    eval_pattern: 1-hop and 2-hop questions about which paper proposes or uses which method.
+    extraction_prompt: prompt_entity_method (per extraction contract #7).
+
+  - name: dataset
+    definition: A named evaluation dataset used or introduced in the corpus.
+    examples:
+      - Natural Questions
+      - TriviaQA
+      - MS-MARCO
+      - HotpotQA
+      - SQuAD
+      - BEIR
+    eval_pattern: 2-hop questions about which paper evaluates on which dataset.
+    extraction_prompt: prompt_entity_dataset (per extraction contract #7).
+
+  - name: metric
+    definition: A named retrieval or QA evaluation metric.
+    examples:
+      - Recall@k
+      - MRR
+      - NDCG
+      - Exact Match
+      - F1
+    eval_pattern: 1-hop questions about which metric a paper reports; 3-hop compositional for metric + task + method.
+    extraction_prompt: prompt_entity_metric (per extraction contract #7).
+
+  - name: task
+    definition: A named retrieval, QA, or generation task.
+    examples:
+      - Open-Domain QA
+      - Multi-Hop QA
+      - Passage Retrieval
+      - Re-ranking
+    eval_pattern: 2-hop and 3-hop questions linking datasets to tasks, methods to tasks.
+    extraction_prompt: prompt_entity_task (per extraction contract #7).
+
+relation_types:
+  - name: CITES
+    from: document
+    to: document
+    definition: Document A references Document B in its bibliography. Direction: citing -> cited.
+    examples:
+      - from: W1522301498
+        relation: CITES
+        to: W_HISTORICAL_RMSPROP
+    eval_pattern: structural; document-to-document traversal backbone for 2-hop and 3+ questions.
+    extraction_prompt: prompt_relation_cites (per extraction contract #7; bibliography parsing).
+
+  - name: PROPOSES
+    from: document
+    to: method
+    definition: Document introduces or originates a method.
+    examples:
+      - from: W1522301498
+        relation: PROPOSES
+        to: Adam Optimizer
+    eval_pattern: 1-hop "which paper proposed method X" questions.
+    extraction_prompt: prompt_relation_proposes_method (per extraction contract #7).
+
+  - name: INTRODUCES
+    from: document
+    to: dataset
+    definition: Document releases or proposes a dataset.
+    examples:
+      - from: W_NQ_PAPER
+        relation: INTRODUCES
+        to: Natural Questions
+    eval_pattern: 1-hop "which paper released dataset X" questions.
+    extraction_prompt: prompt_relation_introduces_dataset (per extraction contract #7).
+
+  - name: EVALUATES_ON
+    from: document
+    to: dataset
+    definition: Document reports experimental results on a dataset.
+    examples:
+      - from: W_SELF_RAG
+        relation: EVALUATES_ON
+        to: PopQA
+    eval_pattern: 2-hop questions about which paper evaluates on which dataset.
+    extraction_prompt: prompt_relation_evaluates_on (per extraction contract #7).
+
+  - name: USES_METHOD
+    from: document
+    to: method
+    definition: Document applies or builds on a method without originating it. Distinct from PROPOSES.
+    examples:
+      - from: W_RETRO
+        relation: USES_METHOD
+        to: ColBERT
+    eval_pattern: 2-hop questions about which paper uses which method.
+    extraction_prompt: prompt_relation_uses_method (per extraction contract #7).
+
+  - name: REPORTS_METRIC
+    from: document
+    to: metric
+    definition: Document reports a metric in its results.
+    examples:
+      - from: W_RAG_PAPER
+        relation: REPORTS_METRIC
+        to: Exact Match
+    eval_pattern: 1-hop questions about which metric a paper reports.
+    extraction_prompt: prompt_relation_reports_metric (per extraction contract #7).
+
+  - name: EXTENDS
+    from: method
+    to: method
+    definition: Method A builds on or generalises method B.
+    examples:
+      - from: Adam Optimizer
+        relation: EXTENDS
+        to: RMSProp
+    eval_pattern: 2-hop and 3-hop questions about method lineage and derivation.
+    extraction_prompt: prompt_relation_extends_method (per extraction contract #7).
+
+  - name: EVALUATED_ON
+    from: method
+    to: dataset
+    definition: A method's empirical evaluation is on a dataset. Derivable from Document EVALUATES_ON Dataset when the document proposes the method.
+    examples:
+      - from: RAG
+        relation: EVALUATED_ON
+        to: Natural Questions
+    eval_pattern: 3-hop compositional for method + dataset + task questions.
+    extraction_prompt: prompt_relation_evaluated_on (per extraction contract #7; may be derived at ingestion).
+
+  - name: USED_FOR_TASK
+    from: dataset
+    to: task
+    definition: A dataset supports or is standard for a task.
+    examples:
+      - from: HotpotQA
+        relation: USED_FOR_TASK
+        to: Multi-Hop QA
+    eval_pattern: 2-hop and 3-hop questions linking datasets to tasks.
+    extraction_prompt: prompt_relation_used_for_task (per extraction contract #7).
+
+  - name: MEASURES
+    from: metric
+    to: task
+    definition: A metric evaluates performance on a task.
+    examples:
+      - from: Recall@k
+        relation: MEASURES
+        to: Passage Retrieval
+    eval_pattern: 3-hop compositional for method + dataset + task + metric questions.
+    extraction_prompt: prompt_relation_measures (per extraction contract #7).
+
+notes: |
+  Starter ontology authored during Wayfinder resolution of #5.
+  The implementing authoring ticket refines examples with real corpus
+  instances and validates per docs/specs/ontology.md §5.
+  Author entity type intentionally excluded per user standing preference.
