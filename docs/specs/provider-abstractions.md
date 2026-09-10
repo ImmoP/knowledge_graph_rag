@@ -157,19 +157,65 @@ The cache is a property of the abstraction layer, not of the call site.
 
 ### 5.1 Key shape
 
-For `generate` / `generate_json`:
+Cache identity is built by canonical JSON + SHA256, not by delimiter-concatenated ad-hoc fields. This change was made during [#13](https://github.com/ImmoP/knowledge_graph_rag/issues/13) resolution so that generation parameters (`max_tokens`, `temperature`) and the schema (for `generate_json`) participate in the cache key even when they don't appear in the prompt text. The public `LLMProvider.generate` / `LLMProvider.generate_json` / `EmbeddingProvider.embed` method signatures are unchanged.
 
-```
-sha256(f"{provider.name}|{provider.model}|{sha256(system + chr(0x1f) + user)}")
+For `generate`:
+
+```python
+import hashlib, json
+
+def _cache_key(
+    *,
+    cache_format_version: str,
+    operation: str,                    # "generate" | "generate_json" | "embed"
+    provider_name: str,
+    provider_model: str,
+    system: str,
+    user: str,
+    max_tokens: int,
+    temperature: float,
+    schema_canonical_json: str | None, # only for "generate_json"
+    texts: list[str] | None,           # only for "embed"; ordered, exact
+) -> str:
+    parts = [
+        cache_format_version,
+        operation,
+        provider_name,
+        provider_model,
+        system,
+        user,
+        json.dumps(max_tokens, sort_keys=True, separators=(",", ":")),
+        json.dumps(temperature, sort_keys=True, separators=(",", ":")),
+    ]
+    if schema_canonical_json is not None:
+        parts.append(schema_canonical_json)
+    if texts is not None:
+        parts.append(json.dumps(texts, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+    blob = json.dumps(parts, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 ```
 
-For `embed`:
+Required identity inputs by operation:
 
-```
-sha256(f"{provider.name}|{provider.model}|{sha256(chr(0x1f).join(texts))}")
-```
+| Operation | Identity inputs (in addition to `cache_format_version`) |
+|---|---|
+| `generate` | operation=`"generate"`, `provider.name`, `provider.model`, exact `system` string, exact `user` string, `max_tokens`, `temperature` |
+| `generate_json` | operation=`"generate_json"`, `provider.name`, `provider.model`, exact `system`, exact `user`, `max_tokens`, `temperature`, **canonical schema hash** (JSON Schema serialised via `json.dumps(schema, sort_keys=True, separators=(",", ":"))` then SHA256, hex) |
+| `embed` | operation=`"embed"`, `provider.name`, `provider.model`, ordered exact texts (full list preserved) |
 
-`chr(0x1f)` (unit separator) is used as the inner delimiter because it cannot appear in valid UTF-8 text content. The outer `provider.name` / `provider.model` ensures that switching providers or models cannot reuse a stale cached entry.
+Sensitivity requirements — the cache identity MUST change if any of the following change:
+
+- `provider.name` or `provider.model`
+- the operation kind (`generate` vs `generate_json` vs `embed`)
+- the exact `system` or `user` string
+- `max_tokens` or `temperature` for a `generate` / `generate_json` call (changing either without changing the prompt text changes model output, so it must change the key)
+- the canonicalised schema for a `generate_json` call
+- the ordered text list (any element added / removed / edited / reordered) for an `embed` call
+- the adapter's `cache_format_version` constant (bumped on any adapter-code change that affects parsing or output shape)
+
+Callers do not duplicate this responsibility by injecting `temperature`, `max_tokens`, or schema hashes into the prompt text merely to vary the key. Doing so double-counts those fields across layers and creates spurious cache splits. The `#13` generator, for example, records `prompt_filename` and `prompt_content_sha256` in the run/generation trace, not as a second cache key; the rendered user prompt already includes those audit fields and changing them changes the user string, which changes the key.
+
+The change of base from the original `sha256(f"{provider.name}|{provider.model}|{sha256(system + chr(0x1f) + user)}")` shape is structurally additive: it is a strict superset of what that construction produced. Old cache files keyed by the previous construction remain on disk and are simply never read again.
 
 ### 5.2 Stored value
 
@@ -190,6 +236,10 @@ Cache files are content-addressed JSON under `${LLM_CACHE_DIR}/{llm,embeddings}/
 - Budget accounting state (per-process).
 - Provider reachability checks.
 - Validation retry history.
+
+### 5.5 Caller-specific cache identities remain strict supersets
+
+Callers may add additional identity dimensions to the canonical key inputs above. [#7's extraction pipeline](extraction-contract.md) §10 is the first such caller and remains valid as written: it mixes `schema_hash`, generation parameters, `chunk_id`, `source_text_sha256`, ontology `version` + SHA256, and `prompt-template filename` + file content hash into the cache key on top of the inputs above. Those extra dimensions do not weaken this contract; they strengthen it (more identity inputs → fewer collisions across extraction runs). The `#13` grounded generator does **not** add such dimensions; its audit metadata (`prompt_filename`, `prompt_content_sha256`, `evidence_fingerprint`) participates in the canonical key only to the extent that those values appear in the rendered user prompt and therefore in the `user` string. Adding scope-specific identity dimensions is allowed; weakening the canonical identity is not.
 
 ## 6. Budget caps
 
