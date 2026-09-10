@@ -10,7 +10,7 @@ These are the architectural properties hybrid inherits from upstream specs and t
 
 1. **First-class benchmark condition.** Hybrid results must be comparable across runs and benchmarkable per hop bucket alongside vector-only and graph-only. The hybrid shape does not block this.
 2. **Composes #10 and #11 unchanged.** `VectorRetriever.retrieve(query, k)` and `GraphRetriever.retrieve(query, k, hop_budget=3)` are called directly with the signatures already pinned. Neither retriever is reimplemented.
-3. **Deterministic routing.** Routing is a pure function of the query string, the ontology, and the canonical artifacts. No learned model, no embedding similarity for routing, no `LLMProvider` call in the hot path. A measured-failure fallback exists on paper (§8) but is **not enabled**.
+3. **No router rule, deterministic invocation.** The hybrid invokes both retrievers with the caller's query and the frozen constants in §3; there is no query-side router, no learned model, no embedding similarity for routing, no `LLMProvider` call in the hot path. A measured-failure fallback exists on paper (§8) but is **not enabled**.
 4. **No `LLMProvider` or `EmbeddingProvider` in the hot path.** Hybrid routing and fusion are computed offline; only the local BGE adapter from #10 sees an embedding at query time, via `VectorRetriever.retrieve`. Graph retrieval sees neither.
 5. **Held-out governance.** The 45 canonical questions in `eval/questions.jsonl` are `split: "held_out"` and **must not be used to tune any hybrid parameter** (router rule, fusion constant, candidate depth, tie-break). Tuning, if any, lives in `eval/dev_questions.jsonl` strictly out-of-band (per eval-schema §6).
 6. **Canonical chunk identity.** `chunk_id` is the unit of retrieval and the unit of fusion. Dedup is structural (one fused entry per `chunk_id`). Source chunk text matches via the canonical artifact `data/derived/chunks.jsonl` only.
@@ -30,51 +30,77 @@ class HybridRetriever(Protocol):
 
 ## 2. Routing
 
-Routing is the deterministic rule that picks which retriever leads the merge for a given query. It is computed *before* either retriever is called and uses the same seed-lifting machinery as #11 §2, with the same normalisation rules (NFKC + Unicode `casefold()` + whitespace collapse, retention of all boundary-valid matches, maximal-span suppression only among proper overlapping matches, ambiguity retention, deduplication by canonical node identity, lexicographic order by `(node_kind, canonical_id)` with `Document` before `Entity`).
+The hybrid retriever has **no router**. For every valid hybrid query, both retrievers are invoked with the same query string and the same globally-frozen graph hop budget; their results are fused by RRF (§4) and ordered (§6). No query-side rule inspects either retriever's output to decide whether (or how) to call the other.
 
-### 2.1 The rule, in two cases
+```python
+vector_candidates = vector_retriever.retrieve(
+    query,
+    k = HYBRID_K_VEC_MULTIPLIER * k,
+)
 
-| Case | Seed-lift result | Lead retriever | Tail-call |
-|---|---|---|---|
-| **graph-led** | ≥ 1 Entity or Document seed lifted | graph at `hop_budget = 3`, `k_g = k * 2` | vector at `k_vec = k * 2` |
-| **vector-led** | 0 seeds lifted | vector at `k_vec = k * 2` | graph at `hop_budget = 1`, `k_g_tail = k`, seeded with the **vector top-1 hit's `doc_id`** as a Document seed |
+graph_candidates = graph_retriever.retrieve(
+    query,
+    k = HYBRID_K_GRAPH_MULTIPLIER * k,
+    hop_budget = HYBRID_HOP_BUDGET,
+)
+```
 
-Both retrievers always run. The router only chooses the *order* (which goes first) and the *depth* of the secondary call. It does **not** short-circuit either retriever.
+with the constants frozen in §3. The `GraphRetriever` owns its own deterministic query seed lifting (per #11 §2) and returns `[]` when no Entity or Document seed can be lifted from the query. When that happens, `graph_candidates == []` and fusion reduces naturally to the vector candidate list — no special-case branch, no fallback, no externally-supplied seed.
 
-The vector-led tail-call is the only piece of routing that is not a direct reprojection of #11's seed-lift machinery. Its purpose is to keep pure `CITES` 1-hop questions alive — the user names neither the cited paper nor the cited-by paper, the lift is empty, but the vector retriever often surfaces a chunk whose `doc_id` is the right anchor. Using the vector top-1 `doc_id` as a Document seed at `hop_budget = 1` enumerates `CITES` paths in and out of that document. At `hop_budget = 1` only direct-citation document chunks (or their citations) surface, which is the correct shape for a 1-hop citation question and is bounded in cost. The tail-call **only fires when the graph-led branch's seed-lift was empty**; if the lift was non-empty, the graph has already traversed `hop_budget = 3` from the real seeds.
+### 2.1 What the hybrid does **not** do
 
-If the vector top-1 hit is a chunk whose `doc_id` is not a Document node (impossible under the chunk-record spec, which forces `doc_id = openalex_id` ∈ `data/manifest.jsonl` — the Document node), the tail-call seeds with no Document, the graph-lift yields `[]`, and the tail-call returns `[]`. The tail-call never raises on a malformed seed.
+The v1 hybrid composes the two retrievers without inventing a new retrieval primitive. Concretely, the hybrid does **not**:
 
-### 2.2 Why this rule and not a learned router
+- derive a `doc_id` from the vector top hit and pass it back to `GraphRetriever` as a Document seed;
+- add a `retrieve_from_seed(...)` or any equivalent externally-seeded traversal entry point;
+- synthesise a query string containing a `doc_id` and re-run graph retrieval on it;
+- bootstrap from chunk to Document to seed graph traversal inside the hybrid;
+- add a second graph multiplier, a second graph hop budget, or a graph-tail call of any kind;
+- read `hop_bucket` from the question to alter `hop_budget`.
 
-- A learned router requires either labels (which the held-out rules forbid tuning on) or unsupervised contrastive training (which the v1 scope explicitly excludes).
-- A rule based on the existing deterministic seed-lift is **zero new mechanism** — it reuses the exact machinery #11 already specified and validated.
-- A threshold on vector confidence (e.g. "if top score > X then vector-led") depends on a number tuned on the held-out set; forbidden.
-- Always-both is cheaper than running two parallel services with conditional branches: one process, two retrievers, deterministic order, easy audit.
+Both retrievers are invoked for every valid hybrid query, exactly once, with the call shapes above. No path between them is permitted beyond RRF fusion.
 
-### 2.3 No embedding-based routing
+### 2.2 Why no router rule
 
-Embedding similarity between the query and any stored entity / document summary is **not used for routing**. It would require a learned embedding space tuned against retrieval-quality labels, which the held-out policy forbids, and it would silently make the routing decision depend on the `EmbeddingProvider` adapter.
+Earlier drafting considered a two-case "graph-led / vector-led" rule keyed off #11's seed-lift output. That was abandoned because:
+
+- the only meaningful graph contribution to questions whose query yields zero seeds would have required passing a vector-derived `doc_id` back into `GraphRetriever`, which is exactly the externally-seeded primitive v1 forbids;
+- a hybrid that always calls both retrievers with the same frozen parameters has no threshold to tune, no switch to flip, and nothing to mislead an operator about which retriever did the work.
+
+An LLM-classifier fallback is recorded as a disabled v2 option in §8; it is **not enabled** in v1.
 
 ## 3. Candidate depth
 
-The `k` values passed to the two retrievers are not the caller's `k`. They are larger to give fusion room to interleave the two ranked lists.
-
-| Retriever | When | `k` requested | Bound |
-|---|---|---|---|
-| Vector (#10) | always | `k_vec = k * 2` | never exceeds `min(2k, store_row_count)` |
-| Graph (#11) | graph-led | `k_g = k * 2` | never exceeds the number of unique `chunk_id`s graph admits |
-| Graph (#11) | vector-led tail-call | `k_g_tail = k` | never exceeds the number of unique `chunk_id`s graph admits |
-
-These multipliers are **frozen**:
+Both retrievers are invoked with the caller's query and a frozen `k` multiplier. The `k` value passed to each retriever is larger than the caller's `k` to give fusion room to interleave the two ranked lists.
 
 ```text
-HYBRID_K_VEC_MULTIPLIER        = 2
-HYBRID_K_GRAPH_MULTIPLIER      = 2   # graph-led only
-HYBRID_K_GRAPH_TAIL_MULTIPLIER = 1   # vector-led tail-call: k * 1
+HYBRID_K_VEC_MULTIPLIER   = 2
+HYBRID_K_GRAPH_MULTIPLIER = 2
+HYBRID_HOP_BUDGET         = 3
 ```
 
-`hop_budget` for graph is **never tuned**: graph-led uses the #11 frozen benchmark value `3`, vector-led tail-call uses `1`. The held-out policy forbids reading `hop_bucket` from a question to alter depth; `3+` is a reporting category, not a query-time hint.
+The two retriever calls are exactly:
+
+```python
+vector_candidates = vector_retriever.retrieve(
+    query,
+    k = HYBRID_K_VEC_MULTIPLIER * k,        # = 2 * k
+)
+
+graph_candidates = graph_retriever.retrieve(
+    query,
+    k = HYBRID_K_GRAPH_MULTIPLIER * k,      # = 2 * k
+    hop_budget = HYBRID_HOP_BUDGET,         # = 3, the #11 frozen benchmark value
+)
+```
+
+Bounds:
+
+- the vector `k` value never exceeds `min(2k, store_row_count)`;
+- the graph `k` value never exceeds the number of unique `chunk_id`s the graph retriever admits;
+- `hop_budget` is the globally-frozen #11 benchmark value `3` for the hybrid and **is never altered** by the hybrid. The held-out policy forbids reading `hop_bucket` from a question to alter depth; `3+` is a reporting category, not a query-time hint.
+
+No other multiplier, hop budget, or depth adjustment exists in the v1 hybrid.
 
 
 ## 4. Merge: Reciprocal Rank Fusion (RRF)
@@ -119,12 +145,13 @@ Two physically distinct `chunk_id`s whose underlying text is near-identical (dif
 
 ## 6. Ordering and tie-breaking
 
-Sort the fused list by:
+The fused list is ordered by exactly three deterministic keys, in this order:
 
 1. `rrf_score` descending.
-2. **sources length descending** — a chunk attributed to *both* retrievers sorts ahead of a chunk attributed to only one, at the same RRF score. Rationale: dual-source attribution is the signal fusion exists to amplify; promoting it is the cheapest zero-cost way to honour that without learned weights.
-3. **`sources == ("graph",)` first** at the same `(score, sources_len)` — a graph-only hit leads a vector-only hit when both have length 1, because graph hits carry semantic evidence the vector retriever cannot fabricate on a paraphrase query.
-4. `chunk_id` ascending (lexicographic, UTF-8 byte order). Final deterministic tie-break.
+2. **`len(sources)` descending** — a chunk attributed to *both* retrievers sorts ahead of any chunk attributed to only one at the same RRF score. Rationale: dual-source attribution is the zero-cost signal fusion exists to amplify, and promoting it costs no learned weights.
+3. `chunk_id` ascending (lexicographic, UTF-8 byte order). Final deterministic tie-break.
+
+The hybrid does **not** rank a graph-only hit ahead of a vector-only hit merely because its source is graph. At `(rrf_score, len(sources))` equal, `sources == ("vector",)` and `sources == ("graph",)` are equal, and only `chunk_id` decides the tie. Per-source modality preference is forbidden in v1.
 
 Tie-break is a deterministic, recorded rule. It is **not** a learned preference and is not tunable.
 
@@ -195,12 +222,12 @@ A measured-failure fallback would let the hybrid switch to an LLM classifier (vi
 
 ## 9. Upstream consistency
 
-- **#4 (eval-schema §6, no-tuning-on-held-out):** every hybrid parameter (`RRF_K`, the three multipliers, the tie-break rule, the tail-call presence) is frozen before benchmark numbers are recorded. Tuning lives only in `eval/dev_questions.jsonl` or any out-of-band file.
+- **#4 (eval-schema §6, no-tuning-on-held-out):** every hybrid parameter (`RRF_K`, `HYBRID_K_VEC_MULTIPLIER`, `HYBRID_K_GRAPH_MULTIPLIER`, `HYBRID_HOP_BUDGET`, and the three-key tie-break rule) is frozen before benchmark numbers are recorded. Tuning lives only in `eval/dev_questions.jsonl` or any out-of-band file.
 - **#5 (ontology):** hybrid reuses #11's seed-lift over the frozen ontology entity-type names. Routing does not introduce new ontology types or relation types.
 - **#7/#8 (extraction, resolution):** hybrid consumes #11's lift output unchanged. The lift uses #8 normalisation policy and #7 mention validation, both already settled.
 - **#9 (Neo4j):** hybrid never writes to the graph. It reads the same #11 Cypher queries (through `GraphRetriever`) on the same projection.
 - **#10 (vector):** `VectorRetriever.retrieve(query, k)` is composed unchanged. Hybrid's `k_vec = k * 2` is the only contract surface that interacts with the vector retriever, and #10 §4.3 already permits `k` values up to the store row count.
-- **#11 (graph):** `GraphRetriever.retrieve(query, k, hop_budget=3)` is composed unchanged. The vector-led tail-call uses `hop_budget=1` (a valid integer ≥ 1 per #11 §3.1). Hybrid never alters the graph retriever's per-hit ordering or evidence path.
+- **#11 (graph):** `GraphRetriever.retrieve(query, k, hop_budget=3)` is composed unchanged. The hybrid calls it at `hop_budget = HYBRID_HOP_BUDGET = 3`, which equals the #11 frozen benchmark value. Hybrid never alters the graph retriever's per-hit ordering or evidence path, and never re-invokes it with a different `hop_budget` or an externally-supplied seed.
 - **#13 (grounded generation):** generation consumes `HybridRetrievalHit` exactly like `VectorRetrievalHit` / `GraphRetrievalHit` — it reads `chunk_id`, looks up `text` from `data/derived/chunks.jsonl`, and uses the provenance to decide which citations to surface.
 - **#14 (benchmark runner):** the runner treats `hybrid` as a third condition with its own column in the headline table. Per-retriever metrics are derivable from each hit's `provenance.vector_*` / `graph_*` fields; the runner records the version of this spec in `report.json`.
 - **#15 (serving surface):** `POST /ask` with `mode: "hybrid"` enters this contract unchanged. The serving layer does not learn any hybrid-specific fields.
@@ -221,15 +248,15 @@ No upstream contract is altered by this spec. `VectorRetriever`, `GraphRetriever
 This spec closes when committed to `docs/specs/hybrid-retrieval.md`. The implementing ticket closes only when:
 
 1. `HybridRetriever.retrieve(query, k)` is implemented with the §1 signature, §2 routing, §3 candidate depth, §4 RRF, §5 deduplication, §6 ordering, and §7 result types.
-2. A deterministic test fixture exercises the router rule:
-    - A query whose lifted seeds are non-empty lands in the graph-led branch and the graph runs at `hop_budget = 3`.
-    - A query whose lifted seeds are empty lands in the vector-led branch and the tail-call graph runs at `hop_budget = 1` using the vector top-1 `doc_id`.
-    - A query whose vector top-1 hit has no resolvable Document node (synthetic stress case) still completes and returns `[]` from the tail-call, never raising.
+2. A deterministic test fixture exercises both retrievers being invoked for every valid query with the frozen constants:
+    - a query for which `GraphRetriever.retrieve` lifts ≥ 1 Entity/Document seed produces a non-empty `graph_candidates` list at `hop_budget = 3`;
+    - a query for which `GraphRetriever.retrieve` lifts no seed returns `[]` from graph and the hybrid still completes; no fallback, no tail-call, no chunk→Document bootstrapping is invoked;
+    - a static inspection of the hybrid module confirms exactly the two `retrieve(...)` calls in §2 and no `retrieve_from_seed(...)`, no query re-writing with a derived `doc_id`, and no second `hop_budget` value.
 3. A second fixture exercises RRF: a `chunk_id` returned by both retrievers at ranks 3 and 2 outranks a `chunk_id` returned by vector at rank 1 alone; an empty retriever contributes nothing without disturbing the other side; under-filled results return every unique chunk.
 4. A third fixture exercises the result envelope: every emitted `HybridRetrievalHit` carries `chunk_id`, `score`, non-empty `sources` from `{"vector","graph"}`, and a `provenance` whose `in_vector` / `in_graph` flags agree with `sources`. Hits with `in_graph == True` carry a non-empty `graph_evidence_path` whose `from`/`to` connectivity holds per #11 §5.
 5. A self-check (per ponytail rule: one runnable check that fails if the logic breaks) iterates a small fixed set of fixture queries through `retrieve(query, k)` and asserts byte-identical output across repeated runs and across perturbed retriever return orders.
 6. Static inspection finds no `LLMProvider`, `EmbeddingProvider`, learned-rerank library, provider SDK, or held-out-tuning dependency in the hybrid module. (`VectorRetriever` and `GraphRetriever` themselves remain subject to their own #10/#11 acceptance gates; this gate only checks the hybrid code does not add a new provider dependency.)
-7. The frozen constants (`RRF_K = 60`, three multipliers, `hop_budget = 3` for graph-led, `hop_budget = 1` for tail-call) appear in code as named constants; the implementing ticket records them with the spec version in `report.json` (per #14).
+7. The frozen constants (`RRF_K = 60`, `HYBRID_K_VEC_MULTIPLIER = 2`, `HYBRID_K_GRAPH_MULTIPLIER = 2`, `HYBRID_HOP_BUDGET = 3`) appear in code as named constants; the implementing ticket records them with the spec version in `report.json` (per #14).
 
 The first four gates validate the router, fusion, and result envelope. Gates five and six validate determinism and the hot-path constraint. Gate seven validates that the frozen parameters are not silently re-tuned.
 
