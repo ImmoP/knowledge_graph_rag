@@ -134,20 +134,17 @@ A 2-hop question authored against a corpus containing the Adam paper (W152230149
 
 The IDs are illustrative. `e_rmsprop` and `W_HISTORICAL_RMSPROP` are placeholders for whatever the actual ontology and manifest contain; the authoring tool validates against the real artifacts at run time.
 
-## 6. Train / development / held-out policy
+## 6. Held-out policy (no split — selected operating policy)
 
-The eval set is **held-out benchmark material** by default.
+**Project operating policy (selected):** the canonical eval set is **not split**. All 45 questions in `eval/questions.jsonl` are `split: "held_out"`. None of them may be used for tuning.
 
-- Every record defaults to `split: "held_out"`.
+- Every record has `split: "held_out"`. The `split` field remains in the schema (because the schema is general) but for this project every shipped record uses the `held_out` value.
 - The benchmark runner treats `held_out` records as the canonical evaluation set and refuses to expose them to retrieval-tuning loops.
-- The author may opt to reserve a subset as `split: "dev"` or `split: "train"` for:
-  - Tuning the hybrid router rule (per #12).
-  - Exploring retrieval-shape decisions before finalizing them.
-  - Iterating on chunking or extraction parameters without contaminating the benchmark.
-- **The rule:** retrieval parameters MUST NOT be tuned on `held_out` records. Tuning on `dev` is permitted; tuning on `train` is permitted; tuning on `held_out` is forbidden.
-- **No silent re-tagging.** A record's `split` field is part of its schema and is recorded in benchmark reports. Re-tagging a record between versions requires a new file (`eval/questions.vN.jsonl`), not an in-place edit.
+- **Tuning is forbidden on these 45 questions.** Retrieval parameters — chunk sizes, embedding-model choices, hybrid-router rules, generation prompts — must be finalized *before* the benchmark numbers are recorded. If a measured run produces a number that depends on a parameter tuned on the held-out set, the run is invalid and the parameter must be re-tuned on out-of-band data (see below).
+- **Development questions, if needed, do not live among the 45.** A separate dev artifact (e.g. `eval/dev_questions.jsonl` or any file outside the canonical benchmark) may be authored at any time for router-rule tuning or retrieval-shape exploration. Dev questions are not part of the benchmark and are not counted in the 45. The benchmark runner does not read them by default.
+- **No silent re-tagging.** A record's `split` field is part of its schema. Promoting a `held_out` record to a different status is forbidden in any version file that is also used as benchmark input. (Dev questions are a separate file, not a re-tagged record.)
 
-If the user elects not to split, the entire set is `held_out` and the rule degenerates to "do not tune retrieval parameters at all after the schema is fixed." That is acceptable for the project — it just means the user accepts fewer iterations on the retrieval pipeline before the benchmark numbers are recorded.
+This is a deliberate trade-off: the user accepts fewer iterations on the retrieval pipeline before the benchmark numbers are recorded, in exchange for a strictly-clean held-out benchmark. Out-of-band tuning uses any of (a) the user's judgment, (b) a small dev artifact kept out of `eval/questions.jsonl`, or (c) qualitative inspection of representative queries. None of those touch the 45.
 
 ## 7. Freeze and versioning policy
 
@@ -167,6 +164,8 @@ The dataset is **fixed before retrieval tuning**. This rule is structural, not s
 - the per-split count (held_out / dev / train)
 
 in `report.json`. These metadata are part of the benchmark record; comparing numbers across runs is only valid when the recorded metadata match.
+
+Because the project elects no split (§6), the per-split count is always `(held_out: 45, dev: 0, train: 0)` for the canonical benchmark file. The runner records it anyway because the schema is general; future projects or forks that reintroduce splits will get correct counts without further config.
 
 ## 8. What this spec leaves open (post-Wayfinder / implementing)
 
