@@ -77,8 +77,8 @@ Field rules:
   "chunk_id": "c_a1b2c3d4e5f60718",
   "doc_id": "W3015883388",
   "relation_type": "PROPOSES",
-  "subject_mention_id": "m_3f9a0b2c8d1e4f7a",
-  "object_mention_id": "m_b2e7f4a190c8d356",
+  "subject_ref": {"kind": "document", "id": "W3015883388"},
+  "object_ref": {"kind": "mention", "id": "m_b2e7f4a190c8d356"},
   "evidence": {
     "char_start": 2048,
     "char_end": 2401,
@@ -92,7 +92,9 @@ Field rules:
 
 - `assertion_id` is `a_` + the first 16 hex characters of `sha256` over a canonical JSON payload (see §6). It is content-addressed, deterministic, and assigned by pipeline code after validation.
 - `relation_type` must be one of the eight `extracted` relation types in `ontology.yaml` v1 (`PROPOSES`, `INTRODUCES`, `EVALUATES_ON`, `USES_METHOD`, `REPORTS_METRIC`, `EXTENDS`, `USED_FOR_TASK`, `MEASURES`).
-- `subject_mention_id` and `object_mention_id` are `mention_id` references to validated mention records from the same chunk's entity pass. **Cross-chunk mention references are forbidden in v1** (see §5.3).
+- `subject_ref` and `object_ref` are typed endpoint references. Each is exactly `{"kind":"document","id":"<doc_id>"}` or `{"kind":"mention","id":"<mention_id>"}`; no other keys or endpoint kinds are allowed.
+- Endpoint kind is derived from the relation endpoint type in `ontology.yaml`. In ontology v1, a structural `document` endpoint must use `kind: "document"` and its `id` must equal the current chunk's `doc_id` byte-for-byte. An extracted endpoint must use `kind: "mention"`, reference a validated mention from the same chunk, and match the endpoint's ontology entity type.
+- The LLM never invents structural document identity. Pipeline code injects the current `chunk.doc_id` or validates an emitted document ref against it. **Cross-chunk mention references and cross-document inference are forbidden in v1** (see §5.3).
 - `evidence` carries the asserted relation's text span and the chunk-text SHA256, exactly as for mentions.
 - `confidence` mirrors the mention-record convention.
 
@@ -155,7 +157,7 @@ There are exactly **two named prompt templates**, and they are **grouped**, not 
 | Template file | Phase | Output |
 |---|---|---|
 | `prompts/extract_entities_v1.txt` | entity pass | a JSON object holding all `extracted` entity types surfaced in the chunk |
-| `prompts/extract_relations_v1.txt` | relation pass | a JSON object holding all `extracted` relation types surfaced in the chunk, with mention-index references |
+| `prompts/extract_relations_v1.txt` | relation pass | a JSON object holding all `extracted` relation types surfaced in the chunk, with typed document/mention endpoint references |
 
 The grouped design is deliberate: it sends each chunk through the LLM exactly twice (once per phase), not 4 + 8 = 12 times. The cost saving matters because the cache contract (§10) and the budget cap (§11) both interact with per-call cost.
 
@@ -193,8 +195,8 @@ The grouped design is deliberate: it sends each chunk through the LLM exactly tw
 {
   "assertions": [
     {"relation_type": "<one of PROPOSES|INTRODUCES|EVALUATES_ON|USES_METHOD|REPORTS_METRIC|EXTENDS|USED_FOR_TASK|MEASURES>",
-     "subject_mention_index": <int>,
-     "object_mention_index": <int>,
+     "subject_ref": {"kind": "document|mention", "id": "<current doc_id or supplied mention_id>"},
+     "object_ref": {"kind": "document|mention", "id": "<current doc_id or supplied mention_id>"},
      "char_start": <int>,
      "char_end": <int>,
      "confidence": "stated|inferred|hedged"}
@@ -202,11 +204,14 @@ The grouped design is deliberate: it sends each chunk through the LLM exactly tw
 }
 ```
 
-The template instructs the LLM that:
+The relation prompt receives the current `chunk.doc_id` and the validated same-chunk mention records after their `m_*` IDs have been assigned. It instructs the LLM that:
 
-- `subject_mention_index` and `object_mention_index` are **0-based indices into the mention list provided in the same prompt** (the validated mention records from the entity pass, rendered as a small numbered list inside the relation prompt). They are **not** the canonical `m_*` IDs; those are assigned by pipeline code (§6).
-- Both endpoint indices must reference a mention whose `entity_type` is the correct endpoint type for the relation (e.g. `PROPOSES` requires `document → method`; the prompt renders the ontology's `relation_types[].from` and `.to` for each relation type, and instructs the LLM to refuse an assertion whose endpoints are the wrong types).
-- **Cross-chunk mentions are forbidden in v1.** If a relation's subject or object is not surfaced in the same chunk, the LLM must omit that assertion. This is a hard rule in the prompt and a hard validation rule in the pipeline; cross-chunk relation extraction belongs to a future ticket.
+- It may assert only ontology-defined relations grounded in the current chunk.
+- For an endpoint whose ontology entity type is `population_mode: extracted`, the ref must be `kind: "mention"`; `id` must be one of the supplied validated same-chunk mention IDs, and that mention's `entity_type` must match the relation endpoint type.
+- For an endpoint whose ontology entity type is the structural `document` type, the ref must be `kind: "document"`; the only permitted `id` is the supplied current `chunk.doc_id`. Pipeline code injects that known value or validates it byte-for-byte rather than trusting model-generated identity.
+- **Cross-chunk mention references and cross-document inference are forbidden in v1.** If a required extracted entity is not a supplied same-chunk mention, the LLM must omit the assertion.
+
+This makes all eight extracted v1 relations representable: the five `document → extracted` relations (`PROPOSES`, `INTRODUCES`, `EVALUATES_ON`, `USES_METHOD`, `REPORTS_METRIC`) use a document source ref and mention target ref; `EXTENDS`, `USED_FOR_TASK`, and `MEASURES` use mention refs at both endpoints. Structural `CITES` is not emitted by this prompt, and derived `EVALUATED_ON` is not independently extracted.
 
 ### 5.4 Schema enforcement
 
@@ -214,7 +219,7 @@ The template instructs the LLM that:
 
 ## 6. Mention and assertion ID generation
 
-Mention IDs (`m_*`) and assertion IDs (`a_*`) are **generated by pipeline code, never by the LLM**. The LLM provides the mention list (entity pass) or the index references (relation pass); pipeline code assigns the IDs after schema, ontology, and evidence validation succeeds.
+Mention IDs (`m_*`) and assertion IDs (`a_*`) are **generated by pipeline code, never by the LLM**. The LLM provides the mention list (entity pass) or typed endpoint references constrained to the supplied current-document and same-chunk mention IDs (relation pass); pipeline code validates/injects refs and assigns IDs after schema, ontology, and evidence validation succeeds.
 
 IDs are **content-addressed**: each ID is a hash prefix over a canonical-JSON payload of the inputs that make the record unique. The same validated record always hashes to the same ID, regardless of when or in what order the pipeline emits it. These are pre-resolution IDs — #8 produces the canonical `e_*` entity IDs; this spec produces only the IDs that pin a particular surfaced mention or assertion to its evidence.
 
@@ -251,8 +256,8 @@ where `canonical_assertion_payload` is the UTF-8 JSON encoding of:
   "chunk_id":           "<chunk_id>",
   "source_text_sha256": "<source_text_sha256>",
   "relation_type":      "<relation_type>",
-  "subject_mention_id": "<subject_mention_id>",
-  "object_mention_id":  "<object_mention_id>",
+  "subject_ref":        {"kind": "<document|mention>", "id": "<doc_id|mention_id>"},
+  "object_ref":         {"kind": "<document|mention>", "id": "<doc_id|mention_id>"},
   "char_start":         <int>,
   "char_end":           <int>
 }
@@ -265,7 +270,7 @@ Deterministic JSON serialisation is mandatory. The pipeline MUST serialise the p
 - UTF-8 encoding (`ensure_ascii=False`), and
 - integer fields serialised as JSON numbers (not strings).
 
-No other fields, comments, or whitespace may appear in the payload. `source_text_sha256` is the 64-hex `sha256(chunk.text)` string (not the raw bytes); the same string format the record's `evidence.source_text_sha256` field carries. The 16-hex prefix is the full ID; there is no chunk suffix, run suffix, or sequence number.
+No other fields, comments, or whitespace may appear in the payload. Each nested endpoint object contains exactly `kind` and `id` and is serialised under the same canonical-JSON rules. `source_text_sha256` is the 64-hex `sha256(chunk.text)` string (not the raw bytes); the same string format the record's `evidence.source_text_sha256` field carries. The 16-hex prefix is the full ID; there is no chunk suffix, run suffix, or sequence number.
 
 ### 6.2 Determinism invariants
 
@@ -319,8 +324,10 @@ Owned by `generate_json` (per [#16](https://github.com/ImmoP/knowledge_graph_rag
 
 - For every `mention` record: `entity_type` ∈ `{method, dataset, metric, task}` (the four `extracted` entity types in `ontology.yaml` v1).
 - For every `assertion` record: `relation_type` ∈ `{PROPOSES, INTRODUCES, EVALUATES_ON, USES_METHOD, REPORTS_METRIC, EXTENDS, USED_FOR_TASK, MEASURES}` (the eight `extracted` relation types in `ontology.yaml` v1).
-- For every `assertion` record: `subject_mention_id` and `object_mention_id` reference mention records in the same chunk whose `entity_type` matches the relation's `from` / `to` (per `ontology.yaml`'s `relation_types[]`).
-- For every `assertion` record: `subject_mention_id` ≠ `object_mention_id` (self-loops are rejected at this gate; the ontology excludes `method → method` self-loops by construction).
+- For every `assertion` record: `subject_ref.kind` and `object_ref.kind` match the population modes of the relation's `from` and `to` entity types in `ontology.yaml`.
+- A structural `document` endpoint has `kind: "document"` and `id == assertion.doc_id == chunk.doc_id` byte-for-byte. No other structural endpoint kind is defined in ontology v1.
+- An extracted endpoint has `kind: "mention"`; its ID resolves to a validated mention from the same chunk, and that mention's `entity_type` matches the relation endpoint type. Dangling and cross-chunk mention refs fail validation.
+- There is no blanket typed-endpoint inequality rule. A self-loop is rejected only when the ontology or a relation-specific contract explicitly forbids it; ontology v1 does not pin a general self-loop prohibition for the extracted relations.
 
 The implementing ticket renders the allowed `entity_type` and `relation_type` sets from `ontology.yaml` filtered to `population_mode == extracted`, so a curated ontology change automatically updates the validation surface. **Code does not hard-code any ontology name.**
 
@@ -525,7 +532,7 @@ The map's no-tuning-on-held-out policy ([#4](https://github.com/ImmoP/knowledge_
 ### 14.1 What this spec hands off
 
 - **To #8 (entity resolution):** the `mention` records in `data/extractions.jsonl`. #8 reads `mention.canonical_form`, normalises, and produces canonical entity keys. #8 owns the `surface_form → canonical_form` cluster membership and the gold entity IDs; this spec produces only the pre-resolution mentions.
-- **To #9 (Neo4j ingestion):** the `assertion` records, filtered to extraction-complete chunks. #9 reads `assertion.subject_mention_id`, `assertion.object_mention_id`, and `assertion.relation_type` and emits Cypher. The cross-store ID contract (#2 §7) means `chunk_id` flows through unchanged.
+- **To #9 (Neo4j ingestion):** the `assertion` records, filtered to extraction-complete chunks. #9 maps `{"kind":"document","id":doc_id}` directly to `Document(doc_id)` and resolves `{"kind":"mention","id":m_*}` through `data/entity_resolutions.jsonl` to a canonical entity `e_*`; missing, duplicate, dangling, or type-incompatible refs fail ingestion. The cross-store ID contract (#2 §7) means `chunk_id` and `doc_id` flow through unchanged.
 - **To #14 (benchmark runner):** the `chunk_status` records (to compute completeness), the run manifest (for metadata), and the extraction output (for the benchmark input if a path goes through extracted facts).
 
 ### 14.2 What this spec explicitly does NOT do

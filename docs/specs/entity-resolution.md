@@ -2,7 +2,7 @@
 
 Resolution of [#8 — Decide the entity resolution policy](https://github.com/ImmoP/knowledge_graph_rag/issues/8). This document is the **decision contract** for canonicalising extracted entity mentions. It fixes the production algorithm, determinism rules, output schemas, and threshold governance; it does not implement the resolver.
 
-This spec consumes the immutable provenance emitted by the [extraction contract](extraction-contract.md). It never edits or replaces `data/extractions.jsonl`. Neo4j ingestion (#9) later resolves assertion endpoints by joining each assertion's `subject_mention_id` and `object_mention_id` through `data/entity_resolutions.jsonl`.
+This spec consumes the immutable provenance emitted by the [extraction contract](extraction-contract.md). It never edits or replaces `data/extractions.jsonl`. Neo4j ingestion (#9) leaves assertion `document` refs as `doc_id` and resolves only assertion `mention` refs through `data/entity_resolutions.jsonl` to canonical `e_*` IDs.
 
 ## 1. Role and artifacts
 
@@ -53,7 +53,7 @@ The global preflight means there is no partial-resolution mode: incomplete-chunk
 
 Only eligible extracted mentions can become cluster members or cause an entity to exist. Verified examples in `ontology.yaml` are not production seeds, aliases, or synthetic mentions. They may be copied into a separate human-labelled development fixture for threshold evaluation, but they never enter a production cluster unless extraction independently emitted a validated eligible mention.
 
-Assertions do not participate in clustering. They retain their immutable `m_*` endpoints until #9 joins those endpoints through `data/entity_resolutions.jsonl`.
+Assertions do not participate in clustering. Their typed refs remain immutable extraction provenance: #8 neither resolves nor rewrites `document` refs, and #9 joins only `mention` refs through `data/entity_resolutions.jsonl`.
 
 ## 3. Resolution name normalisation
 
@@ -251,7 +251,7 @@ There is exactly one record for every eligible mention and exactly these four fi
 - `resolution_method`: exactly `"exact_normalized"` or `"fuzzy"`.
 - `resolution_score`: `1.0` for `exact_normalized`; for `fuzzy`, the accepted unrounded `cross_score(C, T)` that admitted the mention's Stage A cluster, rounded to six decimal places for storage.
 
-This file is the only join #9 uses to translate assertion endpoints. Assertions whose endpoint mention lacks a mapping are rejected by ingestion rather than silently dropped or given a new entity. Records are deterministically sorted by `mention_id`.
+This file is the only join #9 uses to translate assertion refs whose `kind` is `mention`. Assertion refs whose `kind` is `document` retain their `doc_id` and bypass #8. Assertions whose mention ref lacks a mapping are rejected by ingestion rather than silently dropped or given a new entity. Records are deterministically sorted by `mention_id`.
 
 ### 7.3 `data/entity_resolution.manifest.json`
 
@@ -312,7 +312,7 @@ There is no entity-ID stability guarantee across different eligible extraction i
 
 ## 9. Failure and boundary rules
 
-- Resolution never mutates extraction records or replaces `m_*` endpoints with `e_*` endpoints.
+- Resolution never mutates extraction records, rewrites typed assertion refs, resolves document refs, or replaces mention-ref `m_*` values with `e_*` values in provenance.
 - Resolution never merges across `entity_type`.
 - Resolution never invents a mention, alias, or entity from ontology examples.
 - Resolution never uses assertions, graph topology, document co-occurrence, an LLM, embeddings, or held-out questions as merge evidence.
@@ -338,4 +338,4 @@ The later implementing ticket closes only when all of the following pass:
 
 ---
 
-This spec resolves ticket #8. It hands #9 immutable assertion endpoints plus a deterministic `mention_id` → `entity_id` join, while preserving #7 extraction records as provenance.
+This spec resolves ticket #8. It hands #9 a deterministic `mention_id` → `entity_id` join for assertion mention refs while document refs remain `doc_id`, preserving all #7 extraction records as immutable provenance.
