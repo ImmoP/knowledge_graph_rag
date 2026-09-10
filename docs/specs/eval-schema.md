@@ -26,7 +26,7 @@ This is the single, pinned definition. Other intuitive notions are explicitly re
 
 Every consumer of the eval set (authoring tool, benchmark runner, scoring engine) uses this definition. A question whose `evidence_path` has `n` relation steps is `hop_bucket = "n"` for `n ∈ {1, 2}`, or `"3+"` for `n ≥ 3`.
 
-The `evidence_path` MUST NOT contain degenerate "chunk-only" steps with no relation traversal; every step is a `from-relation-to` triple. A 1-hop question has exactly one such triple; the smallest legal `evidence_path` length is therefore 1.
+The `evidence_path` MUST NOT contain degenerate "chunk-only" steps with no relation traversal; every step is one directed traversal record. A 1-hop question has exactly one such record; the smallest legal `evidence_path` length is therefore 1.
 
 ## 3. JSONL record schema
 
@@ -64,7 +64,7 @@ Each line of `eval/questions.jsonl` (and future `eval/questions.vN.jsonl` files)
 Each `evidence_path` entry is a JSON object:
 
 ```json
-{"step": 1, "from": "<id>", "relation": "<relation_type>", "to": "<id>"}
+{"step": 1, "from": "<id>", "relation": "<relation_type>", "to": "<id>", "direction": "forward"}
 ```
 
 Field-by-field:
@@ -72,9 +72,12 @@ Field-by-field:
 - `step` — int, 1-based, monotonically increasing.
 - `from`, `to` — string identifiers in one of three namespaces:
   - `W[0-9]+` — Document (manifest `openalex_id`).
-  - `e_<hex>` — Entity node. The exact form is pinned by the implementing ticket for graph ingestion (#9); the author writes `e_<something>` and the runner validates the prefix.
+  - `^e_[0-9a-f]{16}$` — Entity node, using the canonical entity-ID shape pinned by #8 and projected by #9.
   - `c_[0-9a-f]{16}` — Chunk (per chunk-record spec).
 - `relation` — string, a relation type from the ontology (per #5). The benchmark runner rejects any `relation` value not in the ontology.
+- `direction` — string, exactly `"forward"` or `"reverse"`. `forward` means traversal from `from` to `to` follows the stored ontology edge; `reverse` means traversal from `from` to `to` goes opposite the stored ontology edge. `relation` retains the canonical ontology name in both cases.
+
+`from` and `to` are always traversal-order node IDs. Every record consumes exactly one semantic ontology hop regardless of `direction`. Infrastructure relationships `HAS_CHUNK` and `MENTIONS` never appear in `evidence_path` and consume no semantic hops.
 
 **Path connectivity rule:** for any step `n ≥ 2`, the step's `from` MUST equal step `n-1`'s `to`. The path is a connected walk over the graph. A disconnected step is a defect the authoring tool surfaces, not silently accepts.
 
@@ -97,6 +100,7 @@ The implementing ticket (post-Wayfinder) ships a small CLI that:
 4. **Path-validates:**
    - Steps are connected (per §4).
    - The `relation` value of every step appears in the ontology (per #5).
+   - Every step's `direction` is `forward` or `reverse`, and the graph contains the named ontology edge in the indicated stored direction.
    - `evidence_path` length matches `hop_bucket` per §2.
 5. **Writes** `eval/questions.jsonl` only if all checks pass in strict mode. The tool reports warnings otherwise.
 
@@ -113,26 +117,26 @@ The implementing ticket (post-Wayfinder) ships a small CLI that:
 
 ### 5.3 Worked example
 
-A 2-hop question authored against a corpus containing the Adam paper (W1522301498) and the original RMSProp-like work it extends might look like:
+A 2-hop question starting from a method and traversing through the document that proposed it might look like:
 
 ```json
 {
   "qid": "q_017",
-  "question": "Which earlier adaptive learning-rate method did Adam generalize?",
-  "expected_answer": "RMSProp",
+  "question": "Which dataset did the ColBERT paper evaluate on?",
+  "expected_answer": "MS MARCO",
   "hop_bucket": "2",
   "evidence_path": [
-    {"step": 1, "from": "W1522301498", "relation": "EXTENDS", "to": "e_rmsprop"},
-    {"step": 2, "from": "e_rmsprop", "relation": "INTRODUCED_IN", "to": "W_HISTORICAL_RMSPROP"}
+    {"step": 1, "from": "e_1111111111111111", "relation": "PROPOSES", "to": "W3021397474", "direction": "reverse"},
+    {"step": 2, "from": "W3021397474", "relation": "EVALUATES_ON", "to": "e_2222222222222222", "direction": "forward"}
   ],
-  "supporting_doc_ids": ["W1522301498", "W_HISTORICAL_RMSPROP"],
+  "supporting_doc_ids": ["W3021397474"],
   "supporting_chunk_ids": [],
   "split": "held_out",
   "notes": "Authored before the chunk manifest existed; chunk_ids to be filled in once the chunker ships."
 }
 ```
 
-The IDs are illustrative. `e_rmsprop` and `W_HISTORICAL_RMSPROP` are placeholders for whatever the actual ontology and manifest contain; the authoring tool validates against the real artifacts at run time.
+The Entity IDs are illustrative placeholders for the resolved ColBERT and MS MARCO entities; the authoring tool validates them against the real graph at run time. The example's relation names, endpoint types, traversal directions, and Document ID follow ontology v1 and the canonical manifest.
 
 ## 6. Held-out policy (no split — selected operating policy)
 
@@ -192,3 +196,5 @@ The first three checks gate the schema's *correctness*; the last two gate its *c
 ---
 
 This spec resolves ticket #4. It is referenced by #14 (benchmark runner consumes `eval/questions.jsonl` against this schema), by #12 (hybrid retrieval may tune its router rule on `split: "dev"` records but not on `held_out`), and by the post-Wayfinder implementing ticket that authors the actual 45 records.
+
+The five-field evidence-step shape is a representational consistency repair made while resolving #11. It keeps #4 closed and does not change benchmark size, split policy, hop-count semantics, or ontology vocabulary. It makes reverse semantic traversal explicit while preserving connected traversal-order paths.
