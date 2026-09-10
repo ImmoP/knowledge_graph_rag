@@ -170,7 +170,7 @@ This spec closes when committed to `docs/specs/ontology.md`. The implementing au
 ## 7. Downstream coupling
 
 - **#7 extraction contract** reads `entity_types[]` (filtered to `population_mode == extracted`) and `relation_types[]` (filtered similarly) to render the two grouped prompt templates (`extract_entities_v1` and `extract_relations_v1`). The templates are grouped — one template per phase, not one per type — so each chunk is sent through the LLM exactly twice. The per-type allowed-name lists and the per-type `verified` examples are rendered into the templates at run time from this file; an ontology edit is the only change needed to keep the templates honest.
-- **#8 entity resolution** uses `entity_types[].examples` (verified) as known-candidate seeds.
+- **#8 entity resolution** may use `entity_types[].examples` (verified) when curating a separate human-labelled development fixture for threshold evaluation. Production resolution clusters only validated mentions from extraction-complete chunks; ontology examples are never production seeds, aliases, or synthetic mentions.
 - **#9 Neo4j ingestion** reads the relation types as the edge vocabulary; Cypher constraints and uniqueness rules derive from `relation_types[].from`, `.to`, and `.population_mode`. `derived` relations are computed at ingestion (or at query time, depending on the implementing choice); they are never LLM-extracted.
 - **#11 graph retrieval** uses the relation types as the traversal relation-filter. Cypher queries are parameterised on the ontology.
 - **#12 hybrid retrieval** consults the ontology's entity-type names for routing decisions ("is the query about a `method`?").
