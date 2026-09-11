@@ -37,54 +37,6 @@ from pathlib import Path
 import yaml
 
 
-# Match `key: <value>` continuation of the same key. PyYAML's safe loader
-# raises on unquoted plain scalars containing `: ` (a mapping-key marker
-# mid-value); the v1 ontology.yaml has definitions and sources that do this
-# legitimately. We pre-process: re-render any such value as a quoted string.
-_UNQUOTED_VALUE_RE = re.compile(
-    r"^(?P<key>[A-Za-z_][A-Za-z0-9_]*): (?P<value>.*)$"
-)
-
-
-def _yaml_safe_load_lenient(text: str):
-    """Parse YAML tolerantly when unquoted plain scalars contain ``:``.
-
-    The repo's committed ``ontology.yaml`` uses unquoted scalar values for
-    ``definition`` and ``source`` fields whose text legitimately contains
-    colons. PyYAML's safe loader treats ``: `` (colon followed by space)
-    inside an unquoted scalar as a flow-mapping marker and raises. This
-    pre-processor quotes any ``key: value`` scalar value whose value
-    contains ``: ``, then runs ``yaml.safe_load`` on the rewritten text.
-    The original raw text is unchanged, so the file SHA256 is independent
-    of the loader.
-    """
-
-    out_lines: list[str] = []
-    for line in text.split("\n"):
-        stripped = line.lstrip()
-        if not stripped or stripped.startswith("#") or stripped.startswith("-"):
-            out_lines.append(line)
-            continue
-        indent = line[: len(line) - len(stripped)]
-        m = _UNQUOTED_VALUE_RE.match(stripped)
-        if not m:
-            out_lines.append(line)
-            continue
-        value = m.group("value")
-        if value.startswith(('"', "'", "|", ">", "[")):
-            out_lines.append(line)
-            continue
-        # Quote any unquoted scalar value that contains `:` followed by
-        # whitespace (the loader-conflict pattern) — definitions and
-        # sources routinely have things like "Direction: citing -> cited."
-        if re.search(r":\s", value) or value.rstrip().endswith(":"):
-            escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-            out_lines.append(f'{indent}{m.group("key")}: "{escaped}"')
-        else:
-            out_lines.append(line)
-    return yaml.safe_load("\n".join(out_lines))
-
-
 ROOT = Path(__file__).resolve().parents[2]
 ONTOLOGY_PATH = ROOT / "ontology.yaml"
 MANIFEST_PATH = ROOT / "data" / "manifest.jsonl"
@@ -757,7 +709,7 @@ def validate_ontology(
     raw = path.read_text()
     sha = hashlib.sha256(raw.encode()).hexdigest()
     try:
-        doc = _yaml_safe_load_lenient(raw)
+        doc = yaml.safe_load(raw)
     except yaml.YAMLError as e:
         return ValidationReport(
             yaml_path=path,

@@ -157,7 +157,7 @@ class TestCommittedOntology(unittest.TestCase):
         self.assertEqual(report.version, 1)
         self.assertEqual(report.schema_version, 1)
         self.assertEqual(report.yaml_sha256,
-            "81e11fec1c98ea60a83e9ff87cb2dd00bd73c0a50f70ef56dd44d5dd85ed22d0",
+            "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
         )
         self.assertEqual(v.ONTOLOGY_PATH, REPO_ROOT / "ontology.yaml")
 
@@ -1372,32 +1372,114 @@ class TestCLIExitBehaviour(unittest.TestCase):
             self.assertEqual(rc, 1)
 
 
-class TestLenientYAMLParse(unittest.TestCase):
-    def test_unquoted_scalar_with_colon_loads(self):
-        # The committed ontology.yaml uses unquoted scalars with internal
-        # `: ` in `definition` and `source` fields. The validator's lenient
-        # YAML loader must accept them without modifying the file SHA.
-        from src.ontology.validate import _yaml_safe_load_lenient
-        text = (
-            "version: 1\n"
-            "schema_version: 1\n"
-            "entity_types:\n"
-            "  - name: document\n"
-            "    definition: Document A references Document B. Direction: citing -> cited.\n"
-            "    population_mode: structural\n"
-            "    source: data/manifest.jsonl (canonical artifact)\n"
-            "    examples:\n"
-            "      - status: pending_verification\n"
-            "        instance: x\n"
-            "        note: n\n"
-        )
-        doc = _yaml_safe_load_lenient(text)
-        ent = doc["entity_types"][0]
-        self.assertEqual(
-            ent["definition"],
-            "Document A references Document B. Direction: citing -> cited.",
-        )
-        self.assertEqual(ent["source"], "data/manifest.jsonl (canonical artifact)")
+class TestYAMLParseContract(unittest.TestCase):
+    """The validator reads ``ontology.yaml`` exactly as committed.
+
+    There is **no** pre-processing or auto-repair of malformed scalars.
+    A file that ``yaml.safe_load`` cannot parse must surface a
+    ``yaml_parse`` violation (not be silently fixed). This is the
+    contract the lenient loader used to violate.
+    """
+
+    def test_committed_ontology_parses_with_standard_yaml(self):
+        # Direct standard-library parse of the on-disk file must succeed.
+        # If this fails, the validator was relying on a repair that
+        # masked a real syntax issue in the committed file.
+        import yaml as _yaml
+        doc = _yaml.safe_load(Path("ontology.yaml").read_text())
+        self.assertIsInstance(doc, dict)
+        self.assertEqual(doc["version"], 1)
+        self.assertEqual(doc["schema_version"], 1)
+
+    def test_malformed_yaml_is_rejected_not_repaired(self):
+        # Regression: an unquoted scalar with ": " mid-value is the
+        # canonical #20 contract failure mode. The validator must surface
+        # a `yaml_parse` violation; it must NOT silently rewrite the file.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            onp = tmpp / "ontology.yaml"
+            # `definition:` value contains `Direction: ` mid-scalar.
+            bad = (
+                "version: 1\n"
+                "schema_version: 1\n"
+                "entity_types:\n"
+                "  - name: document\n"
+                "    definition: A. Direction: cited in body.\n"
+                "    population_mode: structural\n"
+                "    source: data/manifest.jsonl\n"
+                "    examples:\n"
+                "      - status: pending_verification\n"
+                "        instance: x\n"
+                "        note: n\n"
+                "  - name: alpha\n"
+                "    definition: d\n"
+                "    population_mode: structural\n"
+                "    source: data/manifest.jsonl\n"
+                "    examples:\n"
+                "      - status: pending_verification\n"
+                "        instance: y\n"
+                "        note: n\n"
+                "  - name: beta\n"
+                "    definition: d\n"
+                "    population_mode: extracted\n"
+                "    extraction_prompt: extract_entities_v1\n"
+                "    examples:\n"
+                "      - status: pending_verification\n"
+                "        instance: z\n"
+                "        note: n\n"
+                "  - name: gamma\n"
+                "    definition: d\n"
+                "    population_mode: extracted\n"
+                "    extraction_prompt: extract_entities_v1\n"
+                "    examples:\n"
+                "      - status: pending_verification\n"
+                "        instance: z\n"
+                "        note: n\n"
+                "  - name: delta\n"
+                "    definition: d\n"
+                "    population_mode: extracted\n"
+                "    extraction_prompt: extract_entities_v1\n"
+                "    examples:\n"
+                "      - status: pending_verification\n"
+                "        instance: z\n"
+                "        note: n\n"
+                "relation_types:\n"
+                + "\n".join(
+                    f"  - name: R{i}\n"
+                    f"    from: document\n"
+                    f"    to: alpha\n"
+                    f"    definition: d\n"
+                    f"    population_mode: structural\n"
+                    f"    source: data/manifest.jsonl\n"
+                    f"    examples:\n"
+                    f"      - status: pending_verification\n"
+                    f"        from: document\n"
+                    f"        to: alpha\n"
+                    f"        note: n"
+                    for i in range(8)
+                )
+                + "\n"
+            )
+            onp.write_text(bad)
+            mp, oa = _build_minimal_corpus(
+                tmpp, manifest_ids=("W100",),
+                papers=(("W100", "t", ["t"]),),
+            )
+
+            import yaml as _yaml
+            with self.assertRaises(_yaml.YAMLError):
+                _yaml.safe_load(onp.read_text())
+
+            report = v.validate_ontology(
+                onp, manifest_path=mp, openalex_dir=oa,
+            )
+            self.assertFalse(report.ok)
+            self.assertEqual(
+                {x.rule for x in report.violations},
+                {"yaml_parse"},
+                msg=f"expected only yaml_parse violation; got "
+                    f"{[x.format() for x in report.violations]}",
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover

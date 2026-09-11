@@ -117,7 +117,7 @@ relation_types:
   - name: CITES
     from: document
     to: document
-    definition: Document A references Document B in its bibliography. Direction: citing -> cited.
+    definition: "Document A references Document B in its bibliography. Direction: citing -> cited."
     population_mode: structural
     source: data/raw/openalex/<work>.json referenced_works canonicalized through data/aliases.json; retain only canonical IDs in data/manifest.jsonl, remove alias-created self-loops, and deduplicate citing -> cited pairs. No LLM call.
     examples:
