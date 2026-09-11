@@ -1,0 +1,12 @@
+{
+  "minimal_cite": {
+    "cite_count": 2,
+    "main_file": "main.tex",
+    "sha256": "b222144a15c4579342cf1d30970d64e4a6f5acdec8746f226cef97cd0f789d37"
+  },
+  "minimal_input": {
+    "cite_count": 1,
+    "main_file": "main.tex",
+    "sha256": "17524615a38d8e105b7d586dbe127cca3718d72ba116a1bb0b041eff9b8e3a77"
+  }
+}
