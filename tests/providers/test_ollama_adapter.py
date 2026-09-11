@@ -178,13 +178,54 @@ class TestOllamaGenerateJSON(unittest.TestCase):
             adapter.generate_json("s", "u", schema)
         self.assertEqual(len(client.requests), 2)
 
-    def test_prose_wrapped_json_still_parses(self):
-        # Some models emit JSON embedded in prose / markdown fences.
-        body = _ollama_chat_body('Here you go:\n```json\n{"answer": 1}\n```\nbye')
+    def test_prose_wrapped_json_triggers_retry_then_succeeds(self):
+        """Spec §2: invalid JSON (including prose-wrapped) is a retry trigger.
+
+        First response is prose-wrapped JSON \u2014 strict parse fails, the
+        retry fires, the retry returns strict valid JSON. Adapter
+        returns after exactly two HTTP calls.
+        """
+        body_prose = _ollama_chat_body('Here you go:\n```json\n{"answer": 1}\n```\nbye')
+        body_strict = _ollama_chat_body('{"answer": 1}')
+        client = _FakeClient([body_prose, body_strict])
+        adapter = OllamaLLM(model="m", base_url="http://h:1", cache=self.cache, client=client)
+        schema = {"type": "object", "required": ["answer"]}
+        parsed, _ = adapter.generate_json("s", "u", schema)
+        self.assertEqual(parsed, {"answer": 1})
+        self.assertEqual(len(client.requests), 2)
+
+    def test_prose_wrapped_json_twice_raises(self):
+        """Two prose-wrapped (invalid) responses \u2192 LLMValidationError after exactly two HTTP calls."""
+        body_prose = _ollama_chat_body('Here you go:\n```json\n{"answer": 1}\n```\nbye')
+        client = _FakeClient([body_prose, body_prose])
+        adapter = OllamaLLM(model="m", base_url="http://h:1", cache=self.cache, client=client)
+        schema = {"type": "object", "required": ["answer"]}
+        with self.assertRaises(LLMValidationError) as ctx:
+            adapter.generate_json("s", "u", schema)
+        self.assertEqual(ctx.exception.model_output, 'Here you go:\n```json\n{"answer": 1}\n```\nbye')
+        self.assertEqual(ctx.exception.schema, schema)
+        self.assertEqual(len(client.requests), 2)
+
+    def test_invalid_json_twice_raises_with_validation_error(self):
+        """Two non-JSON responses \u2192 LLMValidationError, validation_error attached."""
+        body_bad_1 = _ollama_chat_body('not json at all')
+        body_bad_2 = _ollama_chat_body('still not json')
+        client = _FakeClient([body_bad_1, body_bad_2])
+        adapter = OllamaLLM(model="m", base_url="http://h:1", cache=self.cache, client=client)
+        schema = {"type": "object", "required": ["answer"]}
+        with self.assertRaises(LLMValidationError) as ctx:
+            adapter.generate_json("s", "u", schema)
+        self.assertEqual(ctx.exception.model_output, 'still not json')
+        self.assertEqual(len(client.requests), 2)
+
+    def test_strict_parse_only_strips_whitespace(self):
+        """Only surrounding whitespace is stripped before json.loads; the entire response must be valid JSON."""
+        body = _ollama_chat_body('  \n\t{"answer": 1}\n  ')
         client = _FakeClient([body])
         adapter = OllamaLLM(model="m", base_url="http://h:1", cache=self.cache, client=client)
         parsed, _ = adapter.generate_json("s", "u", {"type": "object", "required": ["answer"]})
         self.assertEqual(parsed, {"answer": 1})
+        self.assertEqual(len(client.requests), 1)
 
 
 if __name__ == "__main__":  # pragma: no cover

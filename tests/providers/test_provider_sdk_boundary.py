@@ -137,6 +137,50 @@ class TestSchemaValidatorEdges(unittest.TestCase):
         with self.assertRaises(SchemaValidationError):
             self._validate("d", {"type": "string", "enum": ["a", "b", "c"]})
 
+    def test_minlength_enforced(self):
+        from src.providers.adapters._schema import SchemaValidationError
+
+        with self.assertRaises(SchemaValidationError):
+            self._validate("ab", {"type": "string", "minLength": 3})
+
+    def test_minimum_enforced(self):
+        from src.providers.adapters._schema import SchemaValidationError
+
+        with self.assertRaises(SchemaValidationError):
+            self._validate(5, {"type": "integer", "minimum": 10})
+
+    def test_pattern_enforced(self):
+        from src.providers.adapters._schema import SchemaValidationError
+
+        with self.assertRaises(SchemaValidationError):
+            self._validate("abc1", {"type": "string", "pattern": "^[a-z]+$"})
+
+    def test_oneOf_enforced(self):
+        from src.providers.adapters._schema import SchemaValidationError
+
+        schema = {
+            "oneOf": [
+                {"type": "object", "required": ["a"], "properties": {"a": {"type": "integer"}}},
+                {"type": "object", "required": ["a"], "properties": {"a": {"type": "boolean"}}},
+            ]
+        }
+        with self.assertRaises(SchemaValidationError):
+            self._validate({"a": "string"}, schema)
+
+    def test_const_enforced(self):
+        from src.providers.adapters._schema import SchemaValidationError
+
+        with self.assertRaises(SchemaValidationError):
+            self._validate("no", {"const": "yes"})
+
+    def test_malformed_schema_raises(self):
+        from src.providers.adapters._schema import SchemaValidationError
+
+        # ``type: "foo"`` is not a valid Draft 2020-12 type; validation
+        # must fail closed at the schema level, not silently accept it.
+        with self.assertRaises(SchemaValidationError):
+            self._validate(42, {"type": "foo"})
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

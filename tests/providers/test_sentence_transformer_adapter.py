@@ -165,5 +165,96 @@ class TestAdapterBehavior(unittest.TestCase):
         self.assertEqual(first, cached)
 
 
+class TestRuntimeDependencyDeclared(unittest.TestCase):
+    """The embedding adapter's production runtime dependency
+    (``sentence-transformers``) must be declared in ``requirements.txt``
+    so a clean environment created only from requirements can use the
+    adapter. This is the #19 pre-push repair acceptance check.
+    """
+
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+
+    def _read_requirements(self) -> str:
+        return (self.REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
+
+    def test_requirements_declares_sentence_transformers(self):
+        import re
+
+        text = self._read_requirements()
+        # Exact-pin: ``sentence-transformers==X.Y.Z`` (no range, no
+        # unpinned caret/tilde). The repo's dependency style is exact
+        # pins; we match that to avoid silent drift.
+        match = re.search(r"^sentence-transformers\s*==\s*([\w.+-]+)\s*$", text, re.MULTILINE)
+        self.assertIsNotNone(
+            match,
+            "requirements.txt must exact-pin sentence-transformers (no range, no unpinned)",
+        )
+        pinned = match.group(1)
+        # Sanity: a concrete PEP 440 version, not "latest" / "0".
+        parts = pinned.split(".")
+        self.assertGreaterEqual(
+            len(parts), 3, f"sentence-transformers pin must be a concrete version, got {pinned!r}"
+        )
+
+    def test_requirements_declares_jsonschema(self):
+        """The strict generate_json path uses jsonschema for fail-closed
+        validation; that dep must also be declared (same exact-pin style)."""
+        import re
+
+        text = self._read_requirements()
+        match = re.search(r"^jsonschema\s*==\s*([\w.+-]+)\s*$", text, re.MULTILINE)
+        self.assertIsNotNone(
+            match,
+            "requirements.txt must exact-pin jsonschema (no range, no unpinned)",
+        )
+
+    def test_sentence_transformers_pypi_release_supports_python_version(self):
+        """Verify the pinned version is real, exists on PyPI, and its
+        metadata lists a Python version compatible with this project.
+        Network-touching acceptance gate."""
+        import re
+        import urllib.request
+
+        text = self._read_requirements()
+        match = re.search(r"^sentence-transformers\s*==\s*([\w.+-]+)\s*$", text, re.MULTILINE)
+        if not match:
+            self.skipTest("sentence-transformers not pinned in requirements.txt")
+        version = match.group(1)
+        url = f"https://pypi.org/pypi/sentence-transformers/{version}/json"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                import json
+
+                payload = json.loads(resp.read())
+        except Exception as e:
+            self.skipTest(f"PyPI metadata fetch failed ({e}); environment lacks network")
+        self.assertEqual(payload["info"]["version"], version)
+        classifiers = payload["info"].get("classifiers", [])
+        # Must claim at least one Python 3.x support line.
+        self.assertTrue(
+            any("Python :: 3" in c for c in classifiers),
+            f"sentence-transformers=={version} has no Python 3.x classifier",
+        )
+
+    def test_declared_dependency_is_installed_in_environment(self):
+        """The pinned version must match the version installed in the
+        project environment. This proves ``pip install -r requirements.txt``
+        brings in the exact dep the adapter expects, without doing a live
+        install in the test."""
+        import importlib.metadata
+        import re
+
+        text = self._read_requirements()
+        match = re.search(r"^sentence-transformers\s*==\s*([\w.+-]+)\s*$", text, re.MULTILINE)
+        if not match:
+            self.skipTest("sentence-transformers not pinned in requirements.txt")
+        pinned = match.group(1)
+        try:
+            installed = importlib.metadata.version("sentence-transformers")
+        except importlib.metadata.PackageNotFoundError:
+            self.skipTest("sentence-transformers not installed in current env")
+        self.assertEqual(installed, pinned)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from typing import Any, Mapping
 
 import httpx
@@ -48,10 +47,7 @@ REQUIRED_SECRETS: tuple[str, ...] = ()
 # Cache key namespace; bump on adapter changes that affect parsing or
 # output shape (spec §5.3). The constant lives here so old cache files
 # never silently appear for the new format.
-CACHE_FORMAT_VERSION = "ollama-1"
-
-
-_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+CACHE_FORMAT_VERSION = "ollama-2"
 
 
 class OllamaLLM(LLMProvider):
@@ -328,25 +324,20 @@ def _merge_usage(a: Usage, b: Usage) -> Usage:
 
 
 def _parse_model_json(text: str) -> dict:
-    """Parse the model's text output as a JSON object.
+    """Parse the model's text output as a JSON object, strictly.
 
-    Ollama's ``format="json"`` is documented to return pure JSON, but
-    some models still wrap the object in prose or markdown fences. We
-    try a strict parse first, then fall back to scanning the first
-    balanced JSON object in the text. We never silently repair an
-    object that does not match the requested schema — repair happens
-    in the schema layer, not here.
+    Spec §2: ``generate_json`` treats the model's response as JSON
+    only after normal surrounding whitespace is stripped, and the
+    entire response is parsed with ``json.loads``. We never scan for
+    embedded ``{...}`` substrings, never regex-extract JSON, and never
+    silently repair prose-wrapped or otherwise malformed output —
+    invalid JSON is the trigger for the spec-mandated correction
+    retry, not something this layer quietly fixes.
     """
     try:
-        obj = json.loads(text)
-    except json.JSONDecodeError:
-        match = _JSON_OBJECT_RE.search(text)
-        if not match:
-            raise ValueError(f"model output is not JSON: {text!r}") from None
-        try:
-            obj = json.loads(match.group(0))
-        except json.JSONDecodeError as e:
-            raise ValueError(f"model output is not JSON: {e}") from e
+        obj = json.loads(text.strip())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"model output is not JSON: {e.msg}") from e
     if not isinstance(obj, dict):
-        raise ValueError(f"model output is not a JSON object: {type(obj).__name__}")
+        raise ValueError(f"model output is not a JSON object: got {type(obj).__name__}")
     return obj
