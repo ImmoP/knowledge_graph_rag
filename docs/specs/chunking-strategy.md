@@ -62,12 +62,12 @@ In v1, the LaTeX source package is the only full-text source. Records with `sour
 
 Properties the implementing ticket pins:
 
-- The text-bearing `doc_id` set is reproducible from the manifest alone and equals the set of chunk `doc_id` values in `data/derived/chunks.jsonl` (set equality; see §11 Acceptance gate).
+- The text-bearing `doc_id` set is reproducible from the tracked `data/manifest.jsonl` and `data/fulltext_manifest.jsonl` artifacts and equals the set of chunk `doc_id` values in `data/derived/chunks.jsonl` (set equality; see §11 Acceptance gate).
 - Every manifest record is a canonical `Document` identity (the manifest is not shrunk).
 - Only text-bearing records produce `Chunk` records, `Mention` records, `Assertion` records, and rows in the embedding store. Any other use of a `chunk_id` is invalid.
 - A record that satisfies the membership predicate (tracked `payload == "gzip"`) but whose `data/raw/latex/<arxiv_id>.tar.gz` is missing or unreadable fails the preflight (#21). It is **not** silently removed from the text-bearing set.
 - The non-text-bearing set is reported in run traces (count and `doc_id`s) but the manifest itself is unchanged.
-- The classifier is a deterministic predicate over manifest fields. It is not an LLM call.
+- The classifier is a deterministic predicate over tracked manifest and source-capability metadata. It is not an LLM call.
 - No PDF parsing, no OCR, no ACL Anthology ingestion, and no new ingestion stage are introduced in v1.
 
 Downstream invariants this pin enables:
