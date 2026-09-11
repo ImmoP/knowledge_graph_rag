@@ -128,22 +128,33 @@ Single bridge network `rag-net`. Credentials live in `.env`, never in
 verifies both containers are healthy, neo4j Bolt is reachable on
 `localhost:7687`, and pgvector Postgres on `localhost:5432`.
 
-## 4. Ingest stage
+## 4. Ingest stage — corpus preflight + parser regression
 
-**Input:** `data/raw/latex/<arxiv_id>.tar.gz`, `data/raw/openalex/<work>.json`.
-**Output:** `data/manifest.jsonl` (canonical corpus).
-**Reuses:** `src/ingest/parse_latex.py` (existing user work; do not modify
-during planning per AGENTS.md).
+**Note.** `data/manifest.jsonl` is a **curated, committed canonical
+artifact** (per the map; it lives at repo root and is tracked by Git).
+It is NOT rebuilt from scratch by the implementing ticket. The
+implementing ticket repurposes the ingest stage into a **corpus
+preflight + parser-regression harness** that:
 
-The arXiv LaTeX parser already emits citation markers `[[CITE:...]]` which
-the chunker preserves verbatim (chunking-strategy §citation-span rule). The
-implementing ticket:
+1. re-validates the committed `data/manifest.jsonl` against the
+   available `data/raw/latex/` and `data/raw/openalex/` artifacts
+   (every committed `openalex_id` and `arxiv_id` has a backing raw
+   artifact; every `referenced_works_canonical` either resolves
+   through `data/aliases.json` or is a raw OpenAlex ID);
+2. re-runs `parse_latex.py` against every tarball and verifies that
+   the parser still emits `[[CITE:...]]` markers and the structural
+   anchors downstream stages depend on (preserves existing user work
+   per AGENTS.md);
+3. ships a small **parser-regression fixture**: a frozen subset of
+   tarballs with pinned parser-output SHA256s so a future LaTeX
+   parser change is detected at preflight time, before any downstream
+   stage reads the manifest.
 
-1. wires `parse_latex.py` to iterate every tarball under `data/raw/latex/`,
-2. canonicalizes OpenAlex `referenced_works` through `data/aliases.json`
-   (when present; pass-through otherwise) to produce cited-by edges,
-3. emits `data/manifest.jsonl` with at least `openalex_id`, `arxiv_id`,
-   `title`, `referenced_works_canonical`, sorted by `openalex_id`.
+`data/manifest.jsonl` itself is **not modified** by this ticket. The
+ticket does NOT emit a new `data/manifest.jsonl`; it validates the
+existing committed one and produces a preflight verdict (pass/fail +
+SHA256 report on stderr and as a sidecar JSON next to the manifest's
+own metadata).
 
 `data/raw/` is never mutated; the parser only reads from it.
 
@@ -455,19 +466,39 @@ canonical `e_*` IDs.
 
 ### 8.1 Two-stage deterministic policy
 
-**Stage A — exact-normalized groups.** Group eligible mentions by
-`(entity_type, normalize(surface_form))` where `normalize` is the pinned
-NFKC + casefold + trim + collapse-whitespace rule. Each group is a
-Stage A cluster; sort `mention_id` values inside each cluster
-lexicographically; cluster key for ordering is its smallest `mention_id`.
+**Stage A — exact-normalized groups over `canonical_form`.** Each
+extraction record's `canonical_form` field is the Stage A input —
+**not** `surface_form`. The pinned normalisation chain, applied in
+this exact order to every `canonical_form`:
+
+1. Unicode-normalise to **NFKC**.
+2. **Casefold.**
+3. Replace Unicode category `Pd` (Dash_Punctuation) characters with
+   ASCII `-`. This handles en-dash, em-dash, figure-dash, horizontal
+   bar, etc.
+4. **Whitespace**: collapse runs of whitespace to a single space;
+   trim leading/trailing whitespace.
+5. **Wrapper-quote removal (whitelist only).** Strip a leading/trailing
+   matching pair only if both ends are one of `"`, `'`, `“`,
+   `”`, `‘`, `’`. **No general punctuation stripping**: do not strip
+   parentheses, brackets, commas, periods, slashes, colons, or any
+   other non-whitelist delimiter.
+
+Then group eligible mentions by `(entity_type, normalize(canonical_form))`.
+Each group is a Stage A cluster. Sort `mention_id` values inside each
+cluster lexicographically; cluster key for ordering is its smallest
+`mention_id`.
 
 **Stage B — complete-link fuzzy clusters within each type partition.**
-Distance metric: deterministic normalized Levenshtein on the Stage A
-normalized strings. Threshold frozen at `0.92`. Clusters merge when
-their complete-link similarity exceeds the threshold; ordering and
-tie-breaks are deterministic (smallest `mention_id`). Hard entity-type
-separation: `method` and `dataset` cannot land in the same Stage B
-cluster even with high similarity.
+Distance metric: deterministic **normalised Levenshtein** on the Stage A
+normalized strings. **Threshold: `>= 0.92`** (similarity form, frozen;
+clusters merge when similarity **at or above** the threshold).
+Ordering and tie-breaks are deterministic (smallest `mention_id`).
+Hard entity-type separation: `method` and `dataset` cannot land in
+the same Stage B cluster even with high similarity.
+
+**No CLI / env threshold override.** The threshold is a frozen constant
+in code. Held-out tuning of the threshold is forbidden (eval-schema §6).
 
 ### 8.2 Canonical name + ID
 
@@ -494,12 +525,19 @@ reproducible.
 ### 8.3 Outputs
 
 `data/entities.jsonl`: one canonical entity per final cluster, sorted by
-`(entity_type, entity_id)`. Required fields: `entity_id`, `entity_type`,
-`canonical_name`, `mention_ids` (sorted, unique).
+`(entity_type, entity_id)`. **Required fields per cluster** (full
+schema from entity-resolution spec §5):
+`entity_id`, `entity_type`, `canonical_name`, `mention_ids` (sorted,
+unique), `aliases` (sorted, unique, deduplicated against
+`canonical_name`), `resolution_confidence` (float, e.g. `1.0` for
+exact-normalized clusters; mean similarity for fuzzy clusters;
+deterministic per cluster).
 
 `data/entity_resolutions.jsonl`: full eligible `mention_id → entity_id`
 mapping, sorted by `mention_id`. Each record includes `resolution_method`
-(`exact_normalized` or `fuzzy`) and `resolution_score`.
+(`exact_normalized` or `fuzzy`) and `resolution_score` (the Stage A
+group size for `exact_normalized`; the complete-link similarity that
+caused the merge for `fuzzy`, or `1.0` for singletons).
 
 `data/entity_resolution.manifest.json`: input identity (paths + SHA256
 of chunks, extractions, ontology), policy identity (algorithm version,
@@ -560,7 +598,9 @@ Neo4j-internal provenance IDs.
    every assertion `kind: "mention"` ref.
 3. Transactional graph replacement: delete prior graph content and
    rebuild from canonical artifacts in a single transaction. No partial
-   graphs left on failure.
+   graphs left on failure. On rollback, the graph is restored to its
+   pre-run state (whatever was there before the failed transaction),
+   not necessarily empty.
 
 `data/graph_ingestion.manifest.json` records input paths + SHA256
 (`manifest_sha256`, `aliases_sha256`, `ontology_sha256`, `chunks_sha256`,
@@ -670,20 +710,40 @@ class VectorRetriever(Protocol):
 
 ```python
 @dataclass(frozen=True)
+class GraphEvidenceStep:
+    step: int                            # 1-based ordinal within the path
+    from_id: str                         # typed id (doc_id | entity_id | chunk_id)
+    relation: str                        # ontology relation name
+    to_id: str                           # typed id (doc_id | entity_id | chunk_id)
+    direction: Literal["forward", "reverse"]
+
+@dataclass(frozen=True)
 class GraphRetrievalHit:
     chunk_id: str
     score: float
-    graph_evidence_path: tuple[PathStep, ...]   # connected, directional
+    evidence_path: tuple[GraphEvidenceStep, ...]   # connected, directional
 ```
 
-`PathStep` is a typed record (kind ∈ {Document, Entity, Chunk} + id +
-direction forward/reverse).
+`GraphEvidenceStep` is the canonical #11 type. Its JSON serialisation
+on the wire is the verbatim object form
+`{"step": <int>, "from": <str>, "relation": <str>, "to": <str>,
+"direction": <str>}` (i.e. `from_id` is named `from`, `to_id` is
+named `to` in the JSON projection; this matches `graph-retrieval.md`
+§2 exactly).
 
-**Seed lifting (deterministic):** exact-normalized maximal-span matching
-of the query against `data/entities.jsonl`'s `canonical_name` + every
-`aliases` entry, and against `data/manifest.jsonl`'s `title` field. Uses
-Unicode-alphanumeric boundaries (`\w` with `re.UNICODE`). Ambiguous
-matches are retained (no LLM disambiguation).
+**Seed lifting (deterministic):** for each seed type the retriever
+loads a frozen seed catalogue at startup:
+- **Entity** — every entity in `data/entities.jsonl`, with
+  `(entity_id, canonical_name, aliases)`. Matching is exact-normalized
+  maximal-span: lower-case the query and the seed string (casefold,
+  after NFKC), then find the longest contiguous match with
+  Unicode-alphanumeric boundaries (`\w` with `re.UNICODE`).
+- **Document** — every `Document.title` in `data/manifest.jsonl`,
+  with `(doc_id, title)`. Same matching rule.
+
+Ambiguous matches are retained (no LLM disambiguation). The two
+catalogues are searched independently and the union of matched seeds
+is the input to traversal.
 
 **Traversal:** forward and reverse over ontology relationships only.
 Globally frozen `hop_budget = 3`. Plumbing edges (`HAS_CHUNK`, `MENTIONS`)
@@ -696,7 +756,7 @@ fuzzy/vector fallback, learned ranker, or held-out tuning.
 **Pure-CITES structural context:** when the only path to a chunk is
 through `CITES` (no extracted/derived edges), the terminal-Document
 chunk may be returned explicitly as structural context, with
-`graph_evidence_path` carrying the path verbatim; #13 lexical status
+`evidence_path` carrying the path verbatim; #13 lexical status
 remains authoritative on support, never labeled textual proof.
 
 ### 11.3 Hybrid/routed retriever (#12)
@@ -719,24 +779,28 @@ candidate list.
 @dataclass(frozen=True)
 class HybridRetrievalHit:
     chunk_id: str
-    score: float
-    sources: tuple[str, ...]    # subset of {"vector", "graph"}
-    hybrid_hit_provenance: HybridProvenance
+    score: float                      # the RRF fused score
+    sources: tuple[str, ...]          # subset of {"vector", "graph"}
+    hybrid_hit_provenance: HybridHitProvenance
 
 @dataclass(frozen=True)
-class HybridProvenance:
+class HybridHitProvenance:
+    in_vector: bool
+    in_graph: bool
     vector_rank: int | None
     vector_score: float | None
     graph_rank: int | None
     graph_score: float | None
-    graph_evidence_path: tuple[PathStep, ...] | None
-    rrf_score: float
+    graph_evidence_path: tuple[GraphEvidenceStep, ...] | None  # JSON key 'graph_evidence_path' (per serving-surface §6.4); tuple element type is GraphEvidenceStep from §11.2.
 ```
 
 **Fusion:** Reciprocal Rank Fusion (Cormack 2009) with frozen `RRF_K=60`.
-Per chunk: `rrf_score = sum(1 / (RRF_K + rank_i))` over retrievers that
-returned the chunk. Tie-break three-key ordering:
-1. `rrf_score` desc,
+Per chunk: `score = sum(1 / (RRF_K + rank_i))` over retrievers that
+returned the chunk (`score` on `HybridRetrievalHit` is the fused score;
+there is no separate `rrf_score` field — the fusion value lives in
+`score`). `in_vector` / `in_graph` on `HybridHitProvenance` are set
+from the per-retriever contribution. Tie-break three-key ordering:
+1. `score` desc,
 2. `len(sources)` desc (dual-source beats single-source),
 3. `chunk_id` asc by UTF-8 byte order.
 
@@ -828,11 +892,14 @@ RRF provenance, or per-retriever ranks; those live in the orchestrator's
 Pinned, versioned: `prompts/grounded_answer_v1.txt`. The generator
 reads the file at call time (or memoises). Audit metadata
 `prompt_filename`, `prompt_content_sha256` flow into the run/generation
-trace and the #16 cache key. The rendered user prompt encodes query,
-evidence blocks (in exact caller order), `prompt_filename`,
-`prompt_content_sha256`, `temperature`, `max_tokens`. Bump the suffix
-on any non-empty change to the template text; the SHA changes
-automatically.
+trace and (transitively, via their appearance in the rendered user
+prompt) the #16 cache key. The rendered user prompt encodes the
+query and the evidence blocks in exact caller order. It does **not**
+inject `temperature` or `max_tokens` into the prompt body merely to
+vary the cache key — those parameters are passed to
+`LLMProvider.generate` and participate in the canonical-JSON cache key
+construction in §7.5. Bump the suffix on any non-empty change to the
+template text; the SHA changes automatically.
 
 Pinned grounding requirements (also in the prompt file):
 - Answer using only the supplied evidence blocks.
@@ -1082,9 +1149,11 @@ No silent fallback.
 Provenance shape (direct JSON projection of retriever-native hit
 structure, never re-walked):
 - vector: `{mode, rank, score}`
-- graph: `{mode, rank, score, graph_evidence_path}` (verbatim from #11)
-- hybrid: `{mode, rank, rrf_score, sources, hybrid_hit_provenance}`
-  (verbatim from #12)
+- graph: `{mode, rank, score, graph_evidence_path}` (the
+  `graph_evidence_path` field is the verbatim JSON form of #11's
+  `evidence_path`; serving-surface §6.4 pins the wire-level key name)
+- hybrid: `{mode, rank, score, sources, hybrid_hit_provenance}` where
+  `score` is the RRF fused score (verbatim from #12)
 
 No cross-mode score normalization.
 
@@ -1124,11 +1193,12 @@ retrieval, generation, or #14 benchmark.
 ### 13.8 Logging
 
 Exactly one structured JSON log per completed request, fields:
-`ts`, `event=request_id`, `mode`, `status in {ok, abstained, error}`,
-`http_status`, `latency_ms`, `retrieval_hit_count`, `citation_count`,
-`error_code` (when `>= 400`). Pinned null-vs-zero stage semantics.
-Never logs raw question, normalized question, any question hash/HMAC,
-answer text, evidence text, prompts, raw provider output, credentials.
+`ts`, `event="http_request_completed"`, `request_id`, `mode`,
+`status in {ok, abstained, error}`, `http_status`, `latency_ms`,
+`retrieval_hit_count`, `citation_count`, `error_code` (when `>= 400`).
+Pinned null-vs-zero stage semantics. Never logs raw question,
+normalized question, any question hash/HMAC, answer text, evidence
+text, prompts, raw provider output, credentials.
 
 ### 13.9 Startup preflight
 
@@ -1490,6 +1560,27 @@ open" / "Acceptance gate" sections. ✅ No repair.
 Every disagreement found during the audit was either resolved by the
 already-merged per-ticket consistency repairs (§15.4) or routed to the
 implementing ticket (§15.7). None blocks `/to-spec` from closing.
+
+### 15.13 Post-`/to-tickets` consistency repairs
+
+After `/to-tickets` produced #17–#34, an audit pass found the
+following drifts between the implementing tickets and the per-ticket
+specs. The repairs below were committed to this document; the matching
+ticket-body edits live on the respective GitHub issues.
+
+| Repair | Where it surfaces in this doc | Matching per-ticket spec |
+|---|---|---|
+| §4: do NOT rebuild the curated `data/manifest.jsonl`; the ingest ticket becomes a corpus preflight + parser-regression harness. | §4 | `ontology.md` §4.3 (canonical artifacts are not regenerated); `AGENTS.md` (user-owned committed files preserved) |
+| §8.1: Stage A input is `canonical_form` (not `surface_form`); full normalisation chain NFKC + casefold + `Pd→"-"` + whitespace + wrapper-quote whitelist; threshold `>= 0.92`; no CLI/env override. | §8.1 | `entity-resolution.md` §3, §4 |
+| §8.3: full output schemas — `entities.jsonl` adds `aliases` and `resolution_confidence`; `entity_resolutions.jsonl` `resolution_score` rule. | §8.3 | `entity-resolution.md` §5 |
+| §9.2: rollback semantics — graph is restored to **pre-run** state, not necessarily empty. | §9.2 | `neo4j-ingestion.md` §8 |
+| §11.3: `HybridProvenance` → `HybridHitProvenance`; add `in_vector` / `in_graph` booleans; remove redundant `rrf_score` (the fused score lives in `HybridRetrievalHit.score`); three-key tie-break orders by `score` desc. | §11.3 | `hybrid-retrieval.md` §3 |
+| §12.2: remove `temperature` / `max_tokens` from the rendered user prompt text — they participate in the #16 cache key structurally, not by prompt injection. | §12.2 | `provider-abstractions.md` §5.1, §5.5; `grounded-generation.md` §6.2 |
+| §13.8: log event name is the literal string `"http_request_completed"`; the log record carries `request_id` as a separate field, not as the `event` value. | §13.8 | `serving-surface.md` §7.2 |
+
+`/to-spec` does not reopen the per-ticket specs. These repairs bring
+this synthesis doc and the implementing tickets into alignment with
+specs already on `main`.
 
 ## 16. Global acceptance gate
 
