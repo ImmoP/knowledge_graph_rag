@@ -9,17 +9,52 @@ The chunking strategy is the small set of rules by which a parsed document becom
 ## 1. Inputs and outputs
 
 **Inputs:**
-- `data/manifest.jsonl` — the corpus definition (182 rows).
+- `data/manifest.jsonl` — the canonical document corpus (182 rows); every record defines one canonical `Document` identity.
 - `data/raw/latex/<arxiv_id>.tar.gz` — arXiv LaTeX source packages (read-only; never modified).
 - The parsed-and-cleaned text produced by `src/ingest/parse_latex.py` — specifically the output of `read_tex_files` → `choose_main_file` → `resolve_includes` → `remove_comments` → `preserve_citations`. The chunker does **not** re-parse the raw `.tex`.
 
 **Output:**
-- `data/derived/chunks.jsonl` — one chunk record per line, conforming to the chunk-record spec, one record per `(doc_id, section_path, chunk_index)` triple, sorted by `chunk_id`.
+- `data/derived/chunks.jsonl` — one chunk record per line, conforming to the chunk-record spec, one record per `(doc_id, section_path, chunk_index)` triple, sorted by `chunk_id`. The chunker produces chunks only for documents in the **v1 text-bearing corpus subset** defined in §12. Documents outside that subset produce **zero** chunk records; they remain canonical `Document` identities for graph, citation, and seed-lift purposes but contribute nothing to the chunk namespace, the embedding store, the entity-resolution mention set, or the benchmark.
 
 **Inputs the chunker does NOT read:**
 - `data/aliases.json` — alias merging is a manifest concern, already applied in the manifest's `merged_ids`. The chunker uses `openalex_id` directly.
 - `data/title_overrides.json` — metadata only.
 - `ontology.yaml` — extraction uses it, not the chunker.
+
+## 12. v1 canonical-document corpus vs v1 text-bearing corpus subset
+
+The canonical document corpus is `data/manifest.jsonl`; **every** record there defines one canonical `Document` identity. Not every record in that canonical corpus yields chunks in v1.
+
+The **v1 text-bearing corpus subset** is the deterministic subset of the manifest whose canonical full-text source for v1 is an arXiv LaTeX package:
+
+```
+text_bearing =
+    [
+        record for record in data/manifest.jsonl
+        if record["arxiv_id"] is not None
+        and data/raw/latex/<record["arxiv_id"]>.tar.gz exists
+    ]
+```
+
+In v1, the LaTeX source package is the only full-text source. Records marked with `source_kind ∈ {"other_pdf", "landing_only", "acl_anthology"}` are valid canonical `Document` identities (for graph nodes, `CITES`, and seed lifting) but are **outside the v1 text-bearing subset**. v1 does **not** parse PDF, OCR, ACL Anthology HTML, or any non-LaTeX source; the architecture intentionally narrows v1 text coverage to the LaTeX subset.
+
+Properties the implementing ticket pins:
+
+- Every manifest record is a canonical `Document` identity (§12 row is the carve-out; the manifest is not shrunk).
+- Only text-bearing records produce `Chunk` records, `Mention` records, `Assertion` records, and rows in the embedding store. Any other use of a chunk_id is invalid.
+- A record that qualifies for the text-bearing subset but whose `data/raw/latex/<arxiv_id>.tar.gz` is missing or unreadable is an input-integrity defect and fails the preflight.
+- The non-text-bearing subset is reported in run traces (count and `doc_id`s) but the manifest itself is unchanged.
+- The classifier is implemented as a deterministic predicate over manifest fields (`arxiv_id` present + on-disk LaTeX archive present) plus the preflight. It is not an LLM call.
+- No PDF parsing, no OCR, no ACL Anthology ingestion, and no new ingestion stage are introduced in v1.
+
+Downstream invariants this pin enables:
+
+- `#25` may place a `Document` node with zero `HAS_CHUNK` relationships (a valid non-text-bearing canonical identity); the graph contract forbids inventing `HAS_CHUNK` only on the basis of corpus presence.
+- `#31` / `#35` require every `supporting_chunk_ids` to point to a chunk in `data/derived/chunks.jsonl`. Non-text-bearing documents therefore cannot supply `supporting_chunk_ids` directly — their `gold_evidence_path` must reach a text-bearing terminal Document whose chunks carry the load.
+- `#26` embeds every canonical chunk; it does not embed documents.
+- `#33` runs against the canonical chunk namespace and never assumes every manifest document has chunks.
+
+The numbers in §9 remain the corpus-characterizing numbers for the v1 **text-bearing** corpus (not the full manifest).
 
 ## 2. Default granularity: subsection
 
@@ -113,7 +148,7 @@ The implementing ticket verifies idempotency by running the chunker twice on a n
 
 These are the *corpus-characterizing* numbers, not chunking rules. They tell the implementing ticket what it's sizing chunks to:
 
-- 182 documents, ~80% with arxiv LaTeX source.
+- 182 documents in the canonical document corpus; the v1 text-bearing corpus subset is the records that carry an `arxiv_id` and have a corresponding `data/raw/latex/<arxiv_id>.tar.gz`. The remaining ~40% are non-text-bearing canonical `Document` identities in v1.
 - Cleaned-document sizes observed: 5k–120k characters (mean ≈ 40k).
 - Sections per document observed: 5–12 typical.
 - Subsections per document observed: 5–30 typical.

@@ -136,34 +136,49 @@ It is NOT rebuilt from scratch by the implementing ticket. The
 implementing ticket repurposes the ingest stage into a **corpus
 preflight + parser-regression harness** that:
 
-1. re-validates the committed `data/manifest.jsonl` against the
-   available `data/raw/latex/` and `data/raw/openalex/` artifacts
-   (every committed `openalex_id` and `arxiv_id` has a backing raw
-   artifact; every `referenced_works_canonical` either resolves
-   through `data/aliases.json` or is a raw OpenAlex ID);
-2. re-runs `parse_latex.py` against every tarball and verifies that
-   the parser still emits `[[CITE:...]]` markers and the structural
-   anchors downstream stages depend on (preserves existing user work
-   per AGENTS.md);
-3. ships a small **parser-regression fixture**: a frozen subset of
-   tarballs with pinned parser-output SHA256s so a future LaTeX
-   parser change is detected at preflight time, before any downstream
-   stage reads the manifest.
+1. re-validates every canonical record in `data/manifest.jsonl`
+   against the available `data/raw/openalex/` structural metadata
+   (per #9's input contract — every committed `openalex_id` has a
+   backing raw OpenAlex JSON whose `sha256` matches the manifest's
+   per-record hash, and whose `referenced_works` field is read
+   neither by the preflight nor by the parser; the manifest contains
+   no `referenced_works_canonical` field);
+2. partitions the manifest into the **canonical document corpus**
+   (every record) and the **v1 text-bearing corpus subset**
+   (deterministic: `arxiv_id` present in the record AND
+   `data/raw/latex/<arxiv_id>.tar.gz` present). Records in the
+   text-bearing subset trigger the parser-regression harness;
+   records outside the subset are valid canonical `Document`
+   identities but are NOT chunked and NOT parsed by
+   `parse_latex.py`;
+3. re-runs `parse_latex.py` against every LaTeX archive in the v1
+   text-bearing subset and verifies that the parser still emits
+   `[[CITE:...]]` markers and the structural anchors downstream
+   stages depend on (preserves existing user work per AGENTS.md);
+4. ships a small **parser-regression fixture**: a *synthetic
+   minimal LaTeX* tarball set (not real corpus papers) with pinned
+   parser-output SHA256s so a future LaTeX parser change is
+   detected at preflight time, before any downstream stage reads
+   the manifest.
 
-`data/manifest.jsonl` itself is **not modified** by this ticket. The
-ticket does NOT emit a new `data/manifest.jsonl`; it validates the
-existing committed one and produces a preflight verdict (pass/fail +
-SHA256 report on stderr and as a sidecar JSON next to the manifest's
-own metadata).
+`data/manifest.jsonl` itself is **not modified** by this ticket.
+The ticket does NOT emit a new `data/manifest.jsonl`; it validates
+the existing committed one and prints a preflight verdict
+(pass/fail + SHA256 + text-bearing subset counts) to stdout/
+stderr. **No sidecar JSON is written under `data/` or
+`data/derived/`.**
 
-`data/raw/` is never mutated; the parser only reads from it.
+`data/raw/` is never mutated; the parser only reads from it. Real
+corpus arXiv sources are NOT committed under `src/` or `tests/`.
 
 ## 5. Chunking stage
 
 Source: `docs/specs/chunking-strategy.md` + `docs/specs/chunk-record.md`.
 
-**Input:** `data/manifest.jsonl`, `data/raw/latex/<id>.tar.gz` (via
-`parse_latex.py`).
+**Input:** the v1 text-bearing subset of `data/manifest.jsonl`
+(see §4), `data/raw/latex/<id>.tar.gz` (via `parse_latex.py`),
+canonical `data/derived/chunks.jsonl` for the text-bearing
+corpus only.
 **Output:** `data/derived/chunks.jsonl`.
 
 - Granularity: `\subsection` default; cascading fallbacks (whole-section,
@@ -174,8 +189,19 @@ Source: `docs/specs/chunking-strategy.md` + `docs/specs/chunk-record.md`.
 - `chunk_id = "c_" + sha1(f"{doc_id}|{json.dumps(section_path)}|{chunk_index}")[:16]`.
 - Records sorted by `chunk_id` ascending, written atomically (tempfile +
   rename).
-- Idempotency gate: two consecutive full-corpus runs produce byte-identical
+- Idempotency gate: two consecutive full-corpus runs over the v1
+  text-bearing subset produce byte-identical
   `data/derived/chunks.jsonl`; SHA256 of the file is the gate.
+
+**Canonical-document vs v1 text-bearing distinction.** Every
+manifest record defines one canonical `Document` identity for the
+Neo4j graph, `CITES`, and graph-retrieval seed lifting. Only the v1
+text-bearing subset (`arxiv_id` present + on-disk LaTeX archive
+present) yields chunk records. Non-text-bearing records remain in
+the manifest, contribute no chunks, and are never parsed by
+`parse_latex.py`. v1 deliberately does NOT parse PDFs, OCR
+landing pages, or ACL Anthology HTML. See
+`chunking-strategy.md` §12.
 
 Record shape (every field required):
 
@@ -192,13 +218,13 @@ Record shape (every field required):
 }
 ```
 
-`doc_id` is exactly the `openalex_id` from `data/manifest.jsonl` (regex
-`^W[0-9]+$`).
+`doc_id` is exactly the `openalex_id` from `data/manifest.jsonl`
+(regex `^W[0-9]+$`).
 
-**Token budget:** every chunk's `token_estimate` must fit the embedding
-model's 512-token input limit (vector-retrieval §1.3). The chunker is the
-right place to enforce this; the vector loader refuses to embed oversized
-chunks if any slip through.
+**Token budget:** every chunk's `token_estimate` must fit the
+embedding model's 512-token input limit (vector-retrieval §1.3).
+The chunker is the right place to enforce this; the vector loader
+refuses to embed oversized chunks if any slip through.
 
 ## 6. Extraction stage
 
@@ -1587,6 +1613,14 @@ ticket-body edits live on the respective GitHub issues.
 | #31: no `--allow-overwrite`, no `--force`, no env var that replaces the canonical `eval/questions.jsonl` with different bytes; identical-bytes write is idempotent success; different-bytes write is refused; new question sets go to `eval/questions.vN.jsonl`. No acceptance of empty `supporting_chunk_ids` in strict mode. | §14, §15.13 | `eval-schema.md` §3, §6 |
 | #32: concrete retriever calls use `effective_question = question.strip()`; for `mode == "hybrid"` the route invokes `HybridRetriever.retrieve(effective_question, k=5)` exactly once and never invokes `VectorRetriever` / `GraphRetriever` separately; the serving projection reads `HybridRetrievalHit.provenance` (NOT `hybrid_hit_provenance`). | §13.1, §13.5 | `serving-surface.md` §2.2, §6.1, §6.4 |
 | #35: HITL authoring ticket; canonical `supporting_chunk_ids` is non-empty by spec (no `[]` acceptance inherited from old #31); no LLM generation of the questions. | §14 | `eval-schema.md` §6 |
+| **Canonical document corpus vs v1 text-bearing corpus subset (third pass):** `data/manifest.jsonl` defines one canonical `Document` identity per record; only the deterministic v1 text-bearing subset (manifest records with `arxiv_id` present **and** `data/raw/latex/<arxiv_id>.tar.gz` present) produces chunks, mentions, assertions, and embeddings. Records outside the subset are valid `Document` nodes and `CITES` endpoints but have zero `HAS_CHUNK` edges. v1 intentionally narrows text coverage to LaTeX; no PDF/OCR/ACL-Anthology parsing is added. Downstream invariants: `#25` allows a `Document` node with zero `HAS_CHUNK`; `#26` embeds canonical chunks only; `#31`/`#35` `supporting_chunk_ids` reference the chunk namespace; `#33` does not assume every Document has chunks. | §4, §5 | `chunking-strategy.md` §12 (added) |
+| **Closed-spec carve-out (#6):** the chunking-strategy.md §12 addendum is recorded as a semantic repair to closed ticket #6 in #6's resolution thread / map audit (`docs/specs/implementation-spec.md` §15.13 here plus a follow-up note in #1's thread). The rules of §§1–11 are unchanged; the carve-out makes a previously implicit assumption explicit. | §5 | `chunking-strategy.md` §12; AGENTS.md |
+| #20: ontology validator now permits `derived` on the entity `population_mode` schema (even though v1 has no derived entity type), and pins prompt-phase-specific resolution: every `extracted` entity type → `extract_entities_v1`; every `extracted` relation type → `extract_relations_v1`. Adds the §4–§5 name/discipline checks: `author` forbidden (case-insensitive); junk-drawer entity names forbidden (`concept`, `finding`, `claim`, `benchmark`, `topic`, `theme`); `examples` non-empty on every record; `verified` examples receive corpus-existence checks; `pending_verification` examples require a non-empty `note`. | §15.7 | `ontology.md` §4–§5 |
+| #28: adds the verbatim `graph-retrieval.md` §4 evidence collection and §3.2 path-uniqueness invariants omitted previously: a semantic path may not repeat the same logical relationship identity; node revisits are allowed only when no relationship identity repeats; no Neo4j internal IDs participate; per-extracted ontology assertion return the canonical `chunk_id` stored on it; per-derived `EVALUATED_ON` resolve `supporting_assertion_ids` and collect the exact participating-assertion `chunk_id`s; dangling supporting assertion is stale-graph error; mixed paths return only sorted-unique assertion-evidence chunks; `HAS_CHUNK`/MENTIONS context only on pure-CITES paths; otherwise fail closed. | §11.2 | `graph-retrieval.md` §3.2, §4.1, §4.2 |
+| #27: removed stale claim that `#30` blocks on `#27`. `#30` depends only on `#19 + #22`. | §11.1 | `grounded-generation.md` §1; `vector-retrieval.md` (none) |
+| #26 / #33: a small reusable `validate_vector_store(canonical_chunks, configured_embedding_identity) -> VectorStoreIdentity` API is the single freshness seam. `#26` runs it after ingestion; `#27` may use it as a freshness precondition; `#33` runs it during benchmark preflight and records the returned `embedding_source_chunks_sha256` and `embedding_model_identity`. No new persistent manifest is introduced; benchmark freshness does not depend on historical logs. | §11.1, §14 | `vector-retrieval.md` §3; `local-infra.md` (none) |
+| #34: fresh-checkout gate runs against a **prepared local checkout** (tracked repo state clean, `data/raw/` corpus mounted/present, `.env` credentials/config present, Docker available); the gate then rebuilds all derived state from the supplied canonical/raw inputs. Raw corpus data and credentials remain gitignored. | §16 | `local-infra.md` §1 |
+| #21: textual preflight operates on the v1 text-bearing subset for parser regression; non-text-bearing records do NOT require a LaTeX archive. Parser-regression fixtures committed to git are *synthetic minimal LaTeX*, not real corpus papers. | §4 | `chunking-strategy.md` §12 |
 
 `/to-spec` does not reopen the per-ticket specs. These repairs bring
 this synthesis doc and the implementing tickets into alignment with
