@@ -144,13 +144,17 @@ preflight + parser-regression harness** that:
    neither by the preflight nor by the parser; the manifest contains
    no `referenced_works_canonical` field);
 2. partitions the manifest into the **canonical document corpus**
-   (every record) and the **v1 text-bearing corpus subset**
-   (deterministic: `arxiv_id` present in the record AND
-   `data/raw/latex/<arxiv_id>.tar.gz` present). Records in the
-   text-bearing subset trigger the parser-regression harness;
-   records outside the subset are valid canonical `Document`
-   identities but are NOT chunked and NOT parsed by
-   `parse_latex.py`;
+   (every record) and the **v1 text-bearing document set**
+   (deterministic, derived from manifest metadata alone:
+   `record["arxiv_id"] is not None`). Membership is **independent
+   of any local filesystem state**. Records in the text-bearing
+   set trigger the parser-regression harness; records outside the
+   set are valid canonical `Document` identities but are NOT
+   chunked and NOT parsed by `parse_latex.py`. A text-bearing
+   record whose `data/raw/latex/<arxiv_id>.tar.gz` is missing or
+   unreadable is an input-integrity failure: the preflight exits
+   non-zero with the missing `doc_id` named, and the pipeline
+   does **not** silently reclassify it as non-text-bearing;
 3. re-runs `parse_latex.py` against every LaTeX archive in the v1
    text-bearing subset and verifies that the parser still emits
    `[[CITE:...]]` markers and the structural anchors downstream
@@ -175,10 +179,9 @@ corpus arXiv sources are NOT committed under `src/` or `tests/`.
 
 Source: `docs/specs/chunking-strategy.md` + `docs/specs/chunk-record.md`.
 
-**Input:** the v1 text-bearing subset of `data/manifest.jsonl`
-(see §4), `data/raw/latex/<id>.tar.gz` (via `parse_latex.py`),
-canonical `data/derived/chunks.jsonl` for the text-bearing
-corpus only.
+**Input:** the v1 text-bearing set of `data/manifest.jsonl`
+(see §4 and `chunking-strategy.md` §12), `data/raw/latex/<id>.tar.gz`
+(via `parse_latex.py`) for each text-bearing document.
 **Output:** `data/derived/chunks.jsonl`.
 
 - Granularity: `\subsection` default; cascading fallbacks (whole-section,
@@ -195,13 +198,36 @@ corpus only.
 
 **Canonical-document vs v1 text-bearing distinction.** Every
 manifest record defines one canonical `Document` identity for the
-Neo4j graph, `CITES`, and graph-retrieval seed lifting. Only the v1
-text-bearing subset (`arxiv_id` present + on-disk LaTeX archive
-present) yields chunk records. Non-text-bearing records remain in
-the manifest, contribute no chunks, and are never parsed by
-`parse_latex.py`. v1 deliberately does NOT parse PDFs, OCR
-landing pages, or ACL Anthology HTML. See
-`chunking-strategy.md` §12.
+Neo4j graph, `CITES`, and graph-retrieval seed lifting. The v1
+text-bearing set is the deterministic predicate
+`{record["openalex_id"] for record in data/manifest.jsonl if
+record["arxiv_id"] is not None}`. It is independent of any local
+filesystem state and byte-for-byte reproducible from the manifest.
+Only text-bearing records yield chunk records; non-text-bearing
+records remain in the manifest, contribute no chunks, and are
+never parsed by `parse_latex.py`. v1 deliberately does NOT parse
+PDFs, OCR landing pages, or ACL Anthology HTML. A text-bearing
+record whose LaTeX archive is missing is an input-integrity
+failure (#21 / #22 preflight exits non-zero with the missing
+`doc_id` named); the pipeline does **not** silently reclassify it
+as non-text-bearing. See `chunking-strategy.md` §12.
+
+**Doc-id coverage gate.** Acceptance requires the set equality
+
+```python
+text_bearing_doc_ids = {
+    r["openalex_id"]
+    for r in data/manifest.jsonl
+    if r["arxiv_id"] is not None
+}
+chunk_doc_ids = {c["doc_id"] for c in data/derived/chunks.jsonl}
+assert chunk_doc_ids == text_bearing_doc_ids
+```
+
+Every text-bearing document has at least one chunk; no chunk
+exists for a non-text-bearing document. The total chunk count is
+not pinned (documents produce different numbers of chunks); only
+set equality is asserted.
 
 Record shape (every field required):
 
@@ -647,6 +673,8 @@ Source: `docs/specs/vector-retrieval.md`.
 | Property | Value |
 |---|---|
 | Hugging Face id | `BAAI/bge-small-en-v1.5` |
+| Model revision (literal git SHA) | `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` |
+| Embedding-model identity | `<provider>:BAAI/bge-small-en-v1.5:5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` |
 | Embedding dimension | `384` |
 | Max input length | `512` tokens |
 | Pooling | mean (model default) |
@@ -1621,6 +1649,11 @@ ticket-body edits live on the respective GitHub issues.
 | #26 / #33: a small reusable `validate_vector_store(canonical_chunks, configured_embedding_identity) -> VectorStoreIdentity` API is the single freshness seam. `#26` runs it after ingestion; `#27` may use it as a freshness precondition; `#33` runs it during benchmark preflight and records the returned `embedding_source_chunks_sha256` and `embedding_model_identity`. No new persistent manifest is introduced; benchmark freshness does not depend on historical logs. | §11.1, §14 | `vector-retrieval.md` §3; `local-infra.md` (none) |
 | #34: fresh-checkout gate runs against a **prepared local checkout** (tracked repo state clean, `data/raw/` corpus mounted/present, `.env` credentials/config present, Docker available); the gate then rebuilds all derived state from the supplied canonical/raw inputs. Raw corpus data and credentials remain gitignored. | §16 | `local-infra.md` §1 |
 | #21: textual preflight operates on the v1 text-bearing subset for parser regression; non-text-bearing records do NOT require a LaTeX archive. Parser-regression fixtures committed to git are *synthetic minimal LaTeX*, not real corpus papers. | §4 | `chunking-strategy.md` §12 |
+| **Deterministic text-bearing membership (fourth pass):** the v1 text-bearing set is `{record["openalex_id"] for record in data/manifest.jsonl if record["arxiv_id"] is not None}`. Membership is **derived from manifest metadata alone**, byte-for-byte reproducible across machines, and **independent of local filesystem state**. A text-bearing record whose LaTeX archive is missing is an input-integrity failure (#21 preflight exits non-zero, missing `doc_id` named) and is **not silently reclassified** as non-text-bearing. The current manifest yields 70 text-bearing documents and 112 non-text-bearing canonical Documents (182 total). #22 doc-id coverage gate is the **set equality** `chunk_doc_ids == text_bearing_doc_ids`; the total chunk count is intentionally not pinned. | §4, §5 | `chunking-strategy.md` §12 |
+| **#20 prompt-artifact ownership (fourth pass):** `#20` validates only the **symbolic** extraction-prompt references on the ontology side: an extracted entity's `extraction_prompt` must equal `extract_entities_v1`; an extracted relation's `extraction_prompt` must equal `extract_relations_v1`. `#20` does **not** require the physical prompt-artifact files to exist. `#23` owns creation of `prompts/extract_entities_v1.txt` and `prompts/extract_relations_v1.txt`, asserts their existence at extraction startup, and hashes their exact contents into the extraction/cache identity. No new dependency edge `#23 → #20`; no cycle. | §15.7 | `extraction-contract.md` §3, §10; `ontology.md` §5.10 |
+| **#20 verified-example corpus check (fourth pass):** `#20` runs before chunks exist and does **not** depend on `data/derived/chunks.jsonl`. Verified-example corroboration uses **canonical manifest / OpenAlex metadata** (not chunk text): `document` examples are corroborated by `openalex_id` membership in `data/manifest.jsonl`; non-`document` examples are corroborated by the instance string appearing in a corpus-wide title/abstract surface available before chunking. If the local raw OpenAlex representation stores abstracts as an inverted index, the validator reconstructs the abstract deterministically for this check. | §15.7 | `ontology.md` §5.9 |
+| **#20 genericity test (fourth pass):** the naive "no v1 vocabulary word may appear in the validator" grep is replaced by a meaningful genericity test: no Python constant / list / dict duplicates the v1 entity vocabulary, the v1 relation vocabulary, the ontology endpoints, or the population modes; the validator operates from a YAML-loaded ontology. The behavioral test loads a synthetic valid ontology with different legal entity/relation names and proves the generic structural validator passes without any code change. Schema-level reserved/forbidden names and the two phase-specific prompt reference names remain (those are validation-policy rules, not duplicated ontology vocabulary). | §15.7 | `ontology.md` §4.3 |
+| **BGE model revision pin (fourth pass):** the BGE small-en-v1.5 model revision is pinned to the literal git revision SHA `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a`. The adapter must load the model using this explicit revision (not floating `main`); the embedding-model identity is `<provider>:BAAI/bge-small-en-v1.5:<revision>`; a revision change is a deliberate future baseline change requiring re-embedding, never implicit. Pinned consistently across `vector-retrieval.md`, `implementation-spec.md`, `#19`, `#26`, `#27`, and `#33`. Recorded in the closed #10 resolution thread as the explicit SHA the spec required. | §10, §11, §14 | `vector-retrieval.md` §1.1 |
 
 `/to-spec` does not reopen the per-ticket specs. These repairs bring
 this synthesis doc and the implementing tickets into alignment with

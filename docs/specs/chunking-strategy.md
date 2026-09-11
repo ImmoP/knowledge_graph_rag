@@ -21,35 +21,52 @@ The chunking strategy is the small set of rules by which a parsed document becom
 - `data/title_overrides.json` — metadata only.
 - `ontology.yaml` — extraction uses it, not the chunker.
 
-## 12. v1 canonical-document corpus vs v1 text-bearing corpus subset
+## 12. v1 canonical-document corpus vs v1 text-bearing document set
 
 The canonical document corpus is `data/manifest.jsonl`; **every** record there defines one canonical `Document` identity. Not every record in that canonical corpus yields chunks in v1.
 
-The **v1 text-bearing corpus subset** is the deterministic subset of the manifest whose canonical full-text source for v1 is an arXiv LaTeX package:
+The **v1 text-bearing document set** is determined **exclusively** by canonical manifest metadata:
+
+```python
+text_bearing_doc_ids = {
+    record["openalex_id"]
+    for record in data/manifest.jsonl
+    if record["arxiv_id"] is not None
+}
+```
+
+Membership is a function of the manifest alone. It is **byte-for-byte deterministic**, identical across machines given the same committed `data/manifest.jsonl`, and **independent of any local filesystem state**.
+
+For every member of `text_bearing_doc_ids`, the v1 full-text source is the LaTeX package:
 
 ```
-text_bearing =
-    [
-        record for record in data/manifest.jsonl
-        if record["arxiv_id"] is not None
-        and data/raw/latex/<record["arxiv_id"]>.tar.gz exists
-    ]
+data/raw/latex/<arxiv_id>.tar.gz
 ```
 
-In v1, the LaTeX source package is the only full-text source. Records marked with `source_kind ∈ {"other_pdf", "landing_only", "acl_anthology"}` are valid canonical `Document` identities (for graph nodes, `CITES`, and seed lifting) but are **outside the v1 text-bearing subset**. v1 does **not** parse PDF, OCR, ACL Anthology HTML, or any non-LaTeX source; the architecture intentionally narrows v1 text coverage to the LaTeX subset.
+A text-bearing document's archive is a **precondition** for downstream success, not part of the membership predicate. A record satisfies membership the moment `record["arxiv_id"] is not None`; the preflight is responsible for confirming the archive exists. The two checks must NOT be conflated:
+
+- `arxiv_id != null` AND archive exists: valid text-bearing document.
+- `arxiv_id != null` AND archive missing/unreadable: input-integrity failure; the preflight (#21) exits non-zero. The pipeline does **not** silently reclassify such a record as non-text-bearing.
+- `arxiv_id == null`: canonical non-text-bearing Document; zero chunks required; this is the valid terminal state, not an error.
+
+A prepared checkout is **never** allowed to silently shrink the text-bearing corpus because an archive is missing. Membership is derived from the manifest; archive presence is a downstream runtime check.
+
+In v1, the LaTeX source package is the only full-text source. Records with `source_kind ∈ {"other_pdf", "landing_only", "acl_anthology"}` are valid canonical `Document` identities (for graph nodes, `CITES`, and seed lifting) but are **outside the v1 text-bearing set**. v1 does **not** parse PDF, OCR, ACL Anthology HTML, or any non-LaTeX source; the architecture intentionally narrows v1 text coverage to the LaTeX subset.
 
 Properties the implementing ticket pins:
 
-- Every manifest record is a canonical `Document` identity (§12 row is the carve-out; the manifest is not shrunk).
-- Only text-bearing records produce `Chunk` records, `Mention` records, `Assertion` records, and rows in the embedding store. Any other use of a chunk_id is invalid.
-- A record that qualifies for the text-bearing subset but whose `data/raw/latex/<arxiv_id>.tar.gz` is missing or unreadable is an input-integrity defect and fails the preflight.
-- The non-text-bearing subset is reported in run traces (count and `doc_id`s) but the manifest itself is unchanged.
-- The classifier is implemented as a deterministic predicate over manifest fields (`arxiv_id` present + on-disk LaTeX archive present) plus the preflight. It is not an LLM call.
+- The text-bearing `doc_id` set is reproducible from the manifest alone and equals the set of chunk `doc_id` values in `data/derived/chunks.jsonl` (set equality; see §11 Acceptance gate).
+- Every manifest record is a canonical `Document` identity (the manifest is not shrunk).
+- Only text-bearing records produce `Chunk` records, `Mention` records, `Assertion` records, and rows in the embedding store. Any other use of a `chunk_id` is invalid.
+- A record that satisfies the membership predicate but whose `data/raw/latex/<arxiv_id>.tar.gz` is missing or unreadable fails the preflight (#21). It is **not** silently removed from the text-bearing set.
+- The non-text-bearing set is reported in run traces (count and `doc_id`s) but the manifest itself is unchanged.
+- The classifier is a deterministic predicate over manifest fields. It is not an LLM call.
 - No PDF parsing, no OCR, no ACL Anthology ingestion, and no new ingestion stage are introduced in v1.
 
 Downstream invariants this pin enables:
 
 - `#25` may place a `Document` node with zero `HAS_CHUNK` relationships (a valid non-text-bearing canonical identity); the graph contract forbids inventing `HAS_CHUNK` only on the basis of corpus presence.
+- For a non-text-bearing terminal Document, a pure-CITES path that reaches it produces no `HAS_CHUNK` fallback chunk (the document has no chunks) and therefore yields no hit from that path. This is valid, not stale graph state.
 - `#31` / `#35` require every `supporting_chunk_ids` to point to a chunk in `data/derived/chunks.jsonl`. Non-text-bearing documents therefore cannot supply `supporting_chunk_ids` directly — their `gold_evidence_path` must reach a text-bearing terminal Document whose chunks carry the load.
 - `#26` embeds every canonical chunk; it does not embed documents.
 - `#33` runs against the canonical chunk namespace and never assumes every manifest document has chunks.

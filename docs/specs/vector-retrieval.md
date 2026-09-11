@@ -13,7 +13,7 @@ The vector retriever is the first of three retrieval shapes that ship together a
 | Property              | Value                                                                |
 |-----------------------|----------------------------------------------------------------------|
 | Hugging Face id       | `BAAI/bge-small-en-v1.5`                                             |
-| Model revision        | the commit SHA pinned at resolution time, recorded in the implementing ticket's resolution comment and re-pinned if the SHA ever changes |
+| Model revision        | `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` (literal git revision SHA of `BAAI/bge-small-en-v1.5`; pinned across `implementation-spec.md`, `#19`, `#26`, `#27`, `#33`, and the closed #10 resolution thread) |
 | Embedding dimension   | `384`                                                                |
 | Max model input length | `512` tokens                                                         |
 | Pooling               | mean-pooling, as supplied by the pinned `SentenceTransformer` model (default for `BAAI/bge-small-en-v1.5`) |
