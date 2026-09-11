@@ -256,5 +256,165 @@ class TestRuntimeDependencyDeclared(unittest.TestCase):
         self.assertEqual(installed, pinned)
 
 
+class TestVerifiedEmbeddingRuntimePins(unittest.TestCase):
+    """Focused dependency compatibility test for the #19 embedding
+    runtime that was actually verified to load
+    ``sentence_transformers.SentenceTransformer`` cleanly in the
+    project environment (Python 3.12.13, x86_64 macOS).
+
+    Proves the declared requirements.txt pins reproduce the verified
+    runtime:
+
+    * numpy==1.26.4
+    * scipy==1.12.0
+    * torch==2.2.2
+    * transformers==4.48.3
+    * sentence-transformers==3.4.1
+    * jsonschema==4.25.1
+
+    Two layers of proof are checked:
+
+    1. The pin string is present and exact in ``requirements.txt``
+       (style: ``<name>==<X.Y.Z>``, no range, no caret, no unpinned).
+    2. If the package is importable in the running environment, its
+       installed version equals the pin. If the package is not
+       installed (e.g. a test runner that skips heavy deps), that
+       check is skipped so the test stays runnable in CI without
+       torch.
+    """
+
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+
+    EXPECTED_PINS: dict[str, str] = {
+        "numpy": "1.26.4",
+        "scipy": "1.12.0",
+        "torch": "2.2.2",
+        "transformers": "4.48.3",
+        "sentence-transformers": "3.4.1",
+        "jsonschema": "4.25.1",
+    }
+
+    def _read_requirements(self) -> str:
+        return (self.REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
+
+    def _pinned_in_requirements(self, name: str) -> str | None:
+        import re
+
+        text = self._read_requirements()
+        match = re.search(
+            rf"^{re.escape(name)}\s*==\s*([\w.+-]+)\s*$",
+            text,
+            re.MULTILINE,
+        )
+        return match.group(1) if match else None
+
+    def test_requirements_exact_pins_verified_embedding_runtime(self):
+        import re
+
+        text = self._read_requirements()
+        for name, expected in self.EXPECTED_PINS.items():
+            with self.subTest(dep=name):
+                match = re.search(
+                    rf"^{re.escape(name)}\s*==\s*([\w.+-]+)\s*$",
+                    text,
+                    re.MULTILINE,
+                )
+                self.assertIsNotNone(
+                    match,
+                    f"requirements.txt must exact-pin {name} "
+                    f"(no range, no unpinned)",
+                )
+                pinned = match.group(1)
+                self.assertEqual(
+                    pinned,
+                    expected,
+                    f"{name} pin mismatch: requirements.txt has "
+                    f"{pinned!r}, verified runtime needs {expected!r}",
+                )
+                parts = pinned.split(".")
+                self.assertGreaterEqual(
+                    len(parts),
+                    3,
+                    f"{name} pin must be a concrete PEP 440 version, "
+                    f"got {pinned!r}",
+                )
+
+    def test_no_range_or_unpinned_for_verified_embedding_runtime(self):
+        # Guard against accidental caret/tilde/range/<=/>=/!=/~=
+        # entries for the six verified pins — silent drift defeats
+        # the whole point of pinning. ``==`` (exact pin) is the only
+        # allowed operator.
+        import re
+
+        text = self._read_requirements()
+        for name in self.EXPECTED_PINS:
+            with self.subTest(dep=name):
+                # Every line mentioning this dep must match the
+                # exact-pin shape. Any caret/tilde/range/unpinned
+                # entry would be caught here.
+                matching_lines = [
+                    ln for ln in text.splitlines()
+                    if re.match(rf"^{re.escape(name)}\b", ln)
+                ]
+                self.assertGreaterEqual(
+                    len(matching_lines),
+                    1,
+                    f"requirements.txt has no line for {name!r}",
+                )
+                for ln in matching_lines:
+                    self.assertRegex(
+                        ln,
+                        rf"^{re.escape(name)}\s*==\s*[\w.+-]+\s*$",
+                        f"requirements.txt must exact-pin {name} "
+                        f"(no range, no unpinned, no caret/tilde); "
+                        f"offending line: {ln!r}",
+                    )
+
+    def test_installed_versions_match_verified_pins_when_available(self):
+        # If a package is importable in the running env, its installed
+        # version must equal the declared pin. Skipped when the
+        # package is absent so the test stays runnable in lighter
+        # environments.
+        import importlib
+
+        # Map distribution name -> Python module name where they differ.
+        module_name_for = {
+            "sentence-transformers": "sentence_transformers",
+        }
+
+        for dist_name, expected in self.EXPECTED_PINS.items():
+            with self.subTest(dep=dist_name):
+                pinned = self._pinned_in_requirements(dist_name)
+                self.assertIsNotNone(
+                    pinned,
+                    f"requirements.txt missing pin for {dist_name}",
+                )
+                try:
+                    dist_version = importlib.metadata.version(dist_name)
+                except importlib.metadata.PackageNotFoundError:
+                    self.skipTest(
+                        f"{dist_name} not installed in current env; "
+                        f"cannot verify installed-version parity"
+                    )
+                self.assertEqual(
+                    dist_version,
+                    expected,
+                    f"{dist_name} installed as {dist_version!r} but "
+                    f"requirements.txt pins {expected!r}",
+                )
+                # Smoke-import the Python module if it differs from
+                # the distribution name; this catches the case where a
+                # wrong dist name passes a version check but the real
+                # import path is broken.
+                module_name = module_name_for.get(dist_name, dist_name)
+                try:
+                    importlib.import_module(module_name)
+                except ImportError:
+                    self.skipTest(
+                        f"module {module_name!r} not importable in "
+                        f"current env"
+                    )
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

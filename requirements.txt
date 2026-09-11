@@ -5,7 +5,11 @@ httpcore==1.0.9
 httpx==0.28.1
 idna==3.19
 jsonschema==4.25.1
+numpy==1.26.4
 python-dotenv==1.2.3
 PyYAML==6.0.3
-sentence-transformers==5.7.0
+scipy==1.12.0
+sentence-transformers==3.4.1
+torch==2.2.2
+transformers==4.48.3
 typing_extensions==4.16.0
