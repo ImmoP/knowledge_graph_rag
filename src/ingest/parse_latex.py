@@ -173,23 +173,34 @@ def looks_like_template(title: str) -> bool:
 
 
 def choose_main_file(tex_files: dict[str, str]) -> str:
-    """Return the most plausible main LaTeX file."""
+    """Return the most plausible main LaTeX file.
+
+    Candidate detection evaluates each tex file on a comment-stripped view
+    so commented-out template titles (``% \\title{emnlp 2017 instructions}``)
+    and commented-out ``\\begin{document}`` / ``\\cite`` markers do not
+    influence ranking or rejection. The selected file name still flows
+    through the downstream pipeline on the original ``tex_files`` content;
+    only the candidate-detection view is comment-stripped. ``remove_comments``
+    is reused as-is (escaped ``\\%`` is preserved).
+    """
 
     candidates: list[tuple[int, int, str]] = []
 
     for name, text in tex_files.items():
 
-        if BEGIN_DOCUMENT_RE.search(text) is None:
+        candidate_text = remove_comments(text)
+
+        if BEGIN_DOCUMENT_RE.search(candidate_text) is None:
 
             continue
 
-        title = extract_title(text)
+        title = extract_title(candidate_text)
 
         if title is not None and looks_like_template(title):
 
             continue
 
-        citation_count = len(CITE_RE.findall(text))
+        citation_count = len(CITE_RE.findall(candidate_text))
 
         has_title = int(title is not None)
 

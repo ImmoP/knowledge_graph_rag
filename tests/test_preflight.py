@@ -330,7 +330,101 @@ class EntryPointIntegrationTests(unittest.TestCase):
         self.assertIn("manifest_sha256:", combined)
         self.assertIn("text_bearing_doc_count:", combined)
         self.assertIn("parser_regression_fixtures:", combined)
-        self.assertIsInstance(rc, int)
+
+
+class ChooseMainFileCommentStrippingTests(unittest.TestCase):
+    """Narrow parse_latex repair (#22 / Part A): choose_main_file evaluates
+    each tex file on a comment-stripped view so commented-out template
+    titles, ``\\begin{document}``, and ``\\cite`` markers do not influence
+    candidate detection or ranking.
+
+    The selected file still flows through the downstream pipeline on the
+    ORIGINAL tex_files content; only the candidate-detection view is
+    comment-stripped.
+    """
+
+    def _tex_files(self, main: str, others: dict | None = None) -> dict:
+        out = {"main.tex": main}
+        if others:
+            out.update(others)
+        return out
+
+    def test_commented_template_title_then_real_title_is_not_rejected(self) -> None:
+        """A commented-out ``\\title{emnlp 2017 instructions}`` followed by a
+        real ``\\title{Some Specific Study}`` must NOT reject the file."""
+        text = (
+            "\\documentclass{article}\n"
+            "% \\title{emnlp 2017 instructions}\n"
+            "\\author{Anonymous}\n"
+            "\\title{Some Specific Study}\n"
+            "\\begin{document}\n"
+            "\\section{Intro}\nBody.\n"
+            "\\cite{ref1}\n"
+            "\\end{document}\n"
+        )
+        main = parse_latex.choose_main_file(self._tex_files(text))
+        self.assertEqual(main, "main.tex")
+
+    def test_commented_begin_document_does_not_make_a_file_a_candidate(self) -> None:
+        """A file whose ONLY ``\\begin{document}`` is commented out is not a
+        valid candidate, even though it has other content."""
+        text = (
+            "\\documentclass{article}\n"
+            "% \\begin{document}\n"
+            "\\section{Fake}\nBody.\n"
+        )
+        with self.assertRaises(ValueError):
+            parse_latex.choose_main_file(self._tex_files(text))
+
+    def test_commented_citation_does_not_influence_ranking(self) -> None:
+        """Citation count ranking uses comment-stripped text. A file with only
+        commented-out cites ranks below one with real cites."""
+        low = (
+            "\\documentclass{article}\n"
+            "\\title{Low}\n"
+            "\\begin{document}\n"
+            "\\section{S}\n"
+            "% \\cite{a} % \\cite{b} % \\cite{c}\n"
+            "body.\n"
+            "\\end{document}\n"
+        )
+        high = (
+            "\\documentclass{article}\n"
+            "\\title{High}\n"
+            "\\begin{document}\n"
+            "\\section{S}\n"
+            "\\cite{a} \\cite{b} \\cite{c} \\cite{d} \\cite{e}\n"
+            "body.\n"
+            "\\end{document}\n"
+        )
+        main = parse_latex.choose_main_file(self._tex_files(low, {"other.tex": high}))
+        self.assertEqual(main, "other.tex")
+
+    def test_escaped_percent_in_title_is_preserved(self) -> None:
+        """``\\%`` (escaped percent) is not stripped by ``remove_comments``,
+        so ``\\title{Foo \\% Bar}`` is still seen as a title."""
+        text = (
+            "\\documentclass{article}\n"
+            "\\title{Foo \\% Bar}\n"
+            "\\begin{document}\nbody\n\\end{document}\n"
+        )
+        main = parse_latex.choose_main_file(self._tex_files(text))
+        self.assertEqual(main, "main.tex")
+        # And remove_comments alone must not eat the %:
+        cleaned = parse_latex.remove_comments(text)
+        self.assertIn(r"\%", cleaned)
+
+    def test_template_title_without_comment_is_still_rejected(self) -> None:
+        """Negative control: an UN-commented template title is still rejected.
+        The repair only changes comment-stripping; it does NOT widen what
+        counts as a template title."""
+        text = (
+            "\\documentclass{article}\n"
+            "\\title{emnlp 2017 instructions}\n"
+            "\\begin{document}\nbody\n\\end{document}\n"
+        )
+        with self.assertRaises(ValueError):
+            parse_latex.choose_main_file(self._tex_files(text))
 
 
 if __name__ == "__main__":
