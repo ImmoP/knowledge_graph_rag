@@ -95,11 +95,13 @@ Real LaTeX is not uniform. The strategy names the rules that handle non-uniform 
 | Section with one or more `\subsection` markers | Each subsection is its own chunk. |
 | Section with **no** `\subsection` markers | The whole section (title + body) is one chunk. |
 | Subsection long enough to exceed the chunk-size cap (number pinned by implementing ticket) | Subdivide at paragraph breaks (`\n\n`). Each subdivision stays inside the original subsection's `section_path` and increments `chunk_index` monotonically. |
+| Paragraph long enough that paragraph-only subdivision leaves a still-overlong fragment | Subdivide further at line breaks (`\n`). |
+| Line long enough that line-boundary subdivision leaves a still-overlong fragment (no `\n` boundaries left) | Final safe-whitespace subdivision: split at the LAST Unicode-whitespace boundary in the next `chunk-token-budget * 4` chars that respects the citation-span rule (§6). Never split inside a `[[CITE:...]]` span. If a single token exceeds the budget and there is no safe split point, fail closed with `OversizeChunkError` rather than silently truncate. |
 | Document with no `\section` markers at all | The entire body is one chunk with `section_path = []`. |
 | Document with `\subsubsection` but no `\subsection` | Treat `\subsubsection` as the subsection-equivalent boundary. |
 | Section titles containing nested braces (`\section{X {Y} Z}`) | Section title is truncated at the first inner `}`; chunk continues to use whatever text followed. Implementing ticket emits a warning per occurrence. |
 
-The cascade is not "first matching rule wins"; it is "section → subsection → paragraph subdivision of overlong subsections." When a section has subsections, paragraph subdivision *inside* a subsection only triggers if that subsection is overlong.
+The cascade is not "first matching rule wins"; it is "section → subsection → paragraph → line → safe-whitespace subdivision of overlong lines." When a section has subsections, paragraph and finer subdivision *inside* a subsection only triggers if that subsection is overlong. The whitespace-fallback stage preserves every character (excluding inter-chunk whitespace separators) and respects the citation-span rule; it never silently drops or truncates chunk content. A chunk that cannot be emitted within the budget under these rules causes the whole build to fail closed (no partial chunks.jsonl written).
 
 ## 4. Pre-section content (abstract, front matter)
 

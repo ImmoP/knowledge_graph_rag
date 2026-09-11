@@ -190,8 +190,16 @@ Source: `docs/specs/chunking-strategy.md` + `docs/specs/chunk-record.md`.
 **Output:** `data/derived/chunks.jsonl`.
 
 - Granularity: `\subsection` default; cascading fallbacks (whole-section,
-  subsubsection-equivalent, paragraph subdivision of overlong subsections);
-  pre-section content is `chunk_index=0` with `section_path=[]`.
+  subsubsection-equivalent, paragraph subdivision of overlong subsections,
+  line subdivision of overlong paragraphs, safe-whitespace subdivision of
+  overlong lines); pre-section content is `chunk_index=0` with
+  `section_path=[]`. The whitespace-fallback stage splits a single
+  overlong line at the last Unicode-whitespace boundary inside the next
+  `TOKEN_BUDGET * 4` chars that respects the citation-span rule below;
+  it never silently truncates content. A chunk that still exceeds the
+  budget after every cascade stage fails closed (the build exits
+  non-zero without writing `data/derived/chunks.jsonl`); the chunker
+  never invents an oversize chunk.
 - Section regex pinned: `\\(section|subsection|subsubsection)\*?\s*\{([^}]*)\}`.
 - Citation-span rule: chunks **never** split inside `[[CITE:...]]`.
 - `chunk_id = "c_" + sha1(f"{doc_id}|{json.dumps(section_path)}|{chunk_index}")[:16]`.
