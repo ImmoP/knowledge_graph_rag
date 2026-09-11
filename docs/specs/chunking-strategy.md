@@ -25,17 +25,21 @@ The chunking strategy is the small set of rules by which a parsed document becom
 
 The canonical document corpus is `data/manifest.jsonl`; **every** record there defines one canonical `Document` identity. Not every record in that canonical corpus yields chunks in v1.
 
-The **v1 text-bearing document set** is determined **exclusively** by canonical manifest metadata:
+The **v1 text-bearing document set** is determined by canonical manifest metadata **and the tracked source-capability artifact**:
 
 ```python
+# tracked, committed source-capability artifact
+fulltext_manifest_by_id = {row["arxiv_id"]: row for row in data/fulltext_manifest.jsonl}
+
 text_bearing_doc_ids = {
     record["openalex_id"]
     for record in data/manifest.jsonl
     if record["arxiv_id"] is not None
+    and fulltext_manifest_by_id.get(record["arxiv_id"], {}).get("payload") == "gzip"
 }
 ```
 
-Membership is a function of the manifest alone. It is **byte-for-byte deterministic**, identical across machines given the same committed `data/manifest.jsonl`, and **independent of any local filesystem state**.
+Membership is a function of the **tracked metadata** alone (the committed `data/manifest.jsonl` plus the committed `data/fulltext_manifest.jsonl`). It is **byte-for-byte deterministic**, identical across machines given the same committed artifacts, and **independent of which raw files happen to be present locally**. A `payload == "pdf"` arXiv item is a valid canonical `Document` identity but is **not** in the v1 text-bearing set; the architecture intentionally narrows v1 text coverage to LaTeX (`payload == "gzip"`) and does **not** add PDF parsing, OCR, or ACL Anthology ingestion.
 
 For every member of `text_bearing_doc_ids`, the v1 full-text source is the LaTeX package:
 
@@ -43,13 +47,16 @@ For every member of `text_bearing_doc_ids`, the v1 full-text source is the LaTeX
 data/raw/latex/<arxiv_id>.tar.gz
 ```
 
-A text-bearing document's archive is a **precondition** for downstream success, not part of the membership predicate. A record satisfies membership the moment `record["arxiv_id"] is not None`; the preflight is responsible for confirming the archive exists. The two checks must NOT be conflated:
+A text-bearing document's archive is a **precondition** for downstream success, not part of the membership predicate. A record satisfies membership the moment `record["arxiv_id"] is not None` AND the tracked `data/fulltext_manifest.jsonl` records that arXiv id with `payload == "gzip"`; the preflight is responsible for confirming the archive exists. The two checks must NOT be conflated:
 
-- `arxiv_id != null` AND archive exists: valid text-bearing document.
-- `arxiv_id != null` AND archive missing/unreadable: input-integrity failure; the preflight (#21) exits non-zero. The pipeline does **not** silently reclassify such a record as non-text-bearing.
+- `arxiv_id != null` AND tracked `payload == "gzip"` AND archive exists: valid text-bearing document.
+- `arxiv_id != null` AND tracked `payload == "gzip"` AND archive missing/unreadable: input-integrity failure; the preflight (#21) exits non-zero. The pipeline does **not** silently reclassify such a record as non-text-bearing.
+- `arxiv_id != null` AND tracked `payload == "pdf"`: canonical non-text-bearing Document in v1; zero chunks required; this is the valid terminal state, not an error. (The PDF on disk is real corpus content; v1 just does not parse it.)
+- `arxiv_id != null` AND no tracked `data/fulltext_manifest.jsonl` row for that id: preflight failure — unresolved source capability; #21 exits non-zero. This means the source-capability probe (#4 / fetch_arxiv pipeline) was not run for that arXiv id on the current checkout.
+- duplicate tracked rows for one `arxiv_id` in `data/fulltext_manifest.jsonl`: preflight failure.
 - `arxiv_id == null`: canonical non-text-bearing Document; zero chunks required; this is the valid terminal state, not an error.
 
-A prepared checkout is **never** allowed to silently shrink the text-bearing corpus because an archive is missing. Membership is derived from the manifest; archive presence is a downstream runtime check.
+A prepared checkout is **never** allowed to silently shrink the text-bearing corpus because an archive is missing. Membership is derived from the tracked artifacts; archive presence is a downstream runtime check.
 
 In v1, the LaTeX source package is the only full-text source. Records with `source_kind ∈ {"other_pdf", "landing_only", "acl_anthology"}` are valid canonical `Document` identities (for graph nodes, `CITES`, and seed lifting) but are **outside the v1 text-bearing set**. v1 does **not** parse PDF, OCR, ACL Anthology HTML, or any non-LaTeX source; the architecture intentionally narrows v1 text coverage to the LaTeX subset.
 
@@ -58,7 +65,7 @@ Properties the implementing ticket pins:
 - The text-bearing `doc_id` set is reproducible from the manifest alone and equals the set of chunk `doc_id` values in `data/derived/chunks.jsonl` (set equality; see §11 Acceptance gate).
 - Every manifest record is a canonical `Document` identity (the manifest is not shrunk).
 - Only text-bearing records produce `Chunk` records, `Mention` records, `Assertion` records, and rows in the embedding store. Any other use of a `chunk_id` is invalid.
-- A record that satisfies the membership predicate but whose `data/raw/latex/<arxiv_id>.tar.gz` is missing or unreadable fails the preflight (#21). It is **not** silently removed from the text-bearing set.
+- A record that satisfies the membership predicate (tracked `payload == "gzip"`) but whose `data/raw/latex/<arxiv_id>.tar.gz` is missing or unreadable fails the preflight (#21). It is **not** silently removed from the text-bearing set.
 - The non-text-bearing set is reported in run traces (count and `doc_id`s) but the manifest itself is unchanged.
 - The classifier is a deterministic predicate over manifest fields. It is not an LLM call.
 - No PDF parsing, no OCR, no ACL Anthology ingestion, and no new ingestion stage are introduced in v1.
@@ -165,7 +172,7 @@ The implementing ticket verifies idempotency by running the chunker twice on a n
 
 These are the *corpus-characterizing* numbers, not chunking rules. They tell the implementing ticket what it's sizing chunks to:
 
-- 182 documents in the canonical document corpus; the v1 text-bearing corpus subset is the records that carry an `arxiv_id` and have a corresponding `data/raw/latex/<arxiv_id>.tar.gz`. The remaining ~40% are non-text-bearing canonical `Document` identities in v1.
+- 182 documents in the canonical document corpus; the v1 text-bearing corpus subset is the records that carry an `arxiv_id` AND for which `data/fulltext_manifest.jsonl` records `payload == "gzip"`. The remaining records are non-text-bearing canonical `Document` identities in v1 (which includes PDF-payload arXiv items, non-arXiv source_kinds, and arXiv items with no resolved capability row).
 - Cleaned-document sizes observed: 5k–120k characters (mean ≈ 40k).
 - Sections per document observed: 5–12 typical.
 - Subsections per document observed: 5–30 typical.

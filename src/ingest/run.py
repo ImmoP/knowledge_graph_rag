@@ -31,15 +31,31 @@ def main() -> int:
         if manifest_report.schema_errors:
             print(f"  schema_errors: {manifest_report.schema_errors}", file=sys.stderr)
 
+    ft_report, capability = preflight.load_source_capability()
+    print(f"fulltext_manifest_rows: {len(capability.by_arxiv_id)}")
+    if not ft_report.ok:
+        failures.append("fulltext manifest integrity failed")
+        if ft_report.non_jsonl_lines:
+            print(f"  fulltext_non_jsonl_lines: {ft_report.non_jsonl_lines}", file=sys.stderr)
+        if ft_report.duplicate_ids:
+            print(f"  fulltext_duplicate_arxiv_ids: {ft_report.duplicate_ids}", file=sys.stderr)
+        if ft_report.schema_errors:
+            print(f"  fulltext_schema_errors: {ft_report.schema_errors}", file=sys.stderr)
+
     oa_report = preflight.check_raw_openalex(records)
     print(f"raw_openalex_missing: {len(oa_report.missing)}")
     if not oa_report.ok:
         failures.append("openalex raw artefacts missing")
         print(f"  missing: {oa_report.missing}", file=sys.stderr)
 
-    tb_report = preflight.classify_text_bearing(records)
+    tb_report = preflight.classify_text_bearing(records, capability)
     print(f"text_bearing_doc_count: {len(tb_report.text_bearing)}")
+    print(f"pdf_payload_doc_count: {len(tb_report.pdf_payload)}")
     print(f"non_text_bearing_doc_count: {len(tb_report.non_text_bearing)}")
+    print(f"unresolved_source_capability_count: {len(tb_report.unresolved_capability)}")
+    if tb_report.unresolved_capability:
+        failures.append("unresolved source capability")
+        print(f"  unresolved_doc_ids: {tb_report.unresolved_capability}", file=sys.stderr)
 
     latex_report = preflight.check_latex_archives(records, tb_report.text_bearing)
     print(f"text_bearing_with_missing_archive: {len(latex_report.missing)}")

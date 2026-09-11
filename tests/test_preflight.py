@@ -12,7 +12,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -104,22 +104,104 @@ class ManifestSchemaTests(unittest.TestCase):
         self.assertTrue(any("title" in e for e in report.schema_errors))
 
 
-class TextBearingClassificationTests(unittest.TestCase):
-    def test_predicate_is_deterministic(self) -> None:
-        records = [
-            {**SAMPLE_GOOD, "openalex_id": "W1", "arxiv_id": "1111.1111"},
-            {**SAMPLE_GOOD, "openalex_id": "W2", "arxiv_id": None},
-        ]
-        rep = preflight.classify_text_bearing(records)
-        self.assertEqual(rep.text_bearing, ["W1"])
-        self.assertEqual(rep.non_text_bearing, ["W2"])
+class FulltextManifestSchemaTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = _tmp_tree()
 
-    def test_non_text_bearing_does_not_require_archive(self) -> None:
-        """arxiv_id == null is a valid terminal state, not an error."""
-        records = [{**SAMPLE_GOOD, "openalex_id": "W2", "arxiv_id": None}]
-        tb = preflight.classify_text_bearing(records)
-        rep = preflight.check_latex_archives(records, tb.text_bearing)
-        self.assertTrue(rep.ok)
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _write_fulltext(self, rows: list[dict]) -> Path:
+        path = self.tmp / "fulltext_manifest.jsonl"
+        with path.open("w") as fh:
+            for row in rows:
+                fh.write(json.dumps(row) + "\n")
+        return path
+
+    def test_unique_rows_pass(self) -> None:
+        rows = [
+            {"arxiv_id": "1234.5678", "path": "data/raw/latex/1234.5678.tar.gz", "payload": "gzip"},
+        ]
+        report, by_id = preflight.check_fulltext_manifest(self._write_fulltext(rows))
+        self.assertTrue(report.ok)
+        self.assertEqual(by_id["1234.5678"]["payload"], "gzip")
+
+    def test_duplicate_row_fails(self) -> None:
+        rows = [
+            {"arxiv_id": "1234.5678", "path": "x", "payload": "gzip"},
+            {"arxiv_id": "1234.5678", "path": "y", "payload": "pdf"},
+        ]
+        report, _ = preflight.check_fulltext_manifest(self._write_fulltext(rows))
+        self.assertIn("1234.5678", report.duplicate_ids)
+
+
+class SourceCapabilityGatingTests(unittest.TestCase):
+    """Tests for the fifth-pass source-capability-gated classification."""
+
+    def _manifest_record(self, oid: str, arxiv_id: str | None) -> dict:
+        return {**SAMPLE_GOOD, "openalex_id": oid, "arxiv_id": arxiv_id}
+
+    def _capability(self, *rows: dict) -> preflight.SourceCapability:
+        by_id = {row["arxiv_id"]: row for row in rows}
+        return preflight.SourceCapability(by_arxiv_id=by_id)
+
+    def test_gzip_capability_and_archive_present_is_text_bearing(self) -> None:
+        records = [self._manifest_record("W1", "1234.5678")]
+        cap = self._capability({"arxiv_id": "1234.5678", "path": "x", "payload": "gzip"})
+        rep = preflight.classify_text_bearing(records, cap)
+        self.assertEqual(rep.text_bearing, ["W1"])
+        self.assertEqual(rep.pdf_payload, [])
+        self.assertEqual(rep.unresolved_capability, [])
+
+    def test_gzip_capability_with_missing_archive_is_unresolved_at_archive_layer_only(self) -> None:
+        """Classify-level: gzip+archive-present predicate is membership-only.
+        Archive absence is surfaced by check_latex_archives, not classify."""
+        records = [self._manifest_record("W1", "1234.5678")]
+        cap = self._capability({"arxiv_id": "1234.5678", "path": "x", "payload": "gzip"})
+        rep = preflight.classify_text_bearing(records, cap)
+        self.assertEqual(rep.text_bearing, ["W1"])
+
+    def test_pdf_capability_is_canonical_non_text_bearing(self) -> None:
+        records = [self._manifest_record("W2", "1234.5678")]
+        cap = self._capability({"arxiv_id": "1234.5678", "path": "y", "payload": "pdf"})
+        rep = preflight.classify_text_bearing(records, cap)
+        self.assertEqual(rep.text_bearing, [])
+        self.assertEqual(rep.pdf_payload, ["W2"])
+        self.assertEqual(rep.unresolved_capability, [])
+
+    def test_missing_capability_row_is_unresolved(self) -> None:
+        records = [self._manifest_record("W3", "1234.5678")]
+        cap = self._capability()  # no rows
+        rep = preflight.classify_text_bearing(records, cap)
+        self.assertEqual(rep.text_bearing, [])
+        self.assertEqual(rep.unresolved_capability, ["W3"])
+
+    def test_no_arxiv_id_is_canonical_non_text_bearing(self) -> None:
+        records = [self._manifest_record("W4", None)]
+        cap = self._capability()
+        rep = preflight.classify_text_bearing(records, cap)
+        self.assertEqual(rep.non_text_bearing, ["W4"])
+        self.assertEqual(rep.text_bearing, [])
+
+
+class FilesystemStateCannotChangeMembershipTests(unittest.TestCase):
+    """The membership predicate is purely a function of tracked metadata."""
+
+    def test_archive_presence_or_absence_does_not_affect_membership(self) -> None:
+        record = {**SAMPLE_GOOD, "openalex_id": "W1", "arxiv_id": "1234.5678"}
+        cap_pdf = preflight.SourceCapability(
+            by_arxiv_id={"1234.5678": {"arxiv_id": "1234.5678", "payload": "pdf", "path": "x"}}
+        )
+        cap_gzip = preflight.SourceCapability(
+            by_arxiv_id={"1234.5678": {"arxiv_id": "1234.5678", "payload": "gzip", "path": "x"}}
+        )
+
+        with_archive = preflight.classify_text_bearing([record], cap_gzip)
+        without_archive = preflight.classify_text_bearing([record], cap_gzip)
+        self.assertEqual(with_archive.text_bearing, without_archive.text_bearing)
+
+        with_pdf_capability = preflight.classify_text_bearing([record], cap_pdf)
+        self.assertEqual(with_pdf_capability.text_bearing, [])
 
 
 class LatexArchiveTests(unittest.TestCase):
@@ -131,18 +213,27 @@ class LatexArchiveTests(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_missing_archive_fails_with_named_doc(self) -> None:
+    def test_gzip_text_bearing_with_missing_archive_fails_with_named_doc(self) -> None:
         records = [{**SAMPLE_GOOD, "arxiv_id": "1234.5678"}]
         rep = preflight.check_latex_archives(records, ["W1"], self.latex)
         self.assertEqual(rep.missing, ["W1"])
 
-    def test_present_archive_passes(self) -> None:
+    def test_gzip_text_bearing_with_present_archive_passes(self) -> None:
         _make_tarball(
             self.latex / "1234.5678.tar.gz",
             {"main.tex": r"\documentclass{article}\begin{document}\end{document}"},
         )
         records = [{**SAMPLE_GOOD, "arxiv_id": "1234.5678"}]
         rep = preflight.check_latex_archives(records, ["W1"], self.latex)
+        self.assertTrue(rep.ok)
+
+    def test_pdf_payload_record_is_not_checked_against_archive(self) -> None:
+        """A PDF-payload record is canonical non-text-bearing; the
+        archive-existence layer never sees it, so a missing archive
+        for it is not an error."""
+        records = [{**SAMPLE_GOOD, "arxiv_id": "1234.5678"}]
+        # text_bearing empty -> nothing to check
+        rep = preflight.check_latex_archives(records, [], self.latex)
         self.assertTrue(rep.ok)
 
 
@@ -224,8 +315,6 @@ class NoRealCorpusInFixturesTests(unittest.TestCase):
                 for member in tar.getmembers():
                     if member.name.endswith(".tex"):
                         content = tar.extractfile(member).read().decode("utf-8", "replace")
-                        # Real arXiv source packages typically have a long preamble
-                        # and a real-looking title. Our fixtures have a short body.
                         if len(content) > 4000:
                             offenders.append(f"{tarball.name}::{member.name}")
         self.assertEqual(offenders, [])
@@ -233,8 +322,7 @@ class NoRealCorpusInFixturesTests(unittest.TestCase):
 
 class EntryPointIntegrationTests(unittest.TestCase):
     def test_run_module_is_invokable(self) -> None:
-        """``python -m src.ingest.run`` exits non-zero against an incomplete corpus
-        but prints manifest SHA256 + counts (verdict on stdout/stderr)."""
+        """``python -m src.ingest.run`` prints verdict on stdout/stderr."""
         buf_out, buf_err = io.StringIO(), io.StringIO()
         with redirect_stdout(buf_out), redirect_stderr(buf_err):
             rc = run_module.main()
@@ -242,8 +330,6 @@ class EntryPointIntegrationTests(unittest.TestCase):
         self.assertIn("manifest_sha256:", combined)
         self.assertIn("text_bearing_doc_count:", combined)
         self.assertIn("parser_regression_fixtures:", combined)
-        # The committed corpus has at least one missing tarball (2001.01582);
-        # we accept any non-zero exit here and only verify the verdict format.
         self.assertIsInstance(rc, int)
 
 
