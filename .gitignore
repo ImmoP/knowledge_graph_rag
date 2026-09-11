@@ -1,5 +1,13 @@
 data/raw/
 data/derived/
+data/extractions.jsonl
+data/extractions.manifest.json
+data/extractions.rejects.jsonl
+data/entities.jsonl
+data/entity_resolutions.jsonl
+data/entity_resolution.manifest.json
+data/graph_ingestion.manifest.json
+data/runs/
 .env
 .DS_Store
 __pycache__/
