@@ -71,6 +71,42 @@ class EmbeddingProvider(Protocol):
     def embed(self, texts: list[str]) -> tuple[list[list[float]], Usage]: ...
 
 
+class ProviderTransportError(Exception):
+    """Adapter-reported transport-layer or HTTP failure (spec §6.6, repair #23).
+
+    Adapters raise this for any transport-layer or HTTP failure. ``transient``
+    is the caller's retry-eligibility flag (extraction uses extraction-contract
+    §12.1 bounded retry on ``transient=True`` only). ``status`` is the HTTP
+    status code if known, else ``None``. ``cause`` preserves the underlying
+    SDK exception for logging.
+
+    ``LLMValidationError`` (transport-success, output-invalid) and
+    ``BudgetExceeded`` (cap-exceeded) are separate exception types and
+    propagate independently — adapters MUST NOT convert them to
+    :class:`ProviderTransportError`.
+
+    Adapters MUST wrap only known transport/status failures from their
+    outbound HTTP boundary; they MUST NOT use a broad ``except Exception``.
+    """
+
+    def __init__(
+        self,
+        *,
+        transient: bool,
+        status: int | None = None,
+        cause: BaseException | None = None,
+    ) -> None:
+        self.transient = transient
+        self.status = status
+        self.cause = cause
+        detail = f"transient={transient}"
+        if status is not None:
+            detail += f" status={status}"
+        super().__init__(detail)
+        if cause is not None:
+            self.__cause__ = cause
+
+
 class LLMValidationError(Exception):
     """Raised when ``generate_json`` cannot produce schema-valid output.
 

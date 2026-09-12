@@ -25,13 +25,15 @@ must not be weakened.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import hashlib
 import json
 import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 # Single shared format-version constant. Bumped on adapter changes that
@@ -46,6 +48,95 @@ EMBEDDING_SUBDIR = "embeddings"
 # Canonical-JSON separator pair used both inside individual values
 # (max_tokens, temperature, schema) and at the top-level hash blob.
 _SEPARATORS = (",", ":")
+
+# --- extraction cache scope (repair #23, spec §5.5a) ----------------
+#
+# ``extraction_cache_scope(**dims)`` activates strict-superset identity
+# dimensions on top of the canonical inputs (spec §5.5a). The six
+# allowed extra-dimension keys are: ``chunk_id``, ``source_text_sha256``,
+# ``ontology_version``, ``ontology_sha256``, ``prompt_template_filename``,
+# ``prompt_template_content_sha256``. ``LLMProvider`` Protocol signatures
+# are unchanged — the scope is read inside ``make_key`` (only when
+# ``operation == "generate_json"``) via a ``contextvars`` token.
+#
+# Scope semantics:
+# - Concurrent call isolation via ``contextvars`` is supported.
+# - Nested extraction scopes are FORBIDDEN (spec §5.5a fail-closed).
+#   Entering a scope while one is already active raises
+#   ``RuntimeError`` and does NOT mutate or replace the outer scope.
+_EXTRACTION_SCOPE_KEYS: tuple[str, ...] = (
+    "chunk_id",
+    "source_text_sha256",
+    "ontology_version",
+    "ontology_sha256",
+    "prompt_template_filename",
+    "prompt_template_content_sha256",
+)
+_active_extraction_scope: contextvars.ContextVar[dict[str, str] | None] = (
+    contextvars.ContextVar("_active_extraction_scope", default=None)
+)
+
+
+@contextlib.contextmanager
+def extraction_cache_scope(**dims: str) -> Iterator[None]:
+    """Activate extraction cache-scope identity dimensions (spec §5.5a).
+
+    The ``LLMProvider.generate_json`` cache key includes these six
+    dimensions as a strict superset of the canonical identity inputs
+    (spec §5.5 / §5.5a). When no scope is active, the produced key is
+    byte-identical to the canonical key (spec §5.5 floor is preserved).
+
+    Concurrent call isolation via ``contextvars`` is supported, so two
+    independent calls running concurrently each see their own active
+    scope. Nested extraction scopes are NOT supported: entering this
+    context manager while another ``extraction_cache_scope`` is already
+    active raises ``RuntimeError`` immediately and does not mutate or
+    replace the outer scope. The previous value is restored on exit
+    even if the body raises.
+
+    Only the six allowed dimension keys are accepted. Unknown keys
+    raise ``ValueError``; missing keys raise ``ValueError``; non-string
+    values raise ``TypeError``. The active caller (extraction) is
+    expected to provide all six for every ``generate_json`` call —
+    partial scope is a programming error.
+    """
+    if set(dims) != set(_EXTRACTION_SCOPE_KEYS):
+        unknown = set(dims) - set(_EXTRACTION_SCOPE_KEYS)
+        missing = set(_EXTRACTION_SCOPE_KEYS) - set(dims)
+        problems: list[str] = []
+        if unknown:
+            problems.append(
+                f"unknown keys: {sorted(unknown)!r}"
+            )
+        if missing:
+            problems.append(
+                f"missing keys: {sorted(missing)!r}"
+            )
+        raise ValueError(
+            "extraction_cache_scope requires exactly "
+            f"{list(_EXTRACTION_SCOPE_KEYS)}; got {problems}"
+        )
+    for k, v in dims.items():
+        if not isinstance(v, str):
+            raise TypeError(
+                f"extraction_cache_scope[{k!r}] must be str; got {type(v).__name__}"
+            )
+    # Fail closed on nesting (spec §5.5a). If a scope is already
+    # active, refuse entry without mutating the outer scope.
+    if _active_extraction_scope.get() is not None:
+        raise RuntimeError(
+            "nested extraction_cache_scope is forbidden (spec §5.5a); "
+            "an extraction_cache_scope is already active"
+        )
+    # Defensive copy so a caller mutating the dict after entry does not
+    # affect the active scope. Sorted on entry so two callers that pass
+    # the same six strings in different orders get the same hash.
+    scope = {k: dims[k] for k in sorted(dims)}
+    token = _active_extraction_scope.set(scope)
+    try:
+        yield
+    finally:
+        _active_extraction_scope.reset(token)
 
 
 def _canonical(value: Any) -> str:
@@ -91,6 +182,13 @@ def make_key(
     contributes to identity iff the corresponding operation actually
     uses it; absent inputs (``None``) are omitted from the hashed blob
     so the key shape is consistent across operations.
+
+    For ``operation == "generate_json"`` the key is a strict superset
+    of the canonical key when an ``extraction_cache_scope`` is active
+    (spec §5.5a); for ``"generate"`` and ``"embed"`` the extraction
+    scope is ignored. When no scope is active the generate_json key is
+    byte-identical to the §5.1 canonical key — this is the single
+    source of truth for base-key assembly.
     """
     parts: list[str] = [cache_format_version, operation, provider_name, provider_model]
     if system is not None:
@@ -105,6 +203,16 @@ def make_key(
         parts.append(schema_canonical_json)
     if texts is not None:
         parts.append(_canonical(texts))
+    # spec §5.5a (repair #23): if an extraction_cache_scope is active
+    # at the moment of key construction, mix its six identity
+    # dimensions into the hash as one trailing list element so the
+    # key is a strict superset of the canonical key. Only generate_json
+    # participates; generate() and embed() ignore the scope so the
+    # §5.5 floor is preserved for those operations.
+    if operation == "generate_json":
+        scope = _active_extraction_scope.get()
+        if scope is not None:
+            parts.append(_canonical(scope))
     return _sha256_hex(_canonical(parts))
 
 
@@ -141,6 +249,9 @@ def _key_for_generate_json(
     temperature: float,
     schema: dict,
 ) -> str:
+    # Single source of truth for base-key assembly is ``make_key``;
+    # the extraction-scope augmentation lives there too (only for
+    # ``operation == "generate_json"``).
     return make_key(
         cache_format_version=cache_format_version,
         operation="generate_json",

@@ -26,7 +26,7 @@ import httpx
 
 from src.providers.adapters import _schema
 from src.providers.cache import ProviderCache
-from src.providers.protocol import LLMProvider, LLMValidationError, Usage
+from src.providers.protocol import LLMProvider, LLMValidationError, ProviderTransportError, Usage
 
 
 DEFAULT_BASE_URL = "http://localhost:11434"
@@ -48,6 +48,67 @@ REQUIRED_SECRETS: tuple[str, ...] = ()
 # output shape (spec §5.3). The constant lives here so old cache files
 # never silently appear for the new format.
 CACHE_FORMAT_VERSION = "ollama-2"
+
+# --- transport error mapping (spec §6.6, repair #23) ----------------
+#
+# Transient status codes: connection / timeout failures plus the
+# HTTP statuses documented as retry-eligible. Anything outside this
+# set (other 4xx — auth, model-not-found, malformed request, 409
+# Conflict, 425 Too Early, etc.) is non-transient; the caller's
+# bounded retry must NOT retry those.
+_TRANSIENT_HTTP_STATUSES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def _raise_transport_from_http_status(status: int, cause: httpx.HTTPStatusError) -> None:
+    """Map an ``httpx.HTTPStatusError`` to ``ProviderTransportError``.
+
+    ``status`` is the HTTP status code; ``cause`` is the original SDK
+    exception (preserved via ``ProviderTransportError.cause`` for
+    logging). Spec §6.6 frozen mapping for Ollama: transient on
+    ``{408, 429, 500, 502, 503, 504}``; non-transient on every other
+    4xx (auth, model-not-found, malformed, ``409``, ``425``). 1xx /
+    3xx do not raise ``HTTPStatusError``; only 4xx / 5xx do, so this
+    function never sees them.
+    """
+    transient = status in _TRANSIENT_HTTP_STATUSES
+    raise ProviderTransportError(transient=transient, status=status, cause=cause)
+
+
+def _request_json(client: httpx.Client, url: str, *, payload: dict) -> Any:
+    """POST ``payload`` to ``url`` and return the parsed JSON body.
+
+    Transport-layer and HTTP-status failures are translated to
+    :class:`ProviderTransportError` per spec §6.6; everything else
+    (parse errors, programming errors, unexpected SDK exceptions) is
+    intentionally allowed to propagate unchanged — adapters MUST NOT
+    use a broad ``except Exception`` and MUST NOT silently leak the
+    SDK class.
+    """
+    try:
+        response = client.post(url, json=payload)
+    except (
+        httpx.ConnectError,
+        httpx.ConnectTimeout,
+        httpx.ReadTimeout,
+        httpx.WriteTimeout,
+        httpx.PoolTimeout,
+        httpx.NetworkError,
+        httpx.RemoteProtocolError,
+    ) as exc:
+        raise ProviderTransportError(transient=True, status=None, cause=exc) from exc
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        # ``exc.response.status_code`` is guaranteed on a real
+        # response; guard defensively for fakes / mocks that don't
+        # set it.
+        status = getattr(exc.response, "status_code", None)
+        if isinstance(status, int):
+            _raise_transport_from_http_status(status, exc)
+        raise ProviderTransportError(transient=False, status=None, cause=exc) from exc
+
+    return response.json()
 
 
 class OllamaLLM(LLMProvider):
@@ -108,9 +169,8 @@ class OllamaLLM(LLMProvider):
             temperature=temperature,
             fmt=None,
         )
-        response = self._client.post(f"{self._base_url}/api/chat", json=payload)
-        response.raise_for_status()
-        text, usage = _parse_chat_response(response.json())
+        body = _request_json(self._client, f"{self._base_url}/api/chat", payload=payload)
+        text, usage = _parse_chat_response(body)
 
         if self._cache is not None:
             self._cache.put_generate(
@@ -244,9 +304,8 @@ class OllamaLLM(LLMProvider):
             temperature=temperature,
             fmt="json",
         )
-        response = self._client.post(f"{self._base_url}/api/chat", json=payload)
-        response.raise_for_status()
-        return _parse_chat_response(response.json())
+        body = _request_json(self._client, f"{self._base_url}/api/chat", payload=payload)
+        return _parse_chat_response(body)
 
     def _chat_json_retry(
         self,
@@ -272,13 +331,12 @@ class OllamaLLM(LLMProvider):
             temperature=temperature,
             fmt="json",
         )
-        response = self._client.post(f"{self._base_url}/api/chat", json=payload)
-        response.raise_for_status()
+        body = _request_json(self._client, f"{self._base_url}/api/chat", payload=payload)
         # The previous output is intentionally NOT cached under any
         # schema key; the retry path bypasses the cache so a poisoned
         # cache entry cannot absorb an invalid response.
         del previous_output  # explicit: unused past this point
-        return _parse_chat_response(response.json())
+        return _parse_chat_response(body)
 
 
 # --- response parsing ------------------------------------------------
