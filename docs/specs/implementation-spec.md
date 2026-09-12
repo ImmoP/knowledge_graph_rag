@@ -319,23 +319,34 @@ cannot change them.
 
 Three gates per record (schema, ontology conformity, evidence integrity).
 Failed records go to `data/extractions.rejects.jsonl` and bump the phase's
-failure counter in `chunk_status`. The pipeline never crashes on a single
-record failure.
+failure counter in `chunk_status` (see `extraction-contract §3.1.3`,
+`phases.<entity|relation>.failure_count`). The pipeline never crashes on
+a single record failure.
 
-`chunk_status.extraction_complete == true` is the per-chunk gate. The
-Neo4j ingester (#9) consumes only those.
+`chunk_status.extraction_complete == true` is the per-chunk gate (strict
+reading per `extraction-contract §9` rule 3 — repair #23: any per-record
+Gate 2 or Gate 3 reject means the phase did not pass all three gates).
+The Neo4j ingester (#9) consumes only those.
 
 Cache key is a strict superset of #16 §5.1 (§7.5 below): additionally mixes
 schema hash, generation parameters, `chunk_id`, `source_text_sha256`,
 ontology `version` + SHA256, prompt-template filename + file content hash.
-Invalidation is automatic on any input change.
+Invalidation is automatic on any input change. Extraction activates this
+strict-superset identity via the module-level `extraction_cache_scope(...)`
+helper (`provider-abstractions §5.5a`); the `LLMProvider` Protocol
+signatures are unchanged.
 
 Budget: `LLM_BUDGET_USD` and `LLM_BUDGET_TOKENS` (#16 §6). Clean abort on
 cap; partial run is left on disk and resumable.
 
-Retry: bounded exponential backoff (3 attempts, 2 s / 4 s) on transient
-transport only; no retry on schema failures (the single validation retry is
-owned by `generate_json` per #16 §2.2–2.3).
+Retry: bounded backoff on transient transport only — 3 attempts, sleep
+schedule `(2 s, 4 s)` before attempts 2 and 3, no `sleep(0)`, no sleep
+after attempt 3, re-raise the final `ProviderTransportError` unchanged.
+Transient classification is typed: adapters raise
+`ProviderTransportError(transient=..., status=..., cause=...)` per
+`provider-abstractions §6.6`; no exception class-name string matching.
+No retry on schema failures (the single validation retry is owned by
+`generate_json` per #16 §2.2–2.3).
 
 Resumability: on startup, load existing `data/extractions.jsonl` into an
 in-memory map keyed by `(chunk_id, kind)`. A chunk with
@@ -515,7 +526,13 @@ returned for the new format.
 
 Callers may add extra identity dimensions (e.g. `#7` adds schema hash,
 generation parameters, chunk identity, ontology SHA, prompt-template
-SHA) but cannot weaken the canonical identity.
+SHA) but cannot weaken the canonical identity. The extraction caller
+activates its six strict-superset dimensions via the module-level helper
+`src.providers.cache.extraction_cache_scope(...)` (`provider-abstractions
+§5.5a`); the `LLMProvider` Protocol signatures are unchanged. The six
+keys are exactly: `chunk_id`, `source_text_sha256`, `ontology_version`,
+`ontology_sha256`, `prompt_template_filename`,
+`prompt_template_content_sha256`.
 
 ### 7.6 Default provider
 
@@ -1530,6 +1547,22 @@ the final state:
   canonical-JSON-plus-SHA256 construction; `operation`,
   `cache_format_version`, `max_tokens`, `temperature`, and `generate_json`
   schemas participate in the cache identity.
+- **#23 spec repair**: tightened `extraction-contract §7.1` (assertion
+  evidence is mechanical: offset bounds + non-whitespace span + SHA
+  match; "paraphrased form" obligation moves to the relation prompt
+  §5.3), pinned `extraction-contract §9` rule 3 strict reading
+  (per-record Gate 2/Gate 3 reject ⇒ `extraction_complete=false`) and
+  added `chunk_status.phases.<entity|relation>.failure_count` as the
+  per-phase audit field, pinned `extraction-contract §12.1` retry
+  schedule and switched transient classification to the typed
+  `ProviderTransportError`. Pinned `provider-abstractions §5.5a`
+  (extraction cache scope helper, six required extra-dimension keys,
+  fail-closed at scope entry) and `provider-abstractions §6.6`
+  (provider-independent `ProviderTransportError` with Ollama
+  mapping, `409`/`425` non-transient). Synchronised
+  `implementation-spec §6` and `§7.5` to the now-pinned anchors.
+  No architectural change; `LLMProvider` Protocol signatures
+  unchanged; no new provider adapter required.
 
 ### 15.5 `LLMProvider` return-type discipline
 

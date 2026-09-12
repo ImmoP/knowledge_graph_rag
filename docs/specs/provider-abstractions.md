@@ -241,6 +241,31 @@ Cache files are content-addressed JSON under `${LLM_CACHE_DIR}/{llm,embeddings}/
 
 Callers may add additional identity dimensions to the canonical key inputs above. [#7's extraction pipeline](extraction-contract.md) §10 is the first such caller and remains valid as written: it mixes `schema_hash`, generation parameters, `chunk_id`, `source_text_sha256`, ontology `version` + SHA256, and `prompt-template filename` + file content hash into the cache key on top of the inputs above. Those extra dimensions do not weaken this contract; they strengthen it (more identity inputs → fewer collisions across extraction runs). The `#13` grounded generator does **not** add such dimensions; its audit metadata (`prompt_filename`, `prompt_content_sha256`, `evidence_fingerprint`) participates in the canonical key only to the extent that those values appear in the rendered user prompt and therefore in the `user` string. Adding scope-specific identity dimensions is allowed; weakening the canonical identity is not.
 
+### 5.5a Extraction cache scope (internal helper, repair #23)
+
+The extraction caller activates its strict-superset identity dimensions via the module-level helper:
+
+```python
+from src.providers.cache import extraction_cache_scope
+```
+
+`extraction_cache_scope(**dims: str)` enters a `contextvars`-scoped activation around nested `LLMProvider.generate_json` calls. It is the only scope mechanism extraction uses; the `LLMProvider` Protocol signatures (`generate`, `generate_json`, `embed`) are unchanged.
+
+The six allowed extra-dimension keys are exactly:
+
+- `chunk_id`
+- `source_text_sha256`
+- `ontology_version`
+- `ontology_sha256`
+- `prompt_template_filename`
+- `prompt_template_content_sha256`
+
+The helper **requires all six** at scope entry and is **fail-closed**: missing required keys raise `ValueError`; unknown keys raise `ValueError`; entering a nested scope raises `RuntimeError`. No partial extraction cache identity is permitted. Outside any active scope, the generate_json key is byte-identical to the §5.1 canonical key.
+
+`ProviderCache.get_generate_json` / `put_generate_json` read the active scope at the moment of key construction; when non-empty, the scope is mixed into the existing generate_json key-construction path (currently `ProviderCache.get_generate_json` / `put_generate_json` → `_key_for_generate_json` → `make_key`) before the final SHA256 is computed. The scope is reset via the `contextvars` token in the `finally` block.
+
+Extraction never accesses `provider.cache`, never inspects adapter internals, and never asks an adapter for cache state. The canonical #19 base identity (cache_format_version; operation; provider name/model; exact system prompt; exact user prompt; max_tokens; temperature; canonical schema hash) remains unchanged and is NOT duplicated through the scope.
+
 ## 6. Budget caps
 
 A budget cap is a soft limit that aborts the run when crossed. The contract:
@@ -254,6 +279,23 @@ A budget cap is a soft limit that aborts the run when crossed. The contract:
 ### 6.1 Units and normalization
 
 Providers report cost in USD (after the implementing ticket's adapter converts from any provider-native currency). Token counts are reported as integers; providers that bill in different units (e.g. characters) must convert to tokens in the adapter (using the chunk-record spec's `len(text) // 4` estimator as a fallback if no precise tokenizer is available).
+
+### 6.6 Provider transport error (repair #23)
+
+A provider adapter raises `ProviderTransportError(*, transient: bool, status: int | None = None, cause: BaseException | None = None)` for any transport-layer or HTTP failure. `transient=True` indicates the failure is retry-eligible under the caller's policy (extraction uses extraction-contract §12.1 bounded retry: 3 attempts, 2 s / 4 s schedule, no `sleep(0)`, no sleep after attempt 3, re-raise the final `ProviderTransportError` unchanged). `status` is the HTTP status code if known, else `None`. `cause` is the underlying SDK exception preserved for logging.
+
+`LLMValidationError` (transport-success, output-invalid) and `BudgetExceeded` (cap-exceeded) are separate exception types and propagate independently — they are never converted to `ProviderTransportError`.
+
+Adapters MUST wrap only known transport/status failures from their outbound HTTP boundary; they MUST NOT use a broad `except Exception`. Unexpected parsing, programming, and internal exceptions propagate unchanged.
+
+The Ollama adapter's current mapping (frozen):
+
+- `httpx.TransportError` subclasses (`ConnectError`, `ConnectTimeout`, `ReadTimeout`, `WriteTimeout`, `PoolTimeout`, `NetworkError`, `RemoteProtocolError`) → `ProviderTransportError(transient=True, status=None, cause=...)`.
+- `httpx.HTTPStatusError` with status in `{408, 429, 500, 502, 503, 504}` → `ProviderTransportError(transient=True, status=<status>, cause=...)`.
+- `httpx.HTTPStatusError` with any other 4xx (auth, model-not-found, malformed request) → `ProviderTransportError(transient=False, status=<status>, cause=...)`.
+- `409` and `425` are NOT transient.
+
+Future adapters (OpenAI, Anthropic, others) MUST map their native transport-layer exceptions to `ProviderTransportError` without leaking the SDK class. Adapters MUST NOT classify transient-vs-permanent by exception class-name string matching.
 
 ## 7. Default provider choice
 

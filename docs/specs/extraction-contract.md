@@ -106,14 +106,16 @@ Field rules:
   "chunk_id": "c_a1b2c3d4e5f60718",
   "doc_id": "W3015883388",
   "phases": {
-    "entity": {"status": "validated", "attempt_count": 1, "mention_count": 4},
-    "relation": {"status": "validated", "attempt_count": 1, "assertion_count": 2}
+    "entity":   {"status": "validated", "attempt_count": 1, "mention_count":   4, "failure_count": 0},
+    "relation": {"status": "validated", "attempt_count": 1, "assertion_count": 2, "failure_count": 0}
   },
   "extraction_complete": true
 }
 ```
 
 A `chunk_status` record is written **once per chunk** after both phases finish for that chunk. It is the auditable record of "this chunk is extraction-complete" (see §9). Resumability (§13) reads from these records.
+
+`phases.<entity|relation>.failure_count` (additive, repair #23) is the number of candidate records rejected at Gate 2 (ontology conformity) or Gate 3 (evidence integrity) for that phase. A phase-level Gate 1 (schema) failure is reflected by `status="rejected"` and is **not** added to `failure_count`, because Gate 1 fails the entire phase rather than a per-record reject. `status="validated"` means the phase call ran to completion; it may still carry `failure_count > 0`, in which case the chunk is **not** extraction-complete per §9 rule 3.
 
 ### 3.2 Forbidden fields
 
@@ -210,6 +212,7 @@ The relation prompt receives the current `chunk.doc_id` and the validated same-c
 - For an endpoint whose ontology entity type is `population_mode: extracted`, the ref must be `kind: "mention"`; `id` must be one of the supplied validated same-chunk mention IDs, and that mention's `entity_type` must match the relation endpoint type.
 - For an endpoint whose ontology entity type is the structural `document` type, the ref must be `kind: "document"`; the only permitted `id` is the supplied current `chunk.doc_id`. Pipeline code injects that known value or validates it byte-for-byte rather than trusting model-generated identity.
 - **Cross-chunk mention references and cross-document inference are forbidden in v1.** If a required extracted entity is not a supplied same-chunk mention, the LLM must omit the assertion.
+- **Span selection obligation (§5.3, repair #23).** The relation prompt must explicitly instruct the model that the cited span `chunk.text[char_start:char_end]` must contain or directly express the asserted relation. The model is the authority on span selection; the validator only checks span existence and source-text SHA (per §7.1). No additional mechanical check (no embeddings, no similarity threshold, no LLM judge, no regex semantic heuristic, no extra LLM call) is applied to the span.
 
 This makes all eight extracted v1 relations representable: the five `document → extracted` relations (`PROPOSES`, `INTRODUCES`, `EVALUATES_ON`, `USES_METHOD`, `REPORTS_METRIC`) use a document source ref and mention target ref; `EXTENDS`, `USED_FOR_TASK`, and `MEASURES` use mention refs at both endpoints. Structural `CITES` is not emitted by this prompt, and derived `EVALUATED_ON` is not independently extracted.
 
@@ -309,7 +312,7 @@ The pipeline must use the **exact** `text` string the chunk record carries. Any 
 For every mention and every assertion record:
 
 1. `0 <= evidence.char_start < evidence.char_end <= len(chunk.text)` for the relevant chunk. Offsets outside this range fail validation.
-2. The substring `chunk.text[char_start:char_end]` (after whitespace normalisation on both sides only) contains the `surface_form` (for mentions) or a paraphrased form of the relation (for assertions). Whitespace normalisation is limited to collapsing runs of whitespace and trimming leading/trailing whitespace; no other edits.
+2. For **mentions**, the substring `chunk.text[char_start:char_end]` after whitespace normalisation on both sides (collapse runs, trim leading/trailing whitespace) contains the `surface_form`. For **assertions**, the same normalised substring is non-empty. The mechanical evidence gate does not compare the assertion span against a "paraphrased form" of the relation, because the model-facing assertion shape (§3.1.2 / §5.3) carries no relation-text field. Whether the cited span directly hosts or expresses the asserted relation is the model's responsibility (§5.3, repair #23) and is not a post-condition of this gate. No embeddings, similarity threshold, LLM judge, regex semantic heuristic, or additional LLM call is introduced for assertion evidence. Whitespace normalisation is limited to collapsing runs of whitespace and trimming leading/trailing whitespace; no other edits.
 3. `evidence.source_text_sha256 == sha256(chunk.text)` for the chunk in question. A mismatch fails validation; this is the drift detector.
 
 ## 8. Validation contract
@@ -333,7 +336,7 @@ The implementing ticket renders the allowed `entity_type` and `relation_type` se
 
 ### 8.3 Gate 3 — evidence integrity
 
-Per §7.1: offsets in range, span contains the expected text, `source_text_sha256` matches the chunk. Failures are reject-log entries; the chunk is not extraction-complete.
+Per §7.1: offsets in range (`0 <= evidence.char_start < evidence.char_end <= len(chunk.text)`), the span contains the expected text (mentions) or is non-empty after whitespace normalisation (assertions), and `evidence.source_text_sha256 == sha256(chunk.text.encode("utf-8")).hexdigest()`. Failures are reject-log entries; the affected phase is recorded as not having passed Gate 3 and the chunk is not extraction-complete (§9).
 
 ### 8.4 Reject log
 
@@ -360,7 +363,7 @@ A chunk is **extraction-complete** when and only when all of the following hold:
 
 1. The entity phase produced a validated `mention` list for the chunk (zero or more records; zero is acceptable when the chunk contains no surfaced entities).
 2. The relation phase produced a validated `assertion` list for the chunk (zero or more records; zero is acceptable).
-3. Both phases passed all three validation gates.
+3. Both phases passed all three validation gates. **Strict reading (repair #23):** a per-record Gate 2 or Gate 3 rejection in either phase means that phase did not pass all three gates, even if the provider call itself returned a parseable result. Zero validated records is acceptable only when the phase ran to completion with zero Gate 1, Gate 2, and Gate 3 failures (the LLM returned an empty `mentions` / `assertions` array and every gate ran without raising on a candidate).
 4. A `chunk_status` record with `extraction_complete: true` exists in `data/extractions.jsonl` for this `chunk_id`.
 
 A chunk is **never** extraction-complete on a single phase. Partial completion (entity-only or relation-only) is an incomplete state: the chunk is not benchmark-eligible, but its validated phase output is retained and resumable (§13).
@@ -471,15 +474,20 @@ The retry policy is a strict subset of what `LLMProvider` permits. Extraction re
 
 ### 12.1 Transient transport failures
 
-A failure classified as transient (HTTP 5xx, connection reset, request timeout) is retried with **exponential backoff** up to **3 attempts** total (1 initial + 2 retries). Backoff schedule (pinned constant; see §12.3):
+A failure classified as transient is retried with **bounded backoff** up to **3 attempts** total. Backoff schedule (pinned constant; see §12.3):
 
-| Attempt | Delay before attempt |
+| Attempt | Action |
 |---|---|
-| 1 | 0 s (initial) |
-| 2 | 2 s |
-| 3 | 4 s |
+| 1 | call immediately (no `sleep(0)`) |
+| (transient failure of attempt 1) | `sleep(2)` seconds |
+| 2 | call |
+| (transient failure of attempt 2) | `sleep(4)` seconds |
+| 3 | call |
+| (transient failure of attempt 3) | re-raise the final `ProviderTransportError` unchanged |
 
-The implementing ticket classifies transient failures by inspecting the provider's exception type (per #16 §8, the implementing adapter decides what counts as transient). Extraction does not second-guess that classification.
+Total elapsed cap: 6 s of sleep across the run. No `sleep(0)` is invoked; no sleep follows attempt 3; maximum three attempts; no `RetryExhausted` wrapper is introduced.
+
+**Transient classification (repair #23).** Adapters raise `ProviderTransportError(*, transient: bool, status: int | None = None, cause: BaseException | None = None)` (see `provider-abstractions §6.6`) from their outbound HTTP boundary. The Ollama adapter wraps only known transport/status failures: `httpx.TransportError` subclasses (including `ConnectError`, `ConnectTimeout`, `ReadTimeout`, `WriteTimeout`, `PoolTimeout`, `NetworkError`, `RemoteProtocolError`) and `httpx.HTTPStatusError`. Transient HTTP statuses are pinned to `{408, 429, 500, 502, 503, 504}`; any other 4xx (auth, model-not-found, malformed request) is non-transient. `409` and `425` are NOT transient. Unexpected parsing, programming, and internal exceptions propagate unchanged; `LLMValidationError` and `BudgetExceeded` propagate unchanged. The implementing ticket does not classify by exception class-name string match.
 
 ### 12.2 What is NOT retried
 
