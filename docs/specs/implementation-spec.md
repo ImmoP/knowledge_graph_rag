@@ -76,7 +76,7 @@ Source: map body on issue #1, "Standing preferences for this effort".
 | 3 | **`data/raw/` is read-only.** Never mutate arXiv sources or raw OpenAlex JSON in place. | ingest |
 | 4 | **Provider-agnostic.** Application code depends on `LLMProvider` / `EmbeddingProvider` Protocols (§7). Provider SDKs live in adapter modules only. Switching providers is env-var + adapter, not code change. | extraction, generation, vector |
 | 5 | **Cache and budget are provider-aware.** Cache keys include provider and model identity (§7.5). Cost accounting tolerates `cost_usd=None`. | extraction, generation, embedding |
-| 6 | **Graph and vector stores share stable IDs.** `chunk_id` and `doc_id` flow through both stores byte-for-byte (chunk-record §7). | graph ingest, vector ingest |
+| 6 | **Stores share canonical chunk identity.** Canonical `chunk_id` values flow through Neo4j and pgvector byte-for-byte (chunk-record §7). Neo4j also persists `doc_id` on `Chunk`; pgvector does not duplicate `doc_id` or any other canonical chunk metadata. Retrieval results join `chunk_id` against `data/derived/chunks.jsonl` to recover canonical text and `doc_id`. | graph ingest, vector ingest, retrieval, generation |
 | 7 | **No tuning on held-out.** All 45 questions are held out. Retrieval parameters (model revision, k values, hop budget, hybrid policy constants, lexical proxy `n`, etc.) are finalized before benchmark numbers are recorded. Dev tuning lives on `eval/dev_questions.jsonl`, strictly out-of-band. | benchmark, retrieval, generation |
 | 8 | **Smallest valid implementation.** Prefer the minimum code that can validly test the research question. | every ticket |
 | 9 | **`README.md` is user-owned.** No ticket touches it. | every ticket |
@@ -126,7 +126,7 @@ Single bridge network `rag-net`. Credentials live in `.env`, never in
 
 **Implementing-ticket scope:** an `infra/up.sh` (or equivalent) that
 verifies both containers are healthy, neo4j Bolt is reachable on
-`localhost:7687`, and pgvector Postgres on `localhost:5432`.
+`localhost:7687`, and pgvector Postgres on `localhost:5433`.
 
 ## 4. Ingest stage — corpus preflight + parser regression
 
@@ -751,15 +751,14 @@ touch the 45 held-out benchmark questions.
 
 ### 10.4 Stale-embedding detection (four conditions)
 
-A row is stale and re-embedded if any of:
+Synchronization classifies vector-store state by canonical `chunk_id`:
 
-1. `chunk_id` missing from `data/derived/chunks.jsonl` (orphan-row check).
-2. Row's `embedding_model` ≠ currently-configured `<provider>:<model>:<revision>`.
-3. Row's `source_text_sha256` ≠ `sha256(canonical_chunk.text)`.
-4. Canonical artifact has a chunk with no row in pgvector.
+1. A pgvector row absent from `data/derived/chunks.jsonl` is an orphan: report it and delete it in the synchronization transaction; it cannot be re-embedded because no canonical text exists.
+2. A row with the wrong `embedding_model` is re-embedded from its canonical chunk and updated.
+3. A row whose `source_text_sha256` differs from `sha256(canonical_chunk.text)` is re-embedded from its canonical chunk and updated.
+4. A canonical chunk with no pgvector row is embedded and inserted.
 
-The loader reports the count and proceeds to re-embed; never silently
-drops or skips.
+The loader reports counts for all four conditions and performs the required inserts, updates, and orphan deletions atomically. It never silently drops or skips a canonical chunk.
 
 ### 10.5 No silent truncation
 
@@ -771,12 +770,11 @@ at chunking time; the loader is the last-line enforcement.
 ### 10.6 Run metadata (audit only)
 
 Per-run, alongside logs:
-- SHA256 of `data/derived/chunks.jsonl` at run time.
+- SHA256 of the exact `data/derived/chunks.jsonl` bytes at run time.
 - Pinned model revision.
 - Timestamp.
 
-The per-row `source_text_sha256` is the authoritative staleness signal;
-the run-level SHA is reconstruction aid, not a correctness gate.
+The per-row `source_text_sha256` is the authoritative row-level staleness signal; the exact canonical artifact SHA is reconstruction aid and is returned as `VectorStoreIdentity.embedding_source_chunks_sha256`. It is never computed from a re-serialization of parsed chunk records.
 
 ## 11. Retrieval stages (the three conditions)
 
@@ -1707,7 +1705,7 @@ ticket-body edits live on the respective GitHub issues.
 | #20: ontology validator now permits `derived` on the entity `population_mode` schema (even though v1 has no derived entity type), and pins prompt-phase-specific resolution: every `extracted` entity type → `extract_entities_v1`; every `extracted` relation type → `extract_relations_v1`. Adds the §4–§5 name/discipline checks: `author` forbidden (case-insensitive); junk-drawer entity names forbidden (`concept`, `finding`, `claim`, `benchmark`, `topic`, `theme`); `examples` non-empty on every record; `verified` examples receive corpus-existence checks; `pending_verification` examples require a non-empty `note`. | §15.7 | `ontology.md` §4–§5 |
 | #28: adds the verbatim `graph-retrieval.md` §4 evidence collection and §3.2 path-uniqueness invariants omitted previously: a semantic path may not repeat the same logical relationship identity; node revisits are allowed only when no relationship identity repeats; no Neo4j internal IDs participate; per-extracted ontology assertion return the canonical `chunk_id` stored on it; per-derived `EVALUATED_ON` resolve `supporting_assertion_ids` and collect the exact participating-assertion `chunk_id`s; dangling supporting assertion is stale-graph error; mixed paths return only sorted-unique assertion-evidence chunks; `HAS_CHUNK`/MENTIONS context only on pure-CITES paths; otherwise fail closed. | §11.2 | `graph-retrieval.md` §3.2, §4.1, §4.2 |
 | #27: removed stale claim that `#30` blocks on `#27`. `#30` depends only on `#19 + #22`. | §11.1 | `grounded-generation.md` §1; `vector-retrieval.md` (none) |
-| #26 / #33: a small reusable `validate_vector_store(canonical_chunks, configured_embedding_identity) -> VectorStoreIdentity` API is the single freshness seam. `#26` runs it after ingestion; `#27` may use it as a freshness precondition; `#33` runs it during benchmark preflight and records the returned `embedding_source_chunks_sha256` and `embedding_model_identity`. No new persistent manifest is introduced; benchmark freshness does not depend on historical logs. | §11.1, §14 | `vector-retrieval.md` §3; `local-infra.md` (none) |
+| **pgvector lean-index boundary (#18 / #26 / #33):** pgvector is a replaceable derived embedding index whose `chunks` table contains exactly `chunk_id`, `embedding`, `embedding_model`, `source_text_sha256`, and `embedded_at`. Canonical chunk text and metadata live exclusively in `data/derived/chunks.jsonl`; pgvector never persists `doc_id`, `section_path`, `chunk_index`, `text`, `token_estimate`, `char_start`, or `char_end`. Vector retrieval returns only `chunk_id` and score; serving resolves each ID against the canonical artifact. Synchronization reports and transactionally deletes orphan rows because they have no canonical text and cannot be re-embedded. `validate_vector_store(chunks_path, configured_embedding_identity) -> VectorStoreIdentity` is the single freshness seam; `embedding_source_chunks_sha256` is the SHA256 of the exact canonical artifact bytes, never a re-serialization. Host-side pgvector uses port `5433`. | §1, §3, §10, §14 | `chunk-record.md` §2.1, §7; `local-infra.md` §1, §3.1; `vector-retrieval.md` §3; `serving-surface.md` §5 |
 | #34: fresh-checkout gate runs against a **prepared local checkout** (tracked repo state clean, `data/raw/` corpus mounted/present, `.env` credentials/config present, Docker available); the gate then rebuilds all derived state from the supplied canonical/raw inputs. Raw corpus data and credentials remain gitignored. | §16 | `local-infra.md` §1 |
 | #21: textual preflight operates on the v1 text-bearing subset for parser regression; non-text-bearing records do NOT require a LaTeX archive. Parser-regression fixtures committed to git are *synthetic minimal LaTeX*, not real corpus papers. | §4 | `chunking-strategy.md` §12 |
 | **Deterministic text-bearing membership (fourth pass, superseded by fifth pass):** the v1 text-bearing set is `{record["openalex_id"] for record in data/manifest.jsonl if record["arxiv_id"] is not None}`. Membership is **derived from manifest metadata alone**, byte-for-byte reproducible across machines, and **independent of local filesystem state**. A text-bearing record whose LaTeX archive is missing is an input-integrity failure (#21 preflight exits non-zero, missing `doc_id` named) and is **not silently reclassified** as non-text-bearing. The current manifest yields 70 text-bearing documents and 112 non-text-bearing canonical Documents (182 total). #22 doc-id coverage gate is the **set equality** `chunk_doc_ids == text_bearing_doc_ids`; the total chunk count is intentionally not pinned. *(Found unsatisfiable against the prepared corpus: arXiv 2001.01582 has a real PDF but no LaTeX package; #21 implementation surfaced this. See fifth pass.)* | §4, §5 | `chunking-strategy.md` §12 |

@@ -76,34 +76,34 @@ Table name: `chunks`.
 
 ### 3.2 Derived-store contract
 
-`data/derived/chunks.jsonl` is the source of truth for chunks (per [#2](https://github.com/ImmoP/knowledge_graph_rag/issues/2)). pgvector is a **derived store**: it holds embeddings keyed by `chunk_id`, and its contents may be rebuilt from scratch at any time by re-embedding `data/derived/chunks.jsonl`. The implementing pipeline reads the canonical artifact and populates pgvector; it never writes embeddings for chunks that do not appear there.
+`data/derived/chunks.jsonl` is the sole source of truth for canonical chunk text and metadata (per [#2](https://github.com/ImmoP/knowledge_graph_rag/issues/2)). pgvector is a replaceable **derived embedding index** keyed by canonical `chunk_id`; its contents may be rebuilt from scratch at any time by re-embedding the canonical artifact. The implementing pipeline reads the canonical artifact and populates pgvector; it never writes embeddings for chunks that do not appear there. Vector retrieval returns only `chunk_id` and score, and serving resolves each `chunk_id` against the canonical artifact.
 
-Every `chunk_id` stored in pgvector MUST exist in `data/derived/chunks.jsonl`. A `chunk_id` present in pgvector but missing from the canonical artifact is a defect to surface, not to silently drop.
+The `chunks` table has exactly the five columns in §3.1. It does not persist `doc_id`, `section_path`, `chunk_index`, `text`, `token_estimate`, `char_start`, or `char_end`. Every stored `chunk_id` MUST exist in `data/derived/chunks.jsonl`; a row whose `chunk_id` is absent from the canonical artifact is an orphan to report and transactionally delete during synchronization.
 
 ### 3.3 Stale-embedding detection
 
 `chunk_id` is intentionally content-independent (per [#2](https://github.com/ImmoP/knowledge_graph_rag/issues/2)), so validating only `chunk_id` and `embedding_model` is insufficient: the same `chunk_id` can survive while its text changes after parser or cleaning changes. The `source_text_sha256` column makes stale embeddings detectable.
 
-A row is **stale** and MUST be re-embedded if any of the following is true on load:
+Synchronization classifies vector-store state by canonical `chunk_id`:
 
-| Condition | Detection |
-|-----------|-----------|
-| `chunk_id` missing from `data/derived/chunks.jsonl` | orphan-row check: `SELECT chunk_id FROM chunks WHERE chunk_id NOT IN (<canonical chunk_ids>)` returns non-empty |
-| Embedding model/revision differs | row's `embedding_model` ≠ currently-configured `<provider>:<model>:<revision>` |
-| Source-text fingerprint differs | row's `source_text_sha256` ≠ `sha256(canonical_chunk.text)` for that `chunk_id` |
-| Embedding is missing | canonical artifact has a chunk with no row in pgvector |
+| Condition | Detection | Synchronization action |
+|-----------|-----------|------------------------|
+| pgvector row is missing from `data/derived/chunks.jsonl` | orphan-row check: `SELECT chunk_id FROM chunks WHERE chunk_id NOT IN (<canonical chunk_ids>)` returns non-empty | Report and delete the orphan in the synchronization transaction; it cannot be re-embedded because no canonical text exists. |
+| Embedding model/revision differs | row's `embedding_model` ≠ currently-configured `<provider>:<model>:<revision>` | Re-embed the canonical chunk and update the row. |
+| Source-text fingerprint differs | row's `source_text_sha256` ≠ `sha256(canonical_chunk.text)` for that `chunk_id` | Re-embed the canonical chunk and update the row. |
+| Embedding is missing | canonical artifact has a chunk with no row in pgvector | Embed the canonical chunk and insert the row. |
 
-When stale rows are detected, the loader re-embeds the affected chunks. The loader does not silently drop or skip stale rows; it reports the count and proceeds to re-embed.
+The loader reports counts for all four conditions and performs the required inserts, updates, and orphan deletions atomically. It never silently drops or skips a canonical chunk and never describes an orphan as re-embeddable. Freshness validation fingerprints the SHA256 of the exact `data/derived/chunks.jsonl` bytes and validates the parsed records against the live rows; it never substitutes a re-serialization of parsed records for the canonical artifact identity.
 
 ### 3.4 Run metadata
 
 The implementing ticket records, alongside each embedding run's logs:
 
-- the SHA256 of `data/derived/chunks.jsonl` at the time of the run;
+- the SHA256 of the exact `data/derived/chunks.jsonl` bytes at the time of the run;
 - the pinned model revision;
 - the timestamp.
 
-This metadata is audit-only; it does not gate correctness (the per-row `source_text_sha256` is the authoritative staleness signal). Keeping the canonical artifact's SHA256 lets an operator reconstruct which version of the corpus a given pgvector snapshot was produced from.
+This metadata is audit-only; it does not gate correctness (the per-row `source_text_sha256` is the authoritative row-level staleness signal). The exact canonical artifact SHA256 lets an operator reconstruct which corpus artifact a vector-store snapshot was synchronized against.
 
 ## 4. Retrieval interface
 
