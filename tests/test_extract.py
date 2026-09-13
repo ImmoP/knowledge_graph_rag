@@ -415,6 +415,8 @@ class TestResumeSemantics(unittest.TestCase):
                 output_rejects=outputs["rejects"],
                 output_manifest=outputs["manifest"],
                 provider=llm,
+                max_tokens=1024,
+                temperature=0.0,
             )
             self.assertEqual(len(llm.json_calls), 0)
 
@@ -435,6 +437,8 @@ class TestResumeSemantics(unittest.TestCase):
                 output_rejects=outputs["rejects"],
                 output_manifest=outputs["manifest"],
                 provider=llm,
+                max_tokens=1024,
+                temperature=0.0,
             )
             self.assertEqual(r2.resumed_from_run_id, previous_run)
             self.assertEqual(len(llm.json_calls), 0)
@@ -457,8 +461,183 @@ class TestResumeSemantics(unittest.TestCase):
                 output_rejects=outputs["rejects"],
                 output_manifest=outputs["manifest"],
                 provider=llm,
+                max_tokens=1024,
+                temperature=0.0,
             )
             self.assertGreater(len(llm.json_calls), 0)
+
+
+# --- 3b: resume identity gate (Defect: pipeline does not validate
+# the prior run identity before carrying forward extraction-complete
+# chunks). Tests in this block exercise the canonical resume seam
+# (pipeline.run_extraction with prior output present) against identity
+# drift and assert that previously completed chunks are reprocessed.
+class TestResumeIdentityGate(unittest.TestCase):
+
+    def _seed_complete_run(self, root: Path) -> tuple[dict, dict, "_FakeLLM"]:
+        world = _write_world(root)
+        outputs = _default_outputs(root)
+        seed_llm = _FakeLLM()
+        r = pipeline.run_extraction(
+            chunks_path=world["chunks"],
+            ontology_path=world["ontology"],
+            prompts_dir=world["prompts"],
+            output_jsonl=outputs["jsonl"],
+            output_rejects=outputs["rejects"],
+            output_manifest=outputs["manifest"],
+            provider=seed_llm,
+            max_tokens=1024,
+            temperature=0.0,
+        )
+        self.assertEqual(r.complete_chunk_count, 2)
+        self.assertEqual(len(seed_llm.json_calls), 4)
+        return world, outputs, seed_llm
+    def _complete_chunk_ids(self, outputs: dict) -> list[str]:
+        return sorted(
+            rec["chunk_id"]
+            for rec in _read_jsonl(outputs["jsonl"])
+            if rec.get("kind") == "chunk_status"
+            and rec.get("extraction_complete") is True
+        )
+
+    def _run_resume(self, world: dict, outputs: dict, *, llm: "_FakeLLM",
+                    max_tokens: int = 1024, temperature: float = 0.0):
+        return pipeline.run_extraction(
+            chunks_path=world["chunks"],
+            ontology_path=world["ontology"],
+            prompts_dir=world["prompts"],
+            output_jsonl=outputs["jsonl"],
+            output_rejects=outputs["rejects"],
+            output_manifest=outputs["manifest"],
+            provider=llm,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+    def test_resume_unchanged_identity_makes_no_llm_calls(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            carry = self._complete_chunk_ids(outputs)
+            self.assertEqual(carry, ["c_000", "c_001"])
+
+            llm = _FakeLLM()
+            self._run_resume(world, outputs, llm=llm)
+            self.assertEqual(len(llm.json_calls), 0)
+            self.assertEqual(self._complete_chunk_ids(outputs), ["c_000", "c_001"])
+
+    def _assert_two_chunks_reprocessed(self, llm, outputs):
+        # Two chunks × (entity phase + relation phase) = 4 LLM calls.
+        self.assertEqual(
+            len(llm.json_calls), 4,
+            f"expected exactly two chunks reprocessed (4 calls), got {len(llm.json_calls)}",
+        )
+        # Every canonical chunk must end up extraction-complete in the
+        # resulting JSONL, with status records for both chunk_ids.
+        self.assertEqual(self._complete_chunk_ids(outputs), ["c_000", "c_001"])
+        records = _read_jsonl(outputs["jsonl"])
+        statuses = {
+            r["chunk_id"]
+            for r in records
+            if r.get("kind") == "chunk_status"
+        }
+        self.assertEqual(statuses, {"c_000", "c_001"})
+
+    def test_resume_drops_carry_forward_when_chunks_sha_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            with world["chunks"].open("a") as f:
+                f.write(json.dumps({
+                    "chunk_id": "c_002", "doc_id": "W1",
+                    "section_path": ["intro"], "chunk_index": 2,
+                    "text": "Chunk 2 placeholder for drift.",
+                    "token_estimate": 5, "char_start": 0, "char_end": 5,
+                }) + "\n")
+
+            llm = _FakeLLM()
+            self._run_resume(world, outputs, llm=llm)
+            # Three canonical chunks × (entity + relation) = 6 calls.
+            self.assertEqual(len(llm.json_calls), 6)
+            statuses = {
+                r["chunk_id"]
+                for r in _read_jsonl(outputs["jsonl"])
+                if r.get("kind") == "chunk_status"
+            }
+            self.assertEqual(statuses, {"c_000", "c_001", "c_002"})
+
+    def test_resume_drops_carry_forward_when_ontology_sha_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            text = world["ontology"].read_text()
+            text = text.replace(
+                "definition: A research method or technique.",
+                "definition: A mutated method definition.",
+            )
+            world["ontology"].write_text(text)
+
+            llm = _FakeLLM()
+            self._run_resume(world, outputs, llm=llm)
+            self._assert_two_chunks_reprocessed(llm, outputs)
+
+    def test_resume_drops_carry_forward_when_prompt_sha_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            entity_prompt = world["prompts"] / ENTITY_PROMPT_FILE
+            entity_prompt.write_text(entity_prompt.read_text() + "\n# drift\n")
+
+            llm = _FakeLLM()
+            self._run_resume(world, outputs, llm=llm)
+            self._assert_two_chunks_reprocessed(llm, outputs)
+
+    def test_resume_drops_carry_forward_when_provider_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            llm = _FakeLLM()
+            llm.name = "renamed-provider"
+            self._run_resume(world, outputs, llm=llm)
+            self._assert_two_chunks_reprocessed(llm, outputs)
+
+    def test_resume_drops_carry_forward_when_model_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            llm = _FakeLLM()
+            llm.model = "renamed-model"
+            self._run_resume(world, outputs, llm=llm)
+            self._assert_two_chunks_reprocessed(llm, outputs)
+
+    def test_resume_drops_carry_forward_when_max_tokens_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            llm = _FakeLLM()
+            self._run_resume(world, outputs, llm=llm, max_tokens=2048)
+            self._assert_two_chunks_reprocessed(llm, outputs)
+
+    def test_resume_drops_carry_forward_when_prior_manifest_unparseable(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            # Corrupt the manifest so the prior run identity cannot be
+            # reconstructed. The gate must fail closed: no carry-forward,
+            # every canonical chunk is reprocessed.
+            outputs["manifest"].write_text("{not-json", encoding="utf-8")
+
+            llm = _FakeLLM()
+            self._run_resume(world, outputs, llm=llm)
+            self._assert_two_chunks_reprocessed(llm, outputs)
+
+    def test_resume_drops_carry_forward_when_temperature_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world, outputs, _ = self._seed_complete_run(root)
+            llm = _FakeLLM()
+            self._run_resume(world, outputs, llm=llm, temperature=0.5)
+            self._assert_two_chunks_reprocessed(llm, outputs)
 
 
 # --- 4: validation gates ---------------------------------------------

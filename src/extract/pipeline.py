@@ -313,6 +313,34 @@ def preflight(
     )
     return report, ontology, prompt_artifacts
 
+def _identity_matches(prev_manifest: dict | None, current: "PreflightReport") -> bool:
+    """Return True iff the prior run's identity matches the current preflight.
+
+    The seven identity fields must all match. Any missing field or
+    type mismatch fails closed (returns False), so an unparseable or
+    partial prior manifest cannot silently authorise a carry-forward.
+    ``prev_manifest is None`` returns False: no prior run identity to
+    compare, so no prior chunk is trusted.
+    """
+    if not isinstance(prev_manifest, dict):
+        return False
+    fields = (
+        ("chunks_sha256", current.chunks_sha256),
+        ("ontology_sha256", current.ontology_sha256),
+        ("provider", current.provider_name),
+        ("model", current.provider_model),
+        ("max_tokens", current.max_tokens),
+        ("temperature", current.temperature),
+    )
+    for key, expected in fields:
+        if prev_manifest.get(key) != expected:
+            return False
+    prev_prompts = prev_manifest.get("prompt_template_sha256")
+    cur_prompts = list(current.prompt_template_sha256)
+    if not isinstance(prev_prompts, list) or list(prev_prompts) != cur_prompts:
+        return False
+    return True
+
 # --- phase runners ---------------------------------------------------
 
 
@@ -961,16 +989,22 @@ def run_extraction(
     mentions_by_chunk: dict = {}
     assertions_by_chunk: dict = {}
     statuses_by_chunk: dict = {}
+    carry_forward_identity_ok = _identity_matches(prev_manifest, preflight_report)
 
     # Carry over records for chunks whose status is already complete
     # (spec §13.1: "chunks whose final chunk_status says
     # extraction_complete=true are skipped entirely"). The previous
-    # state is the source of truth for these.
-    for cid, status in prev_statuses.items():
-        if _is_complete(status):
-            mentions_by_chunk[cid] = list(prev_mentions.get(cid, []))
-            assertions_by_chunk[cid] = list(prev_assertions.get(cid, []))
-            statuses_by_chunk[cid] = status
+    # state is the source of truth for these, *but only* when the
+    # prior run's identity still matches the current preflight. Any
+    # drift (chunks, ontology, prompts, provider, model, generation
+    # parameters) invalidates the carry-forward and forces reprocessing
+    # of every canonical chunk under the current identity.
+    if carry_forward_identity_ok:
+        for cid, status in prev_statuses.items():
+            if _is_complete(status):
+                mentions_by_chunk[cid] = list(prev_mentions.get(cid, []))
+                assertions_by_chunk[cid] = list(prev_assertions.get(cid, []))
+                statuses_by_chunk[cid] = status
 
     budget_aborted = False
     total_mentions = sum(len(v) for v in mentions_by_chunk.values())

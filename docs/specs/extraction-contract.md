@@ -513,11 +513,28 @@ A re-run of the entry point against an existing `data/extractions.jsonl` and `da
 - For every `chunk_id` whose `chunk_status.extraction_complete == true` in the existing file: skip both phases entirely.
 - For every `chunk_id` whose `chunk_status.extraction_complete == false` (or that has no `chunk_status` record): re-run entity, then relation. The validated records from the existing file are kept; the new records replace them.
 
+**Identity preconditions for carry-forward.** Carrying a prior `chunk_status.extraction_complete == true` forward is permitted only when the previous run's manifest matches the current run across every one of the following fields. Any mismatch, or any missing field, or any unparseable previous manifest, invalidates carry-forward for every canonical chunk and forces reprocessing under the current identity.
+
+| Field | Source in the previous manifest | Source in the current run |
+|---|---|---|
+| `chunks_sha256` | `data/extractions.manifest.json` | freshly computed by the current `PreflightReport` |
+| `ontology_sha256` | same | same |
+| `prompt_template_sha256` (list equality) | same | same |
+| `provider` | same | same |
+| `model` | same | same |
+| `max_tokens` | same | same |
+| `temperature` | same | same |
+
+An unparseable previous manifest (corrupt JSON, missing required fields, non-dict shape) is treated as identity-mismatch for every chunk.
+
 This is implemented by:
 
 1. On startup, load the existing `data/extractions.jsonl` (if present) into an in-memory map keyed by `(chunk_id, kind)`.
-2. Before processing a chunk, check whether a `chunk_status` record with `extraction_complete == true` exists.
-3. If yes, skip. If no, run both phases, then write all records for that chunk (mention, assertion, and chunk_status).
+2. On startup, parse the existing `data/extractions.manifest.json`. If the file is missing, unparseable, or any required field above is missing or wrong-typed, treat the previous run as having no identity.
+3. Compute the current identity from the freshly read canonical artifacts and provider configuration. Compare every field in the table above against the parsed previous manifest.
+4. If every field matches, carry forward prior `chunk_status.extraction_complete == true` records. If any field differs or the previous manifest cannot be trusted, do not carry forward; every canonical chunk is reprocessed under the current identity.
+5. Before processing a chunk, check whether a `chunk_status` record with `extraction_complete == true` exists in the carried-forward set.
+6. If yes, skip. If no, run both phases, then write all records for that chunk (mention, assertion, and chunk_status).
 
 The run manifest records `resumed_from_run_id` (the prior run's timestamp) so the benchmark report can trace the lineage.
 
@@ -577,6 +594,7 @@ This spec closes when committed to `docs/specs/extraction-contract.md`. The impl
 5. **Budget cap triggers:** with `LLM_BUDGET_TOKENS` set to a value that the second call would exceed, the run aborts after the second call with `BudgetExceeded`, exits non-zero, and leaves `data/extractions.jsonl` containing the first chunk's records plus the in-progress chunk's records.
 6. **Retry behaviour:** a forced transient failure (simulated by an adapter test double) is retried per §12.1's schedule; a forced schema-validation failure is sent to the reject log without retrying beyond `generate_json`'s built-in single retry.
 7. **Resumability:** a partial run followed by a re-run produces the same `extractions.jsonl` as a single uninterrupted run would have (byte-identical, given a deterministic provider). The ID-stability property is also asserted explicitly: the set of `mention_id` and `assertion_id` values in the resumed run equals the set the uninterrupted run would have produced, regardless of which chunks were processed first or which chunks failed.
+7a. **Resume identity gate (impl-spec §13.1):** a re-run against an existing `data/extractions.manifest.json` carries forward prior `chunk_status.extraction_complete == true` records **only** when every one of the seven identity fields listed in §13.1 (`chunks_sha256`, `ontology_sha256`, `prompt_template_sha256`, `provider`, `model`, `max_tokens`, `temperature`) matches the freshly computed current value. A change in any one field, a missing field, an unparseable manifest, or a missing manifest file invalidates carry-forward for every canonical chunk and forces reprocessing under the current identity. The implementing ticket ships tests covering (a) identity match making zero new LLM calls for previously completed chunks, (b) each of the seven field drifts forcing reprocessing of the previously completed chunks, and (c) an unparseable prior manifest failing closed.
 8. **No provider SDK import** in `src/extraction/` (verifiable with `grep`).
 9. **Idempotency:** two consecutive runs against the same chunk manifest, ontology, prompt templates, and provider produce byte-identical `data/extractions.jsonl` (assuming a deterministic provider). SHA256 of the file is the gate. The implementing ticket additionally ships a tiny harness that re-derives every `mention_id` and `assertion_id` from its record fields per §6.1 and asserts the recomputed ID equals the stored one for every record in the file; this catches any future regression that re-introduces a position-dependent ID rule.
 10. **`ontology.yaml` is updated** in lock-step with this spec: every `extracted` entity type's `extraction_prompt` references `extract_entities_v1`; every `extracted` relation type's `extraction_prompt` references `extract_relations_v1`. The ontology spec's "appears in extraction prompt template" cross-check (§5.10) passes against the two grouped templates.
