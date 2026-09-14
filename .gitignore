@@ -15,3 +15,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ipynb_checkpoints/
+
+# Temporary local infrastructure test credentials
+.env.issue18-live
