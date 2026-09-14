@@ -50,6 +50,9 @@ from pathlib import Path
 
 import yaml
 
+from src.extract import ids as extraction_ids
+from src.extract import schema as extraction_schema
+from src.extract import validation as extraction_validation
 from src.extract.prompts import ENTITY_PROMPT_FILE, RELATION_PROMPT_FILE
 from src.extract.schema import SCHEMA_VERSION as EXTRACTION_SCHEMA_VERSION
 
@@ -236,18 +239,24 @@ def lev_similarity(a: str, b: str) -> float:
 
 @dataclass(frozen=True)
 class _ChunkRecord:
-    """Minimal chunk view used by preflight — pulls only the fields we need."""
+    """Canonical chunk identity and text used by extraction validation."""
 
     chunk_id: str
     doc_id: str
+    text: str
 
 
 def _read_jsonl(path: Path) -> Iterator[dict]:
     with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
+        for line_number, line in enumerate(fh, 1):
             if not line.strip():
                 continue
-            yield json.loads(line)
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise PreflightError(
+                    f"{path} line {line_number} is not valid JSON: {exc}"
+                ) from exc
 
 
 def _file_sha256(path: Path) -> str:
@@ -338,6 +347,173 @@ def _validate_manifest_shape(manifest: dict) -> None:
             )
 
 
+_MENTION_FIELDS = {
+    "kind", "mention_id", "chunk_id", "doc_id", "entity_type",
+    "surface_form", "canonical_form", "evidence", "confidence",
+}
+_ASSERTION_FIELDS = {
+    "kind", "assertion_id", "chunk_id", "doc_id", "relation_type",
+    "subject_ref", "object_ref", "evidence", "confidence",
+}
+_STATUS_FIELDS = {"kind", "chunk_id", "doc_id", "phases", "extraction_complete"}
+_EVIDENCE_FIELDS = {"char_start", "char_end", "source_text_sha256"}
+_PHASE_FIELDS = {"status", "attempt_count", "failure_count"}
+
+
+def _require_exact_fields(record: dict, expected: set[str], *, where: str) -> None:
+    if set(record) != expected:
+        raise PreflightError(
+            f"{where} must have exactly {sorted(expected)}; got {sorted(record)}"
+        )
+
+
+def _require_nonempty_strings(record: dict, fields: tuple[str, ...], *, where: str) -> None:
+    for field in fields:
+        if not isinstance(record[field], str) or not record[field]:
+            raise PreflightError(f"{where}.{field} must be a non-empty string")
+
+
+def _validate_evidence_shape(evidence, *, where: str) -> None:
+    if not isinstance(evidence, dict):
+        raise PreflightError(f"{where} must be an object")
+    _require_exact_fields(evidence, _EVIDENCE_FIELDS, where=where)
+    for field in ("char_start", "char_end"):
+        value = evidence[field]
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise PreflightError(f"{where}.{field} must be an integer")
+    source_sha = evidence["source_text_sha256"]
+    if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", source_sha):
+        raise PreflightError(f"{where}.source_text_sha256 must be a lowercase SHA256")
+
+
+def _validate_mention_record(record: dict, *, chunk: _ChunkRecord, ontology: dict) -> None:
+    _require_exact_fields(record, _MENTION_FIELDS, where="mention record")
+    _require_nonempty_strings(
+        record,
+        ("mention_id", "chunk_id", "doc_id", "entity_type", "surface_form", "canonical_form"),
+        where="mention record",
+    )
+    if not re.fullmatch(r"m_[0-9a-f]{16}", record["mention_id"]):
+        raise PreflightError("mention record.mention_id has invalid format")
+    if record["doc_id"] != chunk.doc_id:
+        raise PreflightError(
+            f"mention record doc_id {record['doc_id']!r} != chunk doc_id {chunk.doc_id!r}"
+        )
+    if record["confidence"] not in extraction_schema.CONFIDENCE_VALUES:
+        raise PreflightError("mention record.confidence is invalid")
+    _validate_evidence_shape(record["evidence"], where="mention record.evidence")
+    source_sha = extraction_validation.source_text_sha256(chunk.text)
+    try:
+        extraction_validation.check_mention_ontology(mention=record, ontology=ontology)
+        extraction_validation.check_mention_evidence(
+            mention=record,
+            chunk_text=chunk.text,
+            expected_source_text_sha256=source_sha,
+        )
+    except (extraction_validation.OntologyError, extraction_validation.EvidenceError) as exc:
+        raise PreflightError(str(exc)) from exc
+    if extraction_ids.rederive_mention_id(record) != record["mention_id"]:
+        raise PreflightError(f"mention {record['mention_id']!r} does not re-derive")
+
+
+def _validate_assertion_record_shape(record: dict, *, chunk: _ChunkRecord) -> None:
+    _require_exact_fields(record, _ASSERTION_FIELDS, where="assertion record")
+    _require_nonempty_strings(
+        record,
+        ("assertion_id", "chunk_id", "doc_id", "relation_type"),
+        where="assertion record",
+    )
+    if not re.fullmatch(r"a_[0-9a-f]{16}", record["assertion_id"]):
+        raise PreflightError("assertion record.assertion_id has invalid format")
+    if record["doc_id"] != chunk.doc_id:
+        raise PreflightError(
+            f"assertion record doc_id {record['doc_id']!r} != chunk doc_id {chunk.doc_id!r}"
+        )
+    if record["confidence"] not in extraction_schema.CONFIDENCE_VALUES:
+        raise PreflightError("assertion record.confidence is invalid")
+    for field in ("subject_ref", "object_ref"):
+        ref = record[field]
+        if not isinstance(ref, dict):
+            raise PreflightError(f"assertion record.{field} must be an object")
+        _require_exact_fields(ref, {"kind", "id"}, where=f"assertion record.{field}")
+        if ref["kind"] not in extraction_schema.ENDPOINT_KINDS:
+            raise PreflightError(f"assertion record.{field}.kind is invalid")
+        if not isinstance(ref["id"], str) or not ref["id"]:
+            raise PreflightError(f"assertion record.{field}.id must be a non-empty string")
+    _validate_evidence_shape(record["evidence"], where="assertion record.evidence")
+
+
+def _validate_chunk_status(record: dict, *, chunk: _ChunkRecord) -> None:
+    _require_exact_fields(record, _STATUS_FIELDS, where="chunk_status record")
+    _require_nonempty_strings(record, ("chunk_id", "doc_id"), where="chunk_status record")
+    if record["doc_id"] != chunk.doc_id:
+        raise PreflightError(
+            f"chunk_status doc_id {record['doc_id']!r} != chunk doc_id {chunk.doc_id!r}"
+        )
+    if not isinstance(record["phases"], dict):
+        raise PreflightError("chunk_status.phases must be an object")
+    _require_exact_fields(record["phases"], {"entity", "relation"}, where="chunk_status.phases")
+    for phase, count_field in (("entity", "mention_count"), ("relation", "assertion_count")):
+        value = record["phases"][phase]
+        if not isinstance(value, dict):
+            raise PreflightError(f"chunk_status.phases.{phase} must be an object")
+        expected = _PHASE_FIELDS | {count_field}
+        _require_exact_fields(value, expected, where=f"chunk_status.phases.{phase}")
+        if value["status"] not in ("validated", "rejected"):
+            raise PreflightError(f"chunk_status.phases.{phase}.status is invalid")
+        for field in ("attempt_count", count_field, "failure_count"):
+            count = value[field]
+            if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                raise PreflightError(
+                    f"chunk_status.phases.{phase}.{field} must be a non-negative integer"
+                )
+    complete = (
+        record["phases"]["entity"]["status"] == "validated"
+        and record["phases"]["relation"]["status"] == "validated"
+        and record["phases"]["entity"]["failure_count"] == 0
+        and record["phases"]["relation"]["failure_count"] == 0
+    )
+    if not isinstance(record["extraction_complete"], bool) or record["extraction_complete"] is not complete:
+        raise PreflightError("chunk_status.extraction_complete disagrees with phase state")
+
+
+def _validate_assertion_identity(
+    record: dict,
+    *,
+    chunk: _ChunkRecord,
+    ontology: dict,
+    same_chunk_mentions: dict[str, dict],
+) -> None:
+    allowed_relations = {
+        relation["name"] for relation in extraction_schema.extracted_relation_types(ontology)
+    }
+    if record["relation_type"] not in allowed_relations:
+        raise PreflightError(
+            f"assertion relation_type {record['relation_type']!r} not in extracted ontology"
+        )
+    source_sha = extraction_validation.source_text_sha256(chunk.text)
+    try:
+        extraction_validation.check_assertion_evidence(
+            assertion=record,
+            chunk_text=chunk.text,
+            expected_source_text_sha256=source_sha,
+        )
+        extraction_validation.check_assertion_ontology(
+            assertion=record,
+            ontology=ontology,
+            doc_id=chunk.doc_id,
+            same_chunk_mentions=same_chunk_mentions,
+            entity_type_for_mention={
+                mention_id: mention["entity_type"]
+                for mention_id, mention in same_chunk_mentions.items()
+            },
+        )
+    except (extraction_validation.OntologyError, extraction_validation.EvidenceError) as exc:
+        raise PreflightError(str(exc)) from exc
+    if extraction_ids.rederive_assertion_id(record) != record["assertion_id"]:
+        raise PreflightError(f"assertion {record['assertion_id']!r} does not re-derive")
+
+
 def _preflight(
     *,
     chunks_path: Path,
@@ -410,50 +586,82 @@ def _preflight(
             f"ontology.yaml (expected {ontology_version}, "
             f"got {manifest['ontology_version']})"
         )
-
-    # Index chunks + extractions in one pass each.
+    # Index canonical chunks without allowing duplicate primary keys.
     chunks: dict[str, _ChunkRecord] = {}
     for row in _read_jsonl(chunks_path):
-        chunks[row["chunk_id"]] = _ChunkRecord(
-            chunk_id=row["chunk_id"], doc_id=row["doc_id"]
-        )
+        if not isinstance(row, dict):
+            raise PreflightError("chunk record must be a JSON object")
+        cid = row.get("chunk_id")
+        if cid in chunks:
+            raise PreflightError(f"duplicate chunk_id in chunks input: {cid!r}")
+        try:
+            chunk = _ChunkRecord(chunk_id=cid, doc_id=row["doc_id"], text=row["text"])
+        except KeyError as exc:
+            raise PreflightError(f"chunk record missing required field: {exc.args[0]!r}") from exc
+        if not all(isinstance(value, str) and value for value in (chunk.chunk_id, chunk.doc_id, chunk.text)):
+            raise PreflightError("chunk record chunk_id, doc_id, and text must be non-empty strings")
+        chunks[cid] = chunk
 
     mentions: list[dict] = []
+    assertions: list[dict] = []
     chunk_statuses: dict[str, dict] = {}
     duplicate_status_cids: list[str] = []
     for row in _read_jsonl(extractions_path):
         if not isinstance(row, dict):
-            raise PreflightError(
-                "extraction record must be a JSON object"
-            )
+            raise PreflightError("extraction record must be a JSON object")
         kind = row.get("kind")
         cid = row.get("chunk_id")
         if cid not in chunks:
-            raise PreflightError(
-                f"extraction record references unknown chunk_id: {cid!r}"
-            )
+            raise PreflightError(f"extraction record references unknown chunk_id: {cid!r}")
+        chunk = chunks[cid]
         if kind == "mention":
+            _validate_mention_record(row, chunk=chunk, ontology=ontology)
             mentions.append(row)
+        elif kind == "assertion":
+            _validate_assertion_record_shape(row, chunk=chunk)
+            assertions.append(row)
         elif kind == "chunk_status":
+            _validate_chunk_status(row, chunk=chunk)
             if cid in chunk_statuses:
                 duplicate_status_cids.append(cid)
             else:
                 chunk_statuses[cid] = row
-        elif kind == "assertion":
-            # Assertions do not participate in clustering, but their
-            # chunk must still resolve to a real chunk. Already enforced
-            # above.
-            continue
         else:
             raise PreflightError(f"unknown extraction record kind: {kind!r}")
+    mentions_by_chunk: dict[str, dict[str, dict]] = {}
+    for mention in mentions:
+        chunk_mentions = mentions_by_chunk.setdefault(mention["chunk_id"], {})
+        existing = chunk_mentions.get(mention["mention_id"])
+        if existing is not None and existing != mention:
+            raise PreflightError(
+                f"conflicting duplicate mention records share mention_id={mention['mention_id']!r}"
+            )
+        chunk_mentions[mention["mention_id"]] = mention
+    for assertion in assertions:
+        _validate_assertion_identity(
+            assertion,
+            chunk=chunks[assertion["chunk_id"]],
+            ontology=ontology,
+            same_chunk_mentions=mentions_by_chunk.get(assertion["chunk_id"], {}),
+        )
 
+    for cid, status in chunk_statuses.items():
+        entity_count = sum(1 for mention in mentions if mention["chunk_id"] == cid)
+        relation_count = sum(1 for assertion in assertions if assertion["chunk_id"] == cid)
+        if status["phases"]["entity"]["mention_count"] != entity_count:
+            raise PreflightError(
+                f"chunk_status mention_count disagrees with persisted mentions for {cid!r}"
+            )
+        if status["phases"]["relation"]["assertion_count"] != relation_count:
+            raise PreflightError(
+                f"chunk_status assertion_count disagrees with persisted assertions for {cid!r}"
+            )
     if duplicate_status_cids:
         raise PreflightError(
             f"duplicate chunk_status records for {len(duplicate_status_cids)} "
             f"chunk_id(s); first: {duplicate_status_cids[0]!r}"
         )
 
-    # Every required chunk_id must have exactly one complete status record.
     missing = sorted(set(chunks) - set(chunk_statuses))
     if missing:
         raise PreflightError(
@@ -462,8 +670,8 @@ def _preflight(
         )
     incomplete = sorted(
         cid
-        for cid, st in chunk_statuses.items()
-        if st.get("extraction_complete") is not True
+        for cid, status in chunk_statuses.items()
+        if status["extraction_complete"] is not True
     )
     if incomplete:
         raise PreflightError(
@@ -482,32 +690,8 @@ def _preflight(
     }
 
 def _default_rederive_mention_id(record: dict) -> str:
-    """Default mention-ID re-derivation: ``m_`` + first 16 hex of
-    ``sha256`` over the canonical-JSON evidence payload
-    (``chunk_id``, ``source_text_sha256``, ``entity_type``,
-    ``char_start``, ``char_end``).
-
-    Inlined in this module so the resolver never imports any upstream
-    provider SDK — required by entity-resolution spec §9 and
-    implementation spec §10.
-    """
-    evidence = record["evidence"]
-    payload = {
-        "chunk_id": record["chunk_id"],
-        "source_text_sha256": evidence["source_text_sha256"],
-        "entity_type": record["entity_type"],
-        "char_start": evidence["char_start"],
-        "char_end": evidence["char_end"],
-    }
-    digest = sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
-    return "m_" + digest[:16]
+    """Re-derive a persisted mention ID through the #23 contract helper."""
+    return extraction_ids.rederive_mention_id(record)
 
 # ---------------------------------------------------------------------------
 # §6.1 entity ID derivation.

@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.extract import ids as extraction_ids  # noqa: E402
 from src.extract.pipeline import PreflightReport, RunState  # noqa: E402
 from src.extract.prompts import (  # noqa: E402
     ENTITY_PROMPT_FILE,
@@ -204,7 +205,13 @@ entity_types:
     population_mode: extracted
     extraction_prompt: extract_entities_v1
     examples: []
-relation_types: []
+relation_types:
+  - name: PROPOSES
+    from: document
+    to: method
+    population_mode: extracted
+    extraction_prompt: extract_relations_v1
+    examples: []
 """
 
 
@@ -252,7 +259,47 @@ def _canonical_mention(
     }
 
 
-def _chunk_status(*, chunk_id: str, doc_id: str, complete: bool) -> dict:
+def _canonical_assertion(*, mention: dict, chunk_text: str | None = None) -> dict:
+    chunk_id = mention["chunk_id"]
+    doc_id = mention["doc_id"]
+    text = chunk_text if chunk_text is not None else f"chunk text {chunk_id}"
+    source_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    subject_ref = {"kind": "document", "id": doc_id}
+    object_ref = {"kind": "mention", "id": mention["mention_id"]}
+    payload = {
+        "chunk_id": chunk_id,
+        "source_text_sha256": source_sha,
+        "relation_type": "PROPOSES",
+        "subject_ref": subject_ref,
+        "object_ref": object_ref,
+        "char_start": 0,
+        "char_end": 5,
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        .encode("utf-8")
+    ).hexdigest()
+    return {
+        "kind": "assertion",
+        "assertion_id": "a_" + digest[:16],
+        "chunk_id": chunk_id,
+        "doc_id": doc_id,
+        "relation_type": "PROPOSES",
+        "subject_ref": subject_ref,
+        "object_ref": object_ref,
+        "evidence": {
+            "char_start": 0,
+            "char_end": 5,
+            "source_text_sha256": source_sha,
+        },
+        "confidence": "stated",
+    }
+
+
+def _chunk_status(
+    *, chunk_id: str, doc_id: str, complete: bool,
+    mention_count: int = 0, assertion_count: int = 0,
+) -> dict:
     return {
         "kind": "chunk_status",
         "chunk_id": chunk_id,
@@ -261,13 +308,13 @@ def _chunk_status(*, chunk_id: str, doc_id: str, complete: bool) -> dict:
             "entity": {
                 "status": "validated",
                 "attempt_count": 1,
-                "mention_count": 1,
+                "mention_count": mention_count,
                 "failure_count": 0,
             },
             "relation": {
                 "status": "validated",
                 "attempt_count": 1,
-                "assertion_count": 0,
+                "assertion_count": assertion_count,
                 "failure_count": 0,
             },
         },
@@ -294,25 +341,65 @@ def _build_world(
     chunks=("c_0000000000000001",),
     mentions=(),
     chunk_status_complete=True,
+    assertions=(),
+    mutate_extractions=None,
 ) -> dict:
     """Write a synthetic chunks + extractions + manifest world under ``tmp``."""
     tmp.mkdir(parents=True, exist_ok=True)
     onp = tmp / "ontology.yaml"
     onp.write_text(_MINIMAL_ONTOLOGY)
     chp = tmp / "chunks.jsonl"
-    chunks_records = [
-        {
+    mentions_by_chunk = {cid: [] for cid in chunks}
+    for mention in mentions:
+        mentions_by_chunk.setdefault(mention["chunk_id"], []).append(mention)
+    chunks_records = []
+    mention_id_changes = {}
+    for i, cid in enumerate(chunks):
+        grouped: dict[str, list[dict]] = {}
+        for mention in mentions_by_chunk.get(cid, []):
+            grouped.setdefault(mention["mention_id"], []).append(mention)
+        text_parts = []
+        cursor = 0
+        for old_id, duplicates in grouped.items():
+            first = duplicates[0]
+            surface = first["surface_form"]
+            start = cursor
+            end = start + len(surface)
+            text_parts.append(surface)
+            cursor = end + 1
+            for mention in duplicates:
+                mention["evidence"]["char_start"] = start
+                mention["evidence"]["char_end"] = end
+            mention_id_changes[old_id] = duplicates
+        text = " ".join(part for part in text_parts) or f"chunk text {cid}"
+        source_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        for old_id, duplicates in grouped.items():
+            for mention in duplicates:
+                mention["evidence"]["source_text_sha256"] = source_sha
+                mention["mention_id"] = extraction_ids.rederive_mention_id(mention)
+            mention_id_changes[old_id] = duplicates[0]["mention_id"]
+        chunks_records.append({
             "chunk_id": cid,
             "doc_id": "W1",
             "section_path": ["intro"],
             "chunk_index": i,
-            "text": f"chunk text {cid}",
-            "token_estimate": 10,
+            "text": text,
+            "token_estimate": len(text) // 4,
             "char_start": 0,
-            "char_end": 30,
-        }
-        for i, cid in enumerate(chunks)
-    ]
+            "char_end": len(text),
+        })
+    for assertion in assertions:
+        for field in ("subject_ref", "object_ref"):
+            ref = assertion.get(field)
+            if isinstance(ref, dict) and ref.get("kind") == "mention":
+                ref["id"] = mention_id_changes.get(ref.get("id"), ref.get("id"))
+        chunk_text = next(row["text"] for row in chunks_records if row["chunk_id"] == assertion["chunk_id"])
+        assertion["evidence"]["char_start"] = 0
+        assertion["evidence"]["char_end"] = min(5, len(chunk_text))
+        assertion["evidence"]["source_text_sha256"] = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
+        assertion["assertion_id"] = extraction_ids.rederive_assertion_id(assertion)
+    if mutate_extractions is not None:
+        mutate_extractions(mentions, assertions)
     chp.write_text(
         "\n".join(
             json.dumps(c, sort_keys=True, ensure_ascii=False) for c in chunks_records
@@ -352,10 +439,17 @@ def _build_world(
     exp = tmp / "extractions.jsonl"
     rows = []
     rows.extend(
-        _chunk_status(chunk_id=cid, doc_id="W1", complete=chunk_status_complete)
+        _chunk_status(
+            chunk_id=cid,
+            doc_id="W1",
+            complete=chunk_status_complete,
+            mention_count=sum(1 for mention in mentions if mention["chunk_id"] == cid),
+            assertion_count=sum(1 for assertion in assertions if assertion["chunk_id"] == cid),
+        )
         for cid in chunks
     )
     rows.extend(mentions)
+    rows.extend(assertions)
     exp.write_text(
         "\n".join(
             json.dumps(r, sort_keys=True, ensure_ascii=False) for r in rows
@@ -397,6 +491,109 @@ def _run(world: dict):
         entity_resolutions_path=world["entity_resolutions"],
         entity_resolution_manifest_path=world["entity_resolution_manifest"],
     )
+
+
+def _assert_preflight_failure_preserves_outputs(testcase, world):
+    previous = {
+        world["entities"]: b"previous entities\n",
+        world["entity_resolutions"]: b"previous resolutions\n",
+        world["entity_resolution_manifest"]: b'{"previous":true}\n',
+    }
+    for path, content in previous.items():
+        path.write_bytes(content)
+    with testcase.assertRaises(er.PreflightError):
+        _run(world)
+    for path, content in previous.items():
+        testcase.assertEqual(path.read_bytes(), content)
+
+
+class ExtractionRecordPreflightTests(unittest.TestCase):
+    def test_duplicate_chunk_id_preserves_outputs(self):
+        w = _build_world(_fresh_tmp())
+        duplicate = json.loads(w["chunks"].read_text(encoding="utf-8").splitlines()[0])
+        with w["chunks"].open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(duplicate, sort_keys=True) + "\n")
+        manifest = json.loads(w["manifest"].read_text(encoding="utf-8"))
+        manifest["chunks_sha256"] = hashlib.sha256(w["chunks"].read_bytes()).hexdigest()
+        w["manifest"].write_text(json.dumps(manifest, sort_keys=True) + "\n")
+        _assert_preflight_failure_preserves_outputs(self, w)
+
+    def test_malformed_mention_preserves_outputs(self):
+        mention = _canonical_mention(
+            chunk_id="c_0000000000000001", doc_id="W1", entity_type="method",
+            canonical="DPR", surface="DPR", char_start=0, char_end=3,
+        )
+        del mention["canonical_form"]
+        w = _build_world(_fresh_tmp(), mentions=[mention])
+        _assert_preflight_failure_preserves_outputs(self, w)
+
+    def test_malformed_assertion_preserves_outputs(self):
+        mention = _canonical_mention(
+            chunk_id="c_0000000000000001", doc_id="W1", entity_type="method",
+            canonical="DPR", surface="DPR", char_start=0, char_end=3,
+        )
+        assertion = _canonical_assertion(mention=mention)
+        w = _build_world(
+            _fresh_tmp(), mentions=[mention], assertions=[assertion],
+            mutate_extractions=lambda _mentions, assertions: assertions[0].pop("object_ref"),
+        )
+        _assert_preflight_failure_preserves_outputs(self, w)
+
+    def test_malformed_chunk_status_preserves_outputs(self):
+        w = _build_world(_fresh_tmp())
+        rows = _read_jsonl(w["extractions"])
+        del rows[0]["phases"]["relation"]["failure_count"]
+        w["extractions"].write_text(
+            "\n".join(json.dumps(row, sort_keys=True) for row in rows) + "\n"
+        )
+        _assert_preflight_failure_preserves_outputs(self, w)
+
+    def test_inconsistent_record_doc_id_preserves_outputs(self):
+        mention = _canonical_mention(
+            chunk_id="c_0000000000000001", doc_id="W_OTHER", entity_type="method",
+            canonical="DPR", surface="DPR", char_start=0, char_end=3,
+        )
+        w = _build_world(_fresh_tmp(), mentions=[mention])
+        _assert_preflight_failure_preserves_outputs(self, w)
+
+    def test_stale_evidence_sha_preserves_outputs(self):
+        mention = _canonical_mention(
+            chunk_id="c_0000000000000001", doc_id="W1", entity_type="method",
+            canonical="DPR", surface="DPR", char_start=0, char_end=3,
+        )
+        w = _build_world(
+            _fresh_tmp(), mentions=[mention],
+            mutate_extractions=lambda mentions, _assertions: mentions[0]["evidence"].__setitem__(
+                "source_text_sha256", "0" * 64
+            ),
+        )
+        _assert_preflight_failure_preserves_outputs(self, w)
+
+    def test_invalid_assertion_identity_preserves_outputs(self):
+        mention = _canonical_mention(
+            chunk_id="c_0000000000000001", doc_id="W1", entity_type="method",
+            canonical="DPR", surface="DPR", char_start=0, char_end=3,
+        )
+        assertion = _canonical_assertion(mention=mention)
+        w = _build_world(
+            _fresh_tmp(), mentions=[mention], assertions=[assertion],
+            mutate_extractions=lambda _mentions, assertions: assertions[0].__setitem__(
+                "assertion_id", "a_0000000000000000"
+            ),
+        )
+        _assert_preflight_failure_preserves_outputs(self, w)
+
+    def test_invalid_assertion_typed_ref_preserves_outputs(self):
+        mention = _canonical_mention(
+            chunk_id="c_0000000000000001", doc_id="W1", entity_type="method",
+            canonical="DPR", surface="DPR", char_start=0, char_end=3,
+        )
+        assertion = _canonical_assertion(mention=mention)
+        assertion["object_ref"] = {"kind": "document", "id": "W1"}
+        w = _build_world(_fresh_tmp(), mentions=[mention], assertions=[assertion])
+        _assert_preflight_failure_preserves_outputs(self, w)
+
+
 
 
 class ExtractionManifestContractTests(unittest.TestCase):
