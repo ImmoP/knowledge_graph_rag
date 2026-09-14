@@ -104,25 +104,21 @@ class ResolutionResult:
 # Normalisation — §3 verbatim chain.
 # ---------------------------------------------------------------------------
 
-
 # Whitelist of paired wrapper-quote characters accepted by §3 step 6.
-# Curly double/single quotes and guillemets come in matched shapes (open
-# vs close), but per spec the resolver accepts both ends as "either side
-# of a paired whitelist" — so the mapping is symmetric. A pair strips only
-# when the same character opens and closes; for ASCII / grave, that is
-# strict; for curly and guillemet shapes, we still require matched pairs.
+# Each entry maps an opener to its matching closer. ASCII / grave
+# quotes are symmetric (the same character opens and closes), while
+# curly quotes and guillemets come in matched open/close pairs. A
+# wrapper pair is stripped ONLY when the first and last characters
+# match one of these canonical (opener, closer) tuples — reversed
+# pairs (e.g. ``”DPR“``) are NOT accepted and are preserved verbatim.
 _WRAPPER_OPEN_TO_CLOSE: dict[str, str] = {
     "\"": "\"",        # ASCII double quote
     "'": "'",          # ASCII single quote
     "`": "`",          # grave accent
-    "“": "”",          # left curly double quote
-    "”": "“",          # right curly double quote
-    "‘": "’",          # left curly single quote
-    "’": "“".replace("“", "‘"),  # right curly single quote (kept readable inline)
-    "«": "»",          # left guillemet
-    "»": "«",          # right guillemet
-    "‹": "›",          # single left guillemet
-    "›": "‹",          # single right guillemet
+    "“": "”",          # left curly double quote  -> right curly double quote
+    "‘": "’",          # left curly single quote  -> right curly single quote
+    "«": "»",          # left guillemet            -> right guillemet
+    "‹": "›",          # single left guillemet     -> single right guillemet
 }
 
 _WRAPPER_OPENERS: frozenset[str] = frozenset(_WRAPPER_OPEN_TO_CLOSE.keys())
@@ -267,6 +263,48 @@ def _extracted_entity_types(ontology: dict) -> set[str]:
     }
 
 
+# Required fields on the extraction manifest (§2.1 / §13.1). The
+# preflight enforces shape + types before any clustering runs.
+_REQUIRED_MANIFEST_FIELDS: dict[str, type] = {
+    "chunks_path": str,
+    "chunks_sha256": str,
+    "ontology_path": str,
+    "ontology_sha256": str,
+    "ontology_version": int,
+    "schema_version": int,
+    "provider": str,
+    "model": str,
+}
+
+
+def _validate_manifest_shape(manifest: dict) -> None:
+    """§2.1 manifest schema-validity gate.
+
+    The manifest is a plain JSON object with a fixed field set;
+    unknown types (e.g. ``None`` where a dict is required, list where
+    a dict is required, missing required fields) abort resolution
+    before any output is written.
+    """
+    if not isinstance(manifest, dict):
+        raise PreflightError(
+            f"extractions manifest must be a JSON object, got {type(manifest).__name__}"
+        )
+    missing = sorted(
+        name for name, expected_type in _REQUIRED_MANIFEST_FIELDS.items()
+        if name not in manifest
+    )
+    if missing:
+        raise PreflightError(
+            f"extractions manifest missing required fields: {missing}"
+        )
+    for name, expected_type in _REQUIRED_MANIFEST_FIELDS.items():
+        if not isinstance(manifest[name], expected_type):
+            raise PreflightError(
+                f"extractions manifest field {name!r} must be {expected_type.__name__}, "
+                f"got {type(manifest[name]).__name__}"
+            )
+
+
 def _preflight(
     *,
     chunks_path: Path,
@@ -289,22 +327,55 @@ def _preflight(
     if not ontology_path.is_file():
         raise PreflightError(f"ontology file missing: {ontology_path}")
 
-    manifest = json.loads(extractions_manifest_path.read_text(encoding="utf-8"))
+    try:
+        manifest = json.loads(extractions_manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise PreflightError(
+            f"extractions manifest is not valid JSON: {exc}"
+        ) from exc
+    _validate_manifest_shape(manifest)
 
     chunks_sha_on_disk = _file_sha256(chunks_path)
-    if manifest.get("chunks_sha256") != chunks_sha_on_disk:
+    if manifest["chunks_sha256"] != chunks_sha_on_disk:
         raise PreflightError(
             "extractions manifest chunks_sha256 disagrees with current "
             f"data/derived/chunks.jsonl (expected {chunks_sha_on_disk}, "
-            f"got {manifest.get('chunks_sha256')})"
+            f"got {manifest['chunks_sha256']})"
+        )
+    # §2.1 rule 3: the manifest's chunk-input path must point at the
+    # same on-disk file the resolver is reading. Compare absolute
+    # resolved paths so temporary/symlinked locations match.
+    manifest_chunks_path = Path(manifest["chunks_path"]).resolve()
+    if manifest_chunks_path != chunks_path.resolve():
+        raise PreflightError(
+            "extractions manifest chunks_path disagrees with current "
+            f"chunks input (expected {str(chunks_path.resolve())!r}, "
+            f"got {str(manifest_chunks_path)!r})"
         )
 
     ontology_sha_on_disk = _file_sha256(ontology_path)
-    if manifest.get("ontology_sha256") != ontology_sha_on_disk:
+    if manifest["ontology_sha256"] != ontology_sha_on_disk:
         raise PreflightError(
             "extractions manifest ontology_sha256 disagrees with current "
             f"ontology.yaml (expected {ontology_sha_on_disk}, "
-            f"got {manifest.get('ontology_sha256')})"
+            f"got {manifest['ontology_sha256']})"
+        )
+
+    ontology = _load_ontology(ontology_path)
+    if not isinstance(ontology, dict):
+        raise PreflightError(
+            f"ontology must be a YAML mapping, got {type(ontology).__name__}"
+        )
+    ontology_version = ontology.get("version")
+    if not isinstance(ontology_version, int):
+        raise PreflightError(
+            f"ontology 'version' must be an int, got {type(ontology_version).__name__}"
+        )
+    if manifest["ontology_version"] != ontology_version:
+        raise PreflightError(
+            "extractions manifest ontology_version disagrees with current "
+            f"ontology.yaml (expected {ontology_version}, "
+            f"got {manifest['ontology_version']})"
         )
 
     # Index chunks + extractions in one pass each.
@@ -316,8 +387,12 @@ def _preflight(
 
     mentions: list[dict] = []
     chunk_statuses: dict[str, dict] = {}
-    duplicate_status = False
+    duplicate_status_cids: list[str] = []
     for row in _read_jsonl(extractions_path):
+        if not isinstance(row, dict):
+            raise PreflightError(
+                "extraction record must be a JSON object"
+            )
         kind = row.get("kind")
         cid = row.get("chunk_id")
         if cid not in chunks:
@@ -328,7 +403,7 @@ def _preflight(
             mentions.append(row)
         elif kind == "chunk_status":
             if cid in chunk_statuses:
-                duplicate_status = True
+                duplicate_status_cids.append(cid)
             else:
                 chunk_statuses[cid] = row
         elif kind == "assertion":
@@ -339,8 +414,11 @@ def _preflight(
         else:
             raise PreflightError(f"unknown extraction record kind: {kind!r}")
 
-    if duplicate_status:
-        raise PreflightError("duplicate chunk_status records for the same chunk_id")
+    if duplicate_status_cids:
+        raise PreflightError(
+            f"duplicate chunk_status records for {len(duplicate_status_cids)} "
+            f"chunk_id(s); first: {duplicate_status_cids[0]!r}"
+        )
 
     # Every required chunk_id must have exactly one complete status record.
     missing = sorted(set(chunks) - set(chunk_statuses))
@@ -365,9 +443,8 @@ def _preflight(
         "chunk_statuses": chunk_statuses,
         "ontology_path": ontology_path,
         "ontology_sha": ontology_sha_on_disk,
+        "ontology_version": ontology_version,
     }
-
-
 
 def _default_rederive_mention_id(record: dict) -> str:
     """Default mention-ID re-derivation: ``m_`` + first 16 hex of
@@ -563,8 +640,15 @@ def _stage_b(
     for c in clusters:
         by_type.setdefault(c.entity_type, []).append(c)
 
+    # Explicit one-to-one association: each ``_TargetCluster`` is
+    # paired with exactly one ``_ResolvedCluster``. When a candidate
+    # cluster merges into an older target, this map lets us look up
+    # the matching resolved cluster by target identity rather than
+    # relying on insertion order (``resolved[-1]`` would update the
+    # wrong cluster if there are intervening targets).
     targets: list[_TargetCluster] = []
     resolved: list[_ResolvedCluster] = []
+    target_to_resolved: dict[int, _ResolvedCluster] = {}
 
     for entity_type, type_clusters in by_type.items():
         type_clusters.sort(key=lambda c: c.key)
@@ -598,24 +682,21 @@ def _stage_b(
                     },
                     merge_scores=[],
                 )
-                resolved.append(r)
-                targets.append(
-                    _TargetCluster(
-                        entity_type=entity_type,
-                        normalized_names=[C.normalized_name],
-                        mention_ids=list(C.mention_ids),
-                    )
+                t = _TargetCluster(
+                    entity_type=entity_type,
+                    normalized_names=[C.normalized_name],
+                    mention_ids=list(C.mention_ids),
                 )
+                resolved.append(r)
+                targets.append(t)
+                target_to_resolved[id(t)] = r
             else:
                 best_target.normalized_names.append(C.normalized_name)
                 for mid in C.mention_ids:
                     best_target.mention_ids.append(mid)
-                # Targets and resolved clusters are appended in
-                # lockstep, so resolved[-1] is the cluster that owns
-                # ``best_target`` by construction. We mirror the same
-                # membership bookkeeping on the resolved record so
-                # downstream rendering reflects the merged cluster.
-                r = resolved[-1]
+                # Look up the resolved cluster that owns this target
+                # explicitly via the one-to-one association map.
+                r = target_to_resolved[id(best_target)]
                 r.mention_ids.extend(C.mention_ids)
                 r.stage_a_keys[C.key] = C.normalized_name
                 r.merge_scores.append(best_score)
@@ -744,7 +825,16 @@ def _select_eligible_mentions(
     extracted_types: set[str],
     rederive_mention_id,
 ) -> tuple[list[dict], int]:
-    """Apply §2.2 eligibility and return (mentions, identical_duplicate_count).
+    """Apply §2.2 eligibility and return ``(mentions, identical_duplicate_count)``.
+
+    Per §2.2:
+
+    * Identical duplicate mention records — every field identical —
+      may be de-duplicated by ``mention_id``; the manifest records
+      their count.
+    * Conflicting duplicate mention records — same ``mention_id``,
+      different evidence — must FAIL the run before any output is
+      replaced.
 
     The function delegates ``mention_id`` re-derivation to the supplied
     callable so the resolver stays decoupled from extraction code while
@@ -753,41 +843,48 @@ def _select_eligible_mentions(
     eligible: list[dict] = []
     duplicates = 0
     for m in mentions:
-        cid = m["chunk_id"]
+        if not isinstance(m, dict):
+            raise PreflightError("mention record must be a JSON object")
+        cid = m.get("chunk_id")
         status = chunk_statuses.get(cid)
         if not status or not status.get("extraction_complete"):
             continue
         if m.get("entity_type") not in extracted_types:
             continue
+        mid = m.get("mention_id")
         expected = rederive_mention_id(m)
-        if expected != m.get("mention_id"):
+        if expected != mid:
             raise PreflightError(
-                f"mention {m.get('mention_id')!r} does not re-derive: "
-                f"got {expected!r}"
+                f"mention {mid!r} does not re-derive: got {expected!r}"
             )
         eligible.append(m)
-    # De-duplicate identical duplicate lines per §2.2.
-    seen: dict[tuple, int] = {}
-    deduped: list[dict] = []
+
+    # §2.2 duplicate-mention semantics: group by mention_id and check
+    # every member is byte-identical to the first; conflicting
+    # duplicates abort the run before any output is replaced.
+    by_mid: dict[str, list[dict]] = {}
     for m in eligible:
-        # Use canonical-of-canonicals as the dedup key: two lines are
-        # identical duplicate extractions iff all identity fields match.
-        key = (
-            m["chunk_id"],
-            m["entity_type"],
-            m["mention_id"],
-            m["evidence"]["source_text_sha256"],
-            m["evidence"]["char_start"],
-            m["evidence"]["char_end"],
-            m["canonical_form"],
+        by_mid.setdefault(m["mention_id"], []).append(m)
+    deduped: list[dict] = []
+    for mid, group in by_mid.items():
+        first = group[0]
+        canonical_blob = json.dumps(
+            first, sort_keys=True, ensure_ascii=False, separators=(",", ":")
         )
-        count = seen.get(key, 0)
-        seen[key] = count + 1
-        if count == 0:
-            deduped.append(m)
-    duplicates = sum(c - 1 for c in seen.values() if c > 1)
-    # Re-sort eligible by mention_id so downstream Stage A/B iteration
-    # is deterministic regardless of input file order.
+        for other in group[1:]:
+            other_blob = json.dumps(
+                other, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+            )
+            if other_blob != canonical_blob:
+                raise PreflightError(
+                    f"conflicting duplicate mention records share "
+                    f"mention_id={mid!r}; same id with different "
+                    f"evidence fails the run per §2.2"
+                )
+        duplicates += len(group) - 1
+        deduped.append(first)
+
+    # Deterministic ordering for downstream Stage A/B iteration.
     deduped.sort(key=lambda r: (r["entity_type"], r["mention_id"]))
     return deduped, duplicates
 
@@ -815,10 +912,15 @@ def _render_entities_and_resolutions(
 
     Returns three lists of strings (entity lines, resolution lines, and
     a parallel list of (cluster, entity_id) tuples for the manifest).
+
+    ``data/entities.jsonl`` is sorted by ``(entity_type, entity_id)``
+    per §7.1 / §7.3 — NOT by smallest mention_id. The two keys can
+    disagree when a fuzzy merge re-orders the canonical-name
+    tie-break and therefore the derived ``entity_id`` order.
     """
-    entity_records: list[dict] = []
-    resolution_records: list[dict] = []
-    cluster_summaries: list[dict] = []
+    # Compute every record first; sort by ``(entity_type, entity_id)``
+    # only after ``entity_id`` is known.
+    pending_entities: list[tuple[_ResolvedCluster, dict, list[dict]]] = []
     for cluster in sorted(clusters, key=lambda c: (c.entity_type, min(c.mention_ids))):
         pick = _select_canonical_name(
             cluster=cluster, candidates_by_mid=candidates_by_mid
@@ -832,19 +934,18 @@ def _render_entities_and_resolutions(
         eid = entity_id(
             canonical_name=pick.canonical_name, entity_type=cluster.entity_type
         )
-        entity_records.append(
-            {
-                "entity_id": eid,
-                "entity_type": cluster.entity_type,
-                "canonical_name": pick.canonical_name,
-                "mention_ids": sorted(cluster.mention_ids),
-                "aliases": aliases,
-                "resolution_confidence": _round6(pick.confidence),
-            }
-        )
+        entity_record = {
+            "entity_id": eid,
+            "entity_type": cluster.entity_type,
+            "canonical_name": pick.canonical_name,
+            "mention_ids": sorted(cluster.mention_ids),
+            "aliases": aliases,
+            "resolution_confidence": _round6(pick.confidence),
+        }
+        cluster_resolutions: list[dict] = []
         for mid in sorted(cluster.mention_ids):
             method, score = cluster.mention_methods[mid]
-            resolution_records.append(
+            cluster_resolutions.append(
                 {
                     "mention_id": mid,
                     "entity_id": eid,
@@ -852,13 +953,23 @@ def _render_entities_and_resolutions(
                     "resolution_score": _round6(score),
                 }
             )
+        pending_entities.append((cluster, entity_record, cluster_resolutions))
+
+    entity_records: list[dict] = []
+    resolution_records: list[dict] = []
+    cluster_summaries: list[dict] = []
+    # §7.3 — sort entities by (entity_type, entity_id) ascending.
+    pending_entities.sort(key=lambda t: (t[1]["entity_type"], t[1]["entity_id"]))
+    for _cluster, entity_record, cluster_resolutions in pending_entities:
+        entity_records.append(entity_record)
+        resolution_records.extend(cluster_resolutions)
         cluster_summaries.append(
-            {"entity_id": eid, "entity_type": cluster.entity_type}
+            {"entity_id": entity_record["entity_id"], "entity_type": entity_record["entity_type"]}
         )
-    # entities: sort by (entity_type, entity_id) — already sorted above.
-    # resolutions: sort by mention_id (already sorted within each cluster).
-    # Final cross-cluster resolution sort to be defensive about construction
-    # order.
+    # §7.2 — resolutions are deterministically sorted by mention_id
+    # across all clusters; the cluster loop above already sorted within
+    # each cluster, but the cross-cluster sort is defensive about
+    # construction order.
     resolution_records.sort(key=lambda r: r["mention_id"])
     return entity_records, resolution_records, cluster_summaries
 
@@ -866,6 +977,55 @@ def _render_entities_and_resolutions(
 # ---------------------------------------------------------------------------
 # Top-level orchestrator.
 # ---------------------------------------------------------------------------
+
+def _canonical_repo_relative(path: Path) -> str:
+    """§7.3 — manifest path strings are repository-relative POSIX.
+
+    Absolute and machine-specific temporary/default paths are
+    forbidden because they break byte-identical reproducibility
+    across machines. The resolver always converts to a forward-slash
+    POSIX string anchored at the repo root.
+    """
+    abs_path = path.resolve()
+    repo_root = REPO_ROOT.resolve()
+    try:
+        rel = abs_path.relative_to(repo_root)
+    except ValueError:
+        # Path lives outside the repo — surface the violation rather
+        # than silently emitting a machine-specific absolute path.
+        raise PreflightError(
+            f"manifest path {str(path)!r} lives outside the repository "
+            f"root {str(repo_root)!r}; §7.3 requires repo-relative paths"
+        )
+    return rel.as_posix()
+
+
+def _detect_entity_id_collisions(entity_records: list[dict]) -> None:
+    """§6.1 — hash-prefix collisions on unequal payloads must fail loudly.
+
+    The ID format is ``e_<16 hex>``; a collision happens when two
+    distinct ``(entity_type, normalized_canonical_name)`` pairs hash
+    to the same 16-hex prefix. Per the spec, this MUST abort the run
+    rather than be resolved by appending a nondeterministic suffix.
+    """
+    seen: dict[tuple[str, str], list[dict]] = {}
+    for record in entity_records:
+        key = (record["entity_type"], record["canonical_name"])
+        seen.setdefault(key, []).append(record)
+    # Group records by entity_id; collisions are two records with the
+    # same entity_id but different (entity_type, canonical_name) keys.
+    by_id: dict[str, list[dict]] = {}
+    for record in entity_records:
+        by_id.setdefault(record["entity_id"], []).append(record)
+    for eid, records in by_id.items():
+        keys = {(r["entity_type"], r["canonical_name"]) for r in records}
+        if len(keys) > 1:
+            sample = sorted(keys)
+            raise PreflightError(
+                f"hash-prefix collision on entity_id={eid!r} between "
+                f"unequal payloads: {sample}"
+            )
+
 
 def run_resolution(
     *,
@@ -893,6 +1053,9 @@ def run_resolution(
         extractions_manifest_path=extractions_manifest_path,
         ontology_path=ontology_path,
     )
+    ontology_version = pre["ontology_version"]
+    # The preflight already validated ontology shape and version; reuse
+    # the loaded ontology rather than re-parsing the file.
     ontology = _load_ontology(ontology_path)
     extracted_types = _extracted_entity_types(ontology)
 
@@ -915,6 +1078,9 @@ def run_resolution(
         surfaces_by_mid=surfaces_by_mid,
     )
 
+    # §6.1 — hash-prefix collisions between unequal payloads fail loudly.
+    _detect_entity_id_collisions(entity_records)
+
     # --- Write §7.1 entities.jsonl -----------------------------------
     entity_lines = (
         json.dumps(rec, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
@@ -936,8 +1102,8 @@ def run_resolution(
     extractions_sha = _file_sha256(extractions_path)
     extractions_manifest_sha = _file_sha256(extractions_manifest_path)
     ontology_sha = pre["ontology_sha"]
-    ontology_version = ontology.get("version")
 
+    # §7.3 — manifest path strings are repository-relative POSIX.
     manifest = {
         "algorithm": {
             "algorithm_version": ENTITY_RESOLUTION_ALGORITHM_VERSION,
@@ -954,21 +1120,21 @@ def run_resolution(
             "identical_duplicate_mentions": duplicates,
         },
         "inputs": {
-            "chunks_path": str(chunks_path),
+            "chunks_path": _canonical_repo_relative(chunks_path),
             "chunks_sha256": chunks_sha,
-            "extractions_manifest_path": str(extractions_manifest_path),
+            "extractions_manifest_path": _canonical_repo_relative(extractions_manifest_path),
             "extractions_manifest_sha256": extractions_manifest_sha,
-            "extractions_path": str(extractions_path),
+            "extractions_path": _canonical_repo_relative(extractions_path),
             "extractions_sha256": extractions_sha,
-            "ontology_path": str(ontology_path),
+            "ontology_path": _canonical_repo_relative(ontology_path),
             "ontology_sha256": ontology_sha,
             "ontology_version": ontology_version,
         },
         "outputs": {
-            "entities_path": str(entities_path),
+            "entities_path": _canonical_repo_relative(entities_path),
             "entities_records": len(entity_records),
             "entities_sha256": entities_sha,
-            "entity_resolutions_path": str(entity_resolutions_path),
+            "entity_resolutions_path": _canonical_repo_relative(entity_resolutions_path),
             "entity_resolutions_records": len(resolution_records),
             "entity_resolutions_sha256": entity_resolutions_sha,
         },
