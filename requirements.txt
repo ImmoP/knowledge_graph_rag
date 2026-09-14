@@ -1,3 +1,5 @@
+neo4j==6.3.0
+psycopg[binary]==3.3.5
 anyio==4.15.1
 certifi==2026.7.22
 h11==0.16.0

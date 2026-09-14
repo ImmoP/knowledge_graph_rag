@@ -1,0 +1,75 @@
+# Local infrastructure for the knowledge_graph_rag project.
+#
+# Source of truth: docs/specs/local-infra.md (resolved from issue #3) and
+# implementation-spec.md §3 (cross-references).
+#
+# Two services only. No orchestration, no cloud, no Redis/queues.
+# Pinned image versions resolved on 2026-09-10 (local-infra.md §2). Bump
+# in a follow-up commit when the current version goes EOL or has a
+# security advisory.
+# All credentials live in the gitignored .env; Compose interpolates only
+# ${VAR} references here.
+
+services:
+  neo4j:
+    # current community stable as of 2026-09-10; UBI10 base per local-infra.md §2
+    image: neo4j:5.26-community-ubi10
+    container_name: rag-neo4j
+    # Auth is enabled with ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}.
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in .env}
+    # Named volumes; never bind mounts (local-infra.md §4, §11).
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    ports:
+      - "7474:7474"   # Neo4j Browser (development only)
+      - "7687:7687"   # Bolt — application queries
+    # Single bridge network shared with pgvector.
+    networks:
+      - rag-net
+    # Healthcheck from local-infra.md §6.1 — verbatim.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  pgvector:
+    # pgvector 0.8.6 on PostgreSQL 17, trixie base as of 2026-09-10
+    # (local-infra.md §2).
+    image: pgvector/pgvector:0.8.6-pg17-trixie
+    container_name: rag-pgvector
+    # Map the .env-backed PGVECTOR_* vars to the image's POSTGRES_* vars.
+    # The default PGVECTOR_DB is "rag" per local-infra.md §5.1.
+    environment:
+      POSTGRES_USER: ${PGVECTOR_USER:?PGVECTOR_USER must be set in .env}
+      POSTGRES_PASSWORD: ${PGVECTOR_PASSWORD:?PGVECTOR_PASSWORD must be set in .env}
+      POSTGRES_DB: ${PGVECTOR_DB:-rag}
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"   # 5433 on host avoids clash with system Postgres
+    networks:
+      - rag-net
+    # Healthcheck from local-infra.md §6.2 — verbatim.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+networks:
+  rag-net:
+    name: rag-net
+    driver: bridge
+
+volumes:
+  neo4j_data:
+    name: neo4j_data
+  neo4j_logs:
+    name: neo4j_logs
+  pgvector_data:
+    name: pgvector_data
