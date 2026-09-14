@@ -50,6 +50,9 @@ from pathlib import Path
 
 import yaml
 
+from src.extract.prompts import ENTITY_PROMPT_FILE, RELATION_PROMPT_FILE
+from src.extract.schema import SCHEMA_VERSION as EXTRACTION_SCHEMA_VERSION
+
 
 # ---------------------------------------------------------------------------
 # Named constants — the only knobs the resolver exposes. The threshold,
@@ -263,45 +266,75 @@ def _extracted_entity_types(ontology: dict) -> set[str]:
     }
 
 
-# Required fields on the extraction manifest (§2.1 / §13.1). The
-# preflight enforces shape + types before any clustering runs.
-_REQUIRED_MANIFEST_FIELDS: dict[str, type] = {
-    "chunks_path": str,
-    "chunks_sha256": str,
-    "ontology_path": str,
-    "ontology_sha256": str,
-    "ontology_version": int,
-    "schema_version": int,
+# Fields emitted by ``src.extract.pipeline.RunState.as_manifest``. This is
+# the authoritative #23 extraction-manifest contract consumed by §2.1.
+_EXTRACTION_MANIFEST_FIELDS: dict[str, type | tuple[type, ...]] = {
+    "run_id": str,
+    "resumed_from_run_id": (str, type(None)),
     "provider": str,
     "model": str,
+    "ontology_version": int,
+    "ontology_sha256": str,
+    "prompt_template_files": list,
+    "prompt_template_sha256": list,
+    "schema_version": int,
+    "chunks_path": str,
+    "chunks_sha256": str,
+    "wall_clock_started_at": str,
+    "wall_clock_ended_at": str,
+    "cumulative_tokens": int,
+    "cumulative_cost_usd": (int, float),
+    "max_tokens": int,
+    "temperature": (int, float),
+    "cache_format_version": str,
 }
 
 
 def _validate_manifest_shape(manifest: dict) -> None:
-    """§2.1 manifest schema-validity gate.
-
-    The manifest is a plain JSON object with a fixed field set;
-    unknown types (e.g. ``None`` where a dict is required, list where
-    a dict is required, missing required fields) abort resolution
-    before any output is written.
-    """
+    """Validate the extraction manifest against the #23 producer contract."""
     if not isinstance(manifest, dict):
         raise PreflightError(
             f"extractions manifest must be a JSON object, got {type(manifest).__name__}"
         )
-    missing = sorted(
-        name for name, expected_type in _REQUIRED_MANIFEST_FIELDS.items()
-        if name not in manifest
-    )
+    missing = sorted(set(_EXTRACTION_MANIFEST_FIELDS) - set(manifest))
     if missing:
         raise PreflightError(
             f"extractions manifest missing required fields: {missing}"
         )
-    for name, expected_type in _REQUIRED_MANIFEST_FIELDS.items():
-        if not isinstance(manifest[name], expected_type):
+    for name, expected_type in _EXTRACTION_MANIFEST_FIELDS.items():
+        value = manifest[name]
+        if isinstance(value, bool) or not isinstance(value, expected_type):
+            expected_name = (
+                " or ".join(t.__name__ for t in expected_type)
+                if isinstance(expected_type, tuple)
+                else expected_type.__name__
+            )
             raise PreflightError(
-                f"extractions manifest field {name!r} must be {expected_type.__name__}, "
-                f"got {type(manifest[name]).__name__}"
+                f"extractions manifest field {name!r} must be {expected_name}, "
+                f"got {type(value).__name__}"
+            )
+    expected_prompts = [ENTITY_PROMPT_FILE, RELATION_PROMPT_FILE]
+    if manifest["prompt_template_files"] != expected_prompts:
+        raise PreflightError(
+            "extractions manifest prompt_template_files disagrees with the #23 contract"
+        )
+    prompt_shas = manifest["prompt_template_sha256"]
+    if len(prompt_shas) != len(expected_prompts) or any(
+        not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+        for value in prompt_shas
+    ):
+        raise PreflightError(
+            "extractions manifest prompt_template_sha256 must contain two lowercase SHA256 values"
+        )
+    if manifest["schema_version"] != EXTRACTION_SCHEMA_VERSION:
+        raise PreflightError(
+            "extractions manifest schema_version disagrees with the #23 extraction schema "
+            f"(expected {EXTRACTION_SCHEMA_VERSION}, got {manifest['schema_version']})"
+        )
+    for name in ("ontology_sha256", "chunks_sha256"):
+        if not re.fullmatch(r"[0-9a-f]{64}", manifest[name]):
+            raise PreflightError(
+                f"extractions manifest field {name!r} must be a lowercase SHA256"
             )
 
 
@@ -428,7 +461,9 @@ def _preflight(
             f"(first: {missing[0]!r})"
         )
     incomplete = sorted(
-        cid for cid, st in chunk_statuses.items() if not st.get("extraction_complete")
+        cid
+        for cid, st in chunk_statuses.items()
+        if st.get("extraction_complete") is not True
     )
     if incomplete:
         raise PreflightError(

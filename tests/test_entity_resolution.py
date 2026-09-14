@@ -19,6 +19,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.extract.pipeline import PreflightReport, RunState  # noqa: E402
+from src.extract.prompts import (  # noqa: E402
+    ENTITY_PROMPT_FILE,
+    RELATION_PROMPT_FILE,
+)
+from src.extract.schema import SCHEMA_VERSION as EXTRACTION_SCHEMA_VERSION  # noqa: E402
+from src.providers.cache import CACHE_FORMAT_VERSION  # noqa: E402
 from src.graph import entity_resolution as er  # noqa: E402
 from src.graph.entity_resolution import (  # noqa: E402
     entity_id,
@@ -316,28 +323,30 @@ def _build_world(
     chunks_sha = hashlib.sha256(chp.read_bytes()).hexdigest()
     ontology_sha = hashlib.sha256(onp.read_bytes()).hexdigest()
     emp = tmp / "extractions.manifest.json"
-    # The manifest records the canonical repo-relative POSIX paths.
-    # Both the manifest field and the resolver's path argument use the
-    # same string so §7.3 byte-determinism and §2.1 path agreement
-    # both pass.
-    chunks_repo_rel = chp.resolve().relative_to(_REPO_ROOT).as_posix()
-    ontology_repo_rel = onp.resolve().relative_to(_REPO_ROOT).as_posix()
+    extraction_preflight = PreflightReport(
+        chunks_path=chp,
+        chunks_sha256=chunks_sha,
+        ontology_path=onp,
+        ontology_sha256=ontology_sha,
+        ontology_version=1,
+        schema_version=EXTRACTION_SCHEMA_VERSION,
+        prompt_template_files=[ENTITY_PROMPT_FILE, RELATION_PROMPT_FILE],
+        prompt_template_sha256=["1" * 64, "2" * 64],
+        provider_name="synthetic",
+        provider_model="synthetic",
+        cache_format_version=CACHE_FORMAT_VERSION,
+        max_tokens=1024,
+        temperature=0.0,
+    )
+    extraction_run = RunState(
+        run_id="20260914T120000Z-0123456789abcdef",
+        resumed_from_run_id=None,
+        preflight=extraction_preflight,
+        started_at="20260914T120000Z",
+        ended_at="20260914T120001Z",
+    )
     emp.write_text(
-        json.dumps(
-            {
-                "chunks_path": chunks_repo_rel,
-                "chunks_sha256": chunks_sha,
-                "ontology_path": ontology_repo_rel,
-                "ontology_sha256": ontology_sha,
-                "ontology_version": 1,
-                "schema_version": 1,
-                "provider": "synthetic",
-                "model": "synthetic",
-                "run_id": "synthetic",
-            },
-            sort_keys=True,
-        )
-        + "\n",
+        json.dumps(extraction_run.as_manifest(), sort_keys=True) + "\n",
         encoding="utf-8",
     )
     exp = tmp / "extractions.jsonl"
@@ -388,6 +397,32 @@ def _run(world: dict):
         entity_resolutions_path=world["entity_resolutions"],
         entity_resolution_manifest_path=world["entity_resolution_manifest"],
     )
+
+
+class ExtractionManifestContractTests(unittest.TestCase):
+    """The resolver consumes the exact manifest shape emitted by #23."""
+
+    def test_completed_run_state_manifest_passes_preflight(self):
+        tmp = _fresh_tmp()
+        mention = _canonical_mention(
+            chunk_id="c_0000000000000001",
+            doc_id="W1",
+            entity_type="method",
+            canonical="DPR",
+            surface="DPR",
+            char_start=0,
+            char_end=3,
+        )
+        w = _build_world(tmp, mentions=[mention])
+        manifest = json.loads(w["manifest"].read_text(encoding="utf-8"))
+        self.assertNotIn("ontology_path", manifest)
+
+        result = _run(w)
+
+        self.assertEqual(result.extraction_complete_chunks, 1)
+        self.assertTrue(w["entities"].is_file())
+        self.assertTrue(w["entity_resolutions"].is_file())
+        self.assertTrue(w["entity_resolution_manifest"].is_file())
 
 
 class HardPreflightTests(unittest.TestCase):
@@ -482,6 +517,17 @@ class HardPreflightTests(unittest.TestCase):
         )
         mention["chunk_id"] = "c_unknownchunk1234567"
         w = _build_world(tmp, mentions=[mention])
+        previous = {
+            w["entities"]: b"previous entities\n",
+            w["entity_resolutions"]: b"previous resolutions\n",
+            w["entity_resolution_manifest"]: b'{"previous":true}\n',
+        }
+        for path, content in previous.items():
+            path.write_bytes(content)
+        with self.assertRaises(er.PreflightError):
+            _run(w)
+        for path, content in previous.items():
+            self.assertEqual(path.read_bytes(), content)
 
 
 class DeterminismTests(unittest.TestCase):
@@ -1437,6 +1483,17 @@ class PreflightGateNegativeTests(unittest.TestCase):
             del blob["schema_version"]
 
         w = self._run_with_modified_manifest(tmp, drop)
+        with self.assertRaises(er.PreflightError):
+            _run(w)
+
+
+    def test_wrong_schema_version_fails(self):
+        tmp = _fresh_tmp()
+
+        def wrong(blob):
+            blob["schema_version"] = EXTRACTION_SCHEMA_VERSION + 1
+
+        w = self._run_with_modified_manifest(tmp, wrong)
         with self.assertRaises(er.PreflightError):
             _run(w)
 
