@@ -26,6 +26,16 @@ Reported model identity is the literal string
 ``local_sentence_transformers:BAAI/bge-small-en-v1.5:5c38ec7c405ec4b44b94cc5a9bb96e735b38267a``
 which is what ``validate_vector_store`` (#26) will compare against
 every pgvector row.
+
+Token-counting seam (``count_tokens`` / ``count_tokens_batch``): the
+adapter loads the same pinned tokenizer that the model ships with,
+via HuggingFace ``AutoTokenizer.from_pretrained(..., revision=...)``.
+This is the exact-tokenizer source required by
+``vector-retrieval.md`` §1.3 for the last-line oversize guard. The
+``tokenizer_loader`` constructor argument lets tests inject a
+deterministic stand-in; production uses :func:`_default_tokenizer_loader`,
+which imports ``transformers`` lazily so module import never pays the
+torch / transformers cost for tests that do not exercise the seam.
 """
 
 from __future__ import annotations
@@ -59,11 +69,13 @@ REQUIRED_SECRETS: tuple[str, ...] = ()
 class SentenceTransformersEmbedding(EmbeddingProvider):
     """Adapter for the pinned BGE-small-en-v1.5 sentence-transformers model.
 
-    Constructed via the registry. ``loader`` is injectable so tests can
-    verify the exact ``revision=REVISION`` argument without performing
-    a network download; the production path uses
-    :func:`_default_loader`, which imports sentence_transformers at
-    call time so module import never touches the network.
+    Constructed via the registry. ``loader`` and ``tokenizer_loader``
+    are injectable so tests can verify the exact ``revision=REVISION``
+    argument without performing a network download; the production
+    paths use :func:`_default_loader` and
+    :func:`_default_tokenizer_loader`, which import
+    ``sentence_transformers`` / ``transformers`` at call time so
+    module import never touches the network.
     """
 
     def __init__(
@@ -74,6 +86,7 @@ class SentenceTransformersEmbedding(EmbeddingProvider):
         batch_size: int = 64,
         cache: ProviderCache | None = None,
         loader: Any = None,
+        tokenizer_loader: Any = None,
     ) -> None:
         if model_id != MODEL_ID:
             raise ValueError(
@@ -94,7 +107,12 @@ class SentenceTransformersEmbedding(EmbeddingProvider):
         self._batch_size = batch_size
         self._cache = cache
         self._loader = loader if loader is not None else _default_loader
+        self._tokenizer_loader = (
+            tokenizer_loader if tokenizer_loader is not None
+            else _default_tokenizer_loader
+        )
         self._model = self._loader(MODEL_ID, revision=REVISION)
+        self._tokenizer = self._tokenizer_loader(MODEL_ID, revision=REVISION)
         self._model_identity = MODEL_IDENTITY
 
     @property
@@ -158,6 +176,39 @@ class SentenceTransformersEmbedding(EmbeddingProvider):
         )
         return [list(map(float, row)) for row in raw]
 
+    # --- token-counting seam (vector-retrieval §1.3 last-line guard) -
+
+    def count_tokens(self, text: str) -> int:
+        """Return the real input-token count for ``text`` using the
+        tokenizer shipped with the pinned BGE revision.
+
+        Used by ``src.build_vector.preflight`` as the last-line
+        oversize guard (vector-retrieval.md §1.3). Counts include
+        special tokens (BOS / EOS) the tokenizer inserts by default;
+        we do NOT pre-truncate the text — passing the full chunk
+        string is the spec-required behavior.
+
+        ``tokenizer_loader`` injection lets tests fake the count
+        deterministically; production loads the real HF tokenizer
+        via :func:`_default_tokenizer_loader`.
+        """
+        if not isinstance(text, str):
+            raise TypeError("count_tokens(text) requires str")
+        ids = self._tokenizer.encode(text, add_special_tokens=True)
+        return len(ids)
+
+    def count_tokens_batch(self, texts: list[str]) -> list[int]:
+        """Batch variant: one real-tokenizer count per input string.
+
+        Implemented as a sequential loop because the tokenizer object
+        is stateful and parallel encoding changes the count semantics
+        for some HuggingFace tokenizers; serial is correct, and the
+        corpus is ~10^4 chunks where serial is cheap.
+        """
+        if not isinstance(texts, list) or not all(isinstance(t, str) for t in texts):
+            raise TypeError("count_tokens_batch(texts) requires list[str]")
+        return [self.count_tokens(t) for t in texts]
+
 
 # --- helpers --------------------------------------------------------
 
@@ -179,6 +230,27 @@ def _default_loader(model_id: str, *, revision: str):
     from sentence_transformers import SentenceTransformer  # type: ignore
 
     return SentenceTransformer(model_id, revision=revision)
+
+
+def _default_tokenizer_loader(model_id: str, *, revision: str):
+    """Late-bound HuggingFace tokenizer loader.
+
+    Loads ONLY the tokenizer (no model weights, no sentence-transformers
+    wrapper) so the last-line oversize guard can token-count without
+    paying the torch / model-download cost. The ``revision`` argument
+    pins the tokenizer to the same git SHA as the embedding model;
+    a baseline-change ticket that bumps the model revision MUST bump
+    this loader in lockstep (the loader refuses any non-pinned
+    revision).
+    """
+    if revision != REVISION:
+        raise ValueError(
+            f"refusing to load tokenizer without pinned revision "
+            f"{REVISION!r}; got revision={revision!r}"
+        )
+    from transformers import AutoTokenizer  # type: ignore
+
+    return AutoTokenizer.from_pretrained(model_id, revision=revision)
 
 
 def _l2_normalize(vec: list[float]) -> list[float]:
