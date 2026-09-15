@@ -193,18 +193,24 @@ def synchronize(
     4. ``#33`` reads the returned :class:`VectorStoreIdentity` from
        the report.
     """
-    if bootstrap_schema:
-        for stmt in _BOOTSTRAP_SQL:
-            driver.execute(stmt)
-
-    # Real-tokenizer seam (vector-retrieval §1.3). The adapter
-    # exposes ``count_tokens``; the loader wires it here. Pre-flight
-    # never imports any provider SDK — the callable is the seam.
+    # Canonical-file + exact-tokenizer preflight BEFORE any pgvector
+    # mutation (impl-spec §10.4 + §10.5): a malformed or oversize
+    # canonical artifact must cause zero embedding calls and zero
+    # pgvector execute / executemany calls. We therefore invoke
+    # ``run_preflight`` first; only after it succeeds do we open
+    # the bootstrap schema + transaction.
     token_counter = embedding_provider.count_tokens
-
     records = run_preflight(chunks_path, token_counter=token_counter)
     canonical_by_id = {r.chunk_id: r for r in records}
     canonical_ids = set(canonical_by_id)
+
+    # Schema bootstrap — idempotent; runs only when explicitly
+    # requested. After preflight passed, the only remaining reason
+    # the run can fail is a driver / DB / embedder error inside the
+    # transaction.
+    if bootstrap_schema:
+        for stmt in _BOOTSTRAP_SQL:
+            driver.execute(stmt)
 
     # Single atomic transaction (impl-spec §10.4). The live row
     # read, the four writes, and the post-write validation ALL live

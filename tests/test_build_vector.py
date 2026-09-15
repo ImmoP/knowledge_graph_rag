@@ -42,6 +42,10 @@ from src.build_vector import (  # noqa: E402
     SynchronizationReport,
     synchronize,
 )
+from src.build_vector.preflight import (  # noqa: E402
+    PreflightError,
+    run_preflight,
+)
 from src.providers.protocol import Usage  # noqa: E402
 
 PINED_IDENTITY = (
@@ -55,7 +59,10 @@ PINED_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
 # applies it to QUERIES only, never to chunk text. Tests assert on the
 # asymmetry.
 BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
+BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
 
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Helpers: FakeDriver, FakeEmbedding, chunk fixture writer.
@@ -209,26 +216,46 @@ class FakeEmbedding:
 # --- chunk artifact helpers ---------------------------------------
 
 
+def _derive_chunk_id(doc_id: str, section_path: list, chunk_index: int) -> str:
+    """Mirror the chunk-record §3 derivation the production preflight
+    uses, so tests always write valid chunk_ids (the preflight now
+    re-derives and requires equality)."""
+    payload = (
+        f"{doc_id}|{json.dumps(section_path, ensure_ascii=False)}|{chunk_index}"
+    )
+    return "c_" + hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+
 def _chunk(
-    chunk_id: str,
+    chunk_id: str | None,
     text: str,
     *,
     doc_id: str = "W100000001",
     section_path: list | None = None,
     chunk_index: int = 0,
     token_estimate: int | None = None,
+    char_start: int | None = None,
+    char_end: int | None = None,
 ) -> dict:
+    if section_path is None:
+        section_path = ["Intro"]
+    if chunk_id is None:
+        chunk_id = _derive_chunk_id(doc_id, section_path, chunk_index)
     if token_estimate is None:
         token_estimate = len(text) // 4
+    if char_start is None:
+        char_start = 0
+    if char_end is None:
+        char_end = len(text)
     return {
         "chunk_id": chunk_id,
         "doc_id": doc_id,
-        "section_path": section_path or ["Intro"],
+        "section_path": section_path,
         "chunk_index": chunk_index,
         "text": text,
         "token_estimate": token_estimate,
-        "char_start": 0,
-        "char_end": len(text),
+        "char_start": char_start,
+        "char_end": char_end,
     }
 
 
@@ -247,6 +274,24 @@ def _row(chunk_id: str, text: str, *, embedding_model: str = PINED_IDENTITY) -> 
     }
 
 
+# Derived canonical chunk_ids for the test fixtures. Tests compare
+# against these so the same chunk-record §3 derivation the
+# production preflight enforces is exercised end-to-end.
+CHUNK_A1 = _derive_chunk_id(
+    doc_id="W100000001", section_path=["Intro"], chunk_index=0,
+)
+CHUNK_A2 = _derive_chunk_id(
+    doc_id="W100000001", section_path=["Intro"], chunk_index=1,
+)
+CHUNK_A3 = _derive_chunk_id(
+    doc_id="W100000001", section_path=["Intro"], chunk_index=2,
+)
+CHUNK_B1 = _derive_chunk_id(
+    doc_id="W100000002", section_path=["Intro"], chunk_index=0,
+)
+CHUNK_C1 = _derive_chunk_id(
+    doc_id="W100000003", section_path=["Intro"], chunk_index=0,
+)
 # ---------------------------------------------------------------------------
 # Acceptance gate #1: populate store; identity SHA matches file bytes.
 # ---------------------------------------------------------------------------
@@ -257,9 +302,9 @@ class SyncHappyPathTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
         self.chunks = [
-            _chunk("c_0000000000000001", "alpha body"),
-            _chunk("c_0000000000000002", "beta body", chunk_index=1),
-            _chunk("c_0000000000000003", "gamma body", chunk_index=2),
+            _chunk(None, "alpha body"),
+            _chunk(None, "beta body", chunk_index=1),
+            _chunk(None, "gamma body", chunk_index=2),
         ]
         _write_chunks(self.chunks_path, self.chunks)
         self.driver = FakeDriver()
@@ -328,8 +373,8 @@ class StaleRowSyncTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
         self.chunks = [
-            _chunk("c_0000000000000001", "alpha"),
-            _chunk("c_0000000000000002", "beta"),
+            _chunk(None, "alpha"),
+            _chunk(None, "beta", chunk_index=1),
         ]
         _write_chunks(self.chunks_path, self.chunks)
 
@@ -341,8 +386,8 @@ class StaleRowSyncTests(unittest.TestCase):
             "local_sentence_transformers:BAAI/bge-small-en-v1.5:wrongrev"
         )
         initial_rows = [
-            _row("c_0000000000000001", "alpha", embedding_model=wrong_identity),
-            _row("c_0000000000000002", "beta"),
+            _row(CHUNK_A1, "alpha", embedding_model=wrong_identity),
+            _row(CHUNK_A2, "beta"),
         ]
         driver = FakeDriver(initial_rows=initial_rows)
         embedding = FakeEmbedding()
@@ -353,7 +398,7 @@ class StaleRowSyncTests(unittest.TestCase):
             bootstrap_schema=False,
         )
         self.assertEqual(
-            report.rows_reembedded_model_drift, ["c_0000000000000001"]
+            report.rows_reembedded_model_drift, [CHUNK_A1]
         )
         self.assertTrue(
             all(r["embedding_model"] == PINED_IDENTITY for r in driver.rows.values())
@@ -365,9 +410,9 @@ class StaleRowSyncTests(unittest.TestCase):
 
     def test_sha_drift_is_reembedded(self) -> None:
         bad_rows = [
-            _row("c_0000000000000001", "alpha"),
+            _row(CHUNK_A1, "alpha"),
             {
-                "chunk_id": "c_0000000000000002",
+                "chunk_id": CHUNK_A2,
                 "embedding_model": PINED_IDENTITY,
                 "source_text_sha256": "0" * 64,
             },
@@ -381,10 +426,10 @@ class StaleRowSyncTests(unittest.TestCase):
             bootstrap_schema=False,
         )
         self.assertEqual(
-            report.rows_reembedded_sha_drift, ["c_0000000000000002"]
+            report.rows_reembedded_sha_drift, [CHUNK_A2]
         )
         self.assertEqual(
-            driver.rows["c_0000000000000002"]["source_text_sha256"],
+            driver.rows[CHUNK_A2]["source_text_sha256"],
             hashlib.sha256(b"beta").hexdigest(),
         )
 
@@ -419,7 +464,7 @@ class OrphanRowSyncTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
-        self.chunks = [_chunk("c_0000000000000001", "canonical")]
+        self.chunks = [_chunk(None, "canonical")]
         _write_chunks(self.chunks_path, self.chunks)
 
     def tearDown(self) -> None:
@@ -427,7 +472,7 @@ class OrphanRowSyncTests(unittest.TestCase):
 
     def test_orphan_is_reported_and_deleted(self) -> None:
         driver = FakeDriver(initial_rows=[
-            _row("c_0000000000000001", "canonical"),
+            _row(CHUNK_A1, "canonical"),
             _row("c_deadbeefdeadbeef", "orphan body"),
         ])
         embedding = FakeEmbedding()
@@ -442,7 +487,7 @@ class OrphanRowSyncTests(unittest.TestCase):
 
     def test_embedding_provider_never_called_for_orphan(self) -> None:
         driver = FakeDriver(initial_rows=[
-            _row("c_0000000000000001", "canonical"),
+            _row(CHUNK_A1, "canonical"),
             _row("c_deadbeefdeadbeef", "orphan body"),
         ])
         embedding = FakeEmbedding()
@@ -489,11 +534,9 @@ class OversizeChunkRefusalTests(unittest.TestCase):
     def test_token_estimate_under_budget_rejected_when_real_count_oversize(self) -> None:
         """A chunk whose chunk-record ``token_estimate`` is <= 512 but
         whose real-tokenizer count exceeds 512 is REJECTED."""
-        bad = _chunk(
-            "c_0000000000000099",
+        bad = _chunk(None,
             "hello world " * 100,  # 1100 chars => token_estimate 275 (<=512)
-            chunk_index=0,
-            token_estimate=275,  # chunk-record claim: 275 tokens
+            chunk_index=0  # chunk-record claim: 275 tokens
         )
         _write_chunks(self.chunks_path, [bad])
         driver = FakeDriver()
@@ -505,10 +548,10 @@ class OversizeChunkRefusalTests(unittest.TestCase):
                 embedding_provider=embedding,
                 driver=driver,
             )
-        self.assertEqual(ctx.exception.chunk_id, "c_0000000000000099")
+        self.assertEqual(ctx.exception.chunk_id, CHUNK_A1)
         # The error reports the REAL count, not the chunk-record
         self.assertEqual(ctx.exception.token_count, 300 + 600)
-        self.assertIn("c_0000000000000099", str(ctx.exception))
+        self.assertIn(CHUNK_A1, str(ctx.exception))
         # No embedding calls, no DB writes.
         self.assertEqual(embedding.embed_calls, [])
         self.assertEqual(driver.rows, {})
@@ -518,11 +561,9 @@ class OversizeChunkRefusalTests(unittest.TestCase):
         whose real-tokenizer count is <= 512 is NOT rejected merely
         because of ``token_estimate``. The loader uses the real
         tokenizer as the gate."""
-        good = _chunk(
-            "c_0000000000000099",
+        good = _chunk(None,
             "alpha",
-            chunk_index=0,
-            token_estimate=9999,  # chunk-record says way over; irrelevant
+            chunk_index=0  # chunk-record says way over; irrelevant
         )
         _write_chunks(self.chunks_path, [good])
         driver = FakeDriver()
@@ -534,18 +575,16 @@ class OversizeChunkRefusalTests(unittest.TestCase):
             embedding_provider=embedding,
             driver=driver,
         )
-        self.assertEqual(report.rows_inserted, ["c_0000000000000099"])
-        self.assertIn("c_0000000000000099", driver.rows)
+        self.assertEqual(report.rows_inserted, [CHUNK_A1])
+        self.assertIn(CHUNK_A1, driver.rows)
         # The embedding provider WAS called (passing the real check).
         self.assertEqual(embedding.embed_calls, [["alpha"]])
 
     def test_oversize_error_reports_real_tokenizer_count(self) -> None:
         """The exception message + attributes surface the REAL count."""
-        bad = _chunk(
-            "c_0000000000000099",
+        bad = _chunk(None,
             "hello",
-            chunk_index=0,
-            token_estimate=50,
+            chunk_index=0
         )
         _write_chunks(self.chunks_path, [bad])
         driver = FakeDriver()
@@ -560,22 +599,19 @@ class OversizeChunkRefusalTests(unittest.TestCase):
                 embedding_provider=embedding,
                 driver=driver,
             )
-        self.assertEqual(ctx.exception.chunk_id, "c_0000000000000099")
+        self.assertEqual(ctx.exception.chunk_id, CHUNK_A1)
         self.assertEqual(ctx.exception.token_count, 700)
-        self.assertEqual(ctx.exception.token_estimate, 50)
+        self.assertEqual(ctx.exception.token_estimate, len("hello") // 4)
         # Message includes the real count.
         self.assertIn("token_count=700", str(ctx.exception))
         # And the chunk_id is named.
-        self.assertIn("c_0000000000000099", str(ctx.exception))
-
+        self.assertIn(CHUNK_A1, str(ctx.exception))
     def test_oversize_failure_causes_zero_embed_calls_and_zero_db_writes(self) -> None:
         """If the real-tokenizer gate fires, the loader must fail
         BEFORE any embedding call or DB mutation."""
-        bad = _chunk(
-            "c_0000000000000099",
+        bad = _chunk(None,
             "world",
-            chunk_index=0,
-            token_estimate=100,
+            chunk_index=0
         )
         _write_chunks(self.chunks_path, [bad])
         driver = FakeDriver()
@@ -620,7 +656,7 @@ class BgeAsymmetryFixtureTests(unittest.TestCase):
         try:
             chunks_path = Path(tmp.name) / "chunks.jsonl"
             _write_chunks(chunks_path, [
-                _chunk("c_0000000000000001", "raw passage text"),
+                _chunk(None, "raw passage text"),
             ])
             driver = FakeDriver()
             embedding = FakeEmbedding()
@@ -642,7 +678,7 @@ class BgeAsymmetryFixtureTests(unittest.TestCase):
         try:
             chunks_path = Path(tmp.name) / "chunks.jsonl"
             passage = "what is stochastic gradient descent"
-            _write_chunks(chunks_path, [_chunk("c_0000000000000001", passage)])
+            _write_chunks(chunks_path, [_chunk(None, passage)])
             driver = FakeDriver()
             embedding = FakeEmbedding()
             synchronize(
@@ -667,8 +703,16 @@ class RerunDeterminismTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
         self.chunks = [
-            _chunk(f"c_{i:016x}", f"body {i}") for i in range(1, 6)
+            _chunk(
+                None,
+                f"body {i}",
+                doc_id="W100000001",
+                section_path=["Intro"],
+                chunk_index=i,
+            )
+            for i in range(5)
         ]
+        self.chunks.sort(key=lambda c: c["chunk_id"])
         _write_chunks(self.chunks_path, self.chunks)
 
     def tearDown(self) -> None:
@@ -720,10 +764,389 @@ class RerunDeterminismTests(unittest.TestCase):
         self.assertEqual(report_b.rows_inserted, [])
 
 
+# ---------------------------------------------------------------------------
+# Canonical chunk-record validation — every shape contract is fail-closed.
+# ---------------------------------------------------------------------------
+
+
+class CanonicalChunkValidationTests(unittest.TestCase):
+    """Negative regressions for ``docs/specs/chunk-record.md`` §2 + §3
+    + §5. Each malformed shape MUST raise :class:`PreflightError`,
+    never be silently coerced."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _good(self, **overrides) -> dict:
+        """A minimal well-formed chunk record; tests override one
+        field at a time to make the negative case the only delta."""
+        text = "alpha body"
+        rec = {
+            "chunk_id": _derive_chunk_id(
+                doc_id="W100000001", section_path=["Intro"], chunk_index=0,
+            ),
+            "doc_id": "W100000001",
+            "section_path": ["Intro"],
+            "chunk_index": 0,
+            "text": text,
+            "token_estimate": len(text) // 4,
+            "char_start": 0,
+            "char_end": len(text),
+        }
+        rec.update(overrides)
+        return rec
+
+    def _expect_preflight_error(self, records: list[dict], match: str) -> None:
+        _write_chunks(self.chunks_path, records)
+        with self.assertRaises(PreflightError) as ctx:
+            run_preflight(
+                self.chunks_path,
+                token_counter=lambda t: 1,  # never oversize
+            )
+        self.assertIn(match, str(ctx.exception))
+
+    # --- section_path shape -----------------------------------------
+
+    def test_section_path_as_string_fails(self) -> None:
+        rec = self._good(section_path="Intro")
+        self._expect_preflight_error([rec], "section_path")
+
+    def test_empty_section_path_component_fails(self) -> None:
+        rec = self._good(section_path=["Intro", ""])
+        self._expect_preflight_error([rec], "section_path")
+
+    def test_non_str_section_path_component_fails(self) -> None:
+        rec = self._good(section_path=["Intro", 7])
+        self._expect_preflight_error([rec], "section_path")
+
+    # --- chunk_index shape -----------------------------------------
+
+    def test_chunk_index_bool_fails(self) -> None:
+        rec = self._good(chunk_index=True)
+        # chunk_id still re-derives to a real id (True == 1 as int);
+        # the bool check is what fires.
+        self._expect_preflight_error([rec], "chunk_index")
+
+    def test_chunk_index_negative_fails(self) -> None:
+        rec = self._good(chunk_index=-1)
+        self._expect_preflight_error([rec], "chunk_index")
+
+    def test_chunk_index_string_fails(self) -> None:
+        rec = self._good(chunk_index="0")
+        self._expect_preflight_error([rec], "chunk_index")
+
+    def test_duplicate_chunk_index_in_one_doc_fails(self) -> None:
+        cid1 = _derive_chunk_id(
+            doc_id="W100000001", section_path=["Intro"], chunk_index=0,
+        )
+        cid2 = _derive_chunk_id(
+            doc_id="W100000001", section_path=["Intro"], chunk_index=1,
+        )
+        # Force cid1 to collide with cid2 by overriding.
+        rows = [
+            self._good(chunk_id=cid1),
+            self._good(chunk_id=cid2, chunk_index=0),  # same index as row 0
+        ]
+        self._expect_preflight_error(rows, "duplicate chunk_index")
+
+    # --- text shape ------------------------------------------------
+
+    def test_empty_text_fails(self) -> None:
+        rec = self._good(text="")
+        self._expect_preflight_error([rec], "text")
+
+    def test_non_string_text_fails(self) -> None:
+        rec = self._good(text=12345)
+        self._expect_preflight_error([rec], "text")
+
+    # --- token_estimate shape --------------------------------------
+
+    def test_token_estimate_bool_fails(self) -> None:
+        rec = self._good(token_estimate=True)
+        self._expect_preflight_error([rec], "token_estimate")
+
+    def test_incorrect_token_estimate_fails(self) -> None:
+        # len(text) // 4 == 2; claim 999
+        rec = self._good(token_estimate=999)
+        self._expect_preflight_error([rec], "token_estimate")
+
+    # --- char_start / char_end shape ------------------------------
+
+    def test_char_start_bool_fails(self) -> None:
+        rec = self._good(char_start=True)
+        self._expect_preflight_error([rec], "char_start")
+
+    def test_char_end_negative_when_start_not_escape_fails(self) -> None:
+        rec = self._good(char_start=0, char_end=-1)
+        self._expect_preflight_error([rec], "offsets")
+
+    def test_char_offsets_inverted_fails(self) -> None:
+        rec = self._good(char_start=10, char_end=5)
+        self._expect_preflight_error([rec], "offsets")
+
+    def test_escape_hatch_requires_both_minus_one(self) -> None:
+        # char_start == -1 escape-hatch with char_end != -1 must fail.
+        rec = self._good(char_start=-1, char_end=10)
+        self._expect_preflight_error([rec], "escape hatch")
+
+    def test_escape_hatch_minus_one_minus_one_accepted(self) -> None:
+        # Both -1 is the documented escape-hatch; the canonical
+        # build_graph preflight accepts it.
+        rec = self._good(char_start=-1, char_end=-1)
+        _write_chunks(self.chunks_path, [rec])
+        records = run_preflight(
+            self.chunks_path, token_counter=lambda t: 1,
+        )
+        self.assertEqual(records[0].char_start, -1)
+        self.assertEqual(records[0].char_end, -1)
+
+    # --- chunk_id derivation + sort -------------------------------
+
+    def test_non_rederiving_chunk_id_fails(self) -> None:
+        # Provide a chunk_id that does NOT match the §3 derivation.
+        bogus = "c_deadbeefdeadbeef"
+        rec = self._good(chunk_id=bogus)
+        self._expect_preflight_error([rec], "does not re-derive")
+
+    def test_unsorted_records_fail(self) -> None:
+        cid_high = _derive_chunk_id(
+            doc_id="W100000001", section_path=["Z"], chunk_index=0,
+        )
+        cid_low = _derive_chunk_id(
+            doc_id="W100000001", section_path=["A"], chunk_index=0,
+        )
+        rows = [
+            self._good(chunk_id=cid_high, section_path=["Z"]),
+            self._good(chunk_id=cid_low, section_path=["A"]),
+        ]
+        # Sort order: cid_high > cid_low alphabetically — so the
+        # second line is out of order.
+        self._expect_preflight_error(rows, "records not sorted")
+
+    # --- field-set exactness --------------------------------------
+
+    def test_extra_field_fails(self) -> None:
+        rec = self._good(unexpected_field="garbage")
+        self._expect_preflight_error([rec], "extra")
+
+    def test_missing_field_fails(self) -> None:
+        rec = self._good()
+        del rec["token_estimate"]
+        self._expect_preflight_error([rec], "missing")
+# ---------------------------------------------------------------------------
+# .env loading for the production CLI.
+# ---------------------------------------------------------------------------
+
+
+class CliDotenvLoadingTests(unittest.TestCase):
+    """``python -m src.build_vector`` loads the repository-root
+    ``.env`` before constructing the embedding provider and the
+    pgvector driver. Already-exported process env values win over
+    ``.env``. Credentials are never logged.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env_file = Path(self.tmp.name) / ".env"
+        self._keys_we_touch: list[str] = []
+
+    def tearDown(self) -> None:
+        # No real os.environ mutation should leak from these tests.
+        # The loader only writes into the dict we hand it; we pass
+        # ``environ`` explicitly in tests.
+        self.tmp.cleanup()
+
+    def _write_env(self, lines: list[str]) -> None:
+        self.env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_dotenv_values_visible_to_loader(self) -> None:
+        """A key present only in ``.env`` is visible to the loader."""
+        from src.build_vector.__main__ import load_env_into_environ
+        self._write_env([
+            "EMBEDDING_PROVIDER=local_sentence_transformers",
+            "EMBEDDING_MODEL=BAAI/bge-small-en-v1.5",
+            "PGVECTOR_USER=env_user",
+            "PGVECTOR_PASSWORD=env_pw",
+            "PGVECTOR_DB=rag",
+            "PGVECTOR_HOST=localhost",
+            "PGVECTOR_PORT=5433",
+        ])
+        # Pass an isolated dict so the test never touches os.environ.
+        sentinel: dict[str, str] = {}
+        applied = load_env_into_environ(self.env_file, environ=sentinel)
+        self.assertEqual(sentinel["EMBEDDING_PROVIDER"], "local_sentence_transformers")
+        self.assertEqual(sentinel["PGVECTOR_USER"], "env_user")
+        self.assertEqual(sentinel["PGVECTOR_PASSWORD"], "env_pw")
+        # Returned dict == keys that were newly added (not pre-existing).
+        self.assertIn("EMBEDDING_PROVIDER", applied)
+        self.assertIn("PGVECTOR_USER", applied)
+
+    def test_already_exported_value_is_not_overwritten(self) -> None:
+        """A key already present in ``environ`` is preserved; the
+        loader must NOT overwrite it with the .env value."""
+        from src.build_vector.__main__ import load_env_into_environ
+        self._write_env([
+            "PGVECTOR_USER=from_dotenv",
+            "PGVECTOR_PASSWORD=dotenv_pw",
+        ])
+        sentinel: dict[str, str] = {
+            "PGVECTOR_USER": "from_process_env",
+        }
+        load_env_into_environ(self.env_file, environ=sentinel)
+        self.assertEqual(sentinel["PGVECTOR_USER"], "from_process_env")
+        # But a missing key IS added from the dotenv.
+        self.assertEqual(sentinel["PGVECTOR_PASSWORD"], "dotenv_pw")
+
+    def test_dotenv_loading_does_not_mutate_os_environ(self) -> None:
+        """The caller's real ``os.environ`` is not mutated by the
+        production loader when no explicit ``environ`` is passed in
+        tests that pre-snapshot the keys. We exercise that via the
+        ``EnvSnapshot`` helper."""
+        from src.build_vector.__main__ import EnvSnapshot, load_env_into_environ
+        self._write_env([
+            "BUILD_VECTOR_TEST_UNIQUE=present_in_dotenv",
+        ])
+        # Snapshot a sentinel set of keys (not all of os.environ)
+        # so the helper remains narrow.
+        # Build a synthetic environ dict and apply the loader to it.
+        synthetic: dict[str, str] = {
+            "BUILD_VECTOR_TEST_UNIQUE": "already_exported",
+        }
+        with EnvSnapshot(synthetic, ["BUILD_VECTOR_TEST_UNIQUE"]):
+            applied = load_env_into_environ(self.env_file, environ=synthetic)
+        # After the with-block, the original value is restored.
+        self.assertEqual(synthetic["BUILD_VECTOR_TEST_UNIQUE"], "already_exported")
+        # The .env value was NOT applied (already exported wins).
+        self.assertNotIn("BUILD_VECTOR_TEST_UNIQUE", applied)
+
+    def test_missing_env_file_is_a_noop(self) -> None:
+        """No ``.env`` => no-op; ``environ`` unchanged, no raise."""
+        from src.build_vector.__main__ import load_env_into_environ
+        sentinel: dict[str, str] = {"PRESET": "x"}
+        applied = load_env_into_environ(self.env_file, environ=sentinel)
+        self.assertEqual(sentinel, {"PRESET": "x"})
+        self.assertEqual(applied, {})
+
+    def test_cli_dotenv_drives_provider_and_driver_construction(self) -> None:
+        """End-to-end: a temporary ``.env`` is read by the production
+        loader; both ``make_embedding`` and ``default_driver`` see
+        the same values. We don't connect to pgvector — we observe
+        the env values they would read."""
+        from src.build_vector.__main__ import load_env_into_environ
+        self._write_env([
+            "LLM_PROVIDER=ollama",
+            "EMBEDDING_PROVIDER=local_sentence_transformers",
+            "EMBEDDING_MODEL=BAAI/bge-small-en-v1.5",
+            "EMBEDDING_BATCH_SIZE=42",
+            "PGVECTOR_HOST=localhost",
+            "PGVECTOR_PORT=5433",
+            "PGVECTOR_USER=cli_user",
+            "PGVECTOR_PASSWORD=cli_pw",
+            "PGVECTOR_DB=rag",
+        ])
+        synthetic: dict[str, str] = {}
+        load_env_into_environ(self.env_file, environ=synthetic)
+        # The provider registry's ``make_embedding`` reads
+        # EMBEDDING_PROVIDER, EMBEDDING_MODEL, EMBEDDING_BATCH_SIZE;
+        # all three must now be visible.
+        self.assertEqual(synthetic["EMBEDDING_PROVIDER"], "local_sentence_transformers")
+        self.assertEqual(synthetic["EMBEDDING_MODEL"], "BAAI/bge-small-en-v1.5")
+        self.assertEqual(synthetic["EMBEDDING_BATCH_SIZE"], "42")
+        # ``default_driver`` reads PGVECTOR_HOST / PGVECTOR_PORT /
+        # PGVECTOR_USER / PGVECTOR_PASSWORD / PGVECTOR_DB.
+        self.assertEqual(synthetic["PGVECTOR_HOST"], "localhost")
+        self.assertEqual(synthetic["PGVECTOR_USER"], "cli_user")
+        self.assertEqual(synthetic["PGVECTOR_DB"], "rag")
+
+
+# ---------------------------------------------------------------------------
+# Preflight-before-DB invariant.
+# ---------------------------------------------------------------------------
+
+
+class PreflightBeforeDBMutationTests(unittest.TestCase):
+    """A malformed or oversize canonical artifact must fail
+    ``synchronize`` BEFORE any pgvector mutation: zero bootstrap
+    DDL, zero execute/executemany against the chunks table, no
+    transaction opened. The driver observes no driver mutation
+    activity for any preflight rejection."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_oversize_chunk_fails_before_any_driver_mutation(self) -> None:
+        # Write a single chunk that the REAL-tokenizer count will
+        # exceed. token_estimate must equal len(text) // 4 (per
+        # the chunk-record contract); we override the token counter
+        # to force the oversize path without breaking the contract.
+        bad = _chunk(None, "x" * 4)  # token_estimate = 1
+        _write_chunks(self.chunks_path, [bad])
+        driver = FakeDriver()
+        embedding = FakeEmbedding(token_count_fn=lambda t: 700)
+        with self.assertRaises(OversizeChunkError):
+            synchronize(
+                chunks_path=self.chunks_path,
+                embedding_provider=embedding,
+                driver=driver,
+            )
+        # Driver saw ZERO mutation calls (no bootstrap DDL, no
+        # execute, no executemany, no list_rows, no transaction).
+        self.assertEqual(driver.executed, [])
+        self.assertEqual(driver.executed_many, [])
+        self.assertEqual(driver.tx_opened, 0)
+        self.assertEqual(embedding.embed_calls, [])
+
+    def test_malformed_chunk_fails_before_any_driver_mutation(self) -> None:
+        # A row with a section_path that's not a list. The preflight
+        # rejects; the driver observes nothing.
+        rec = _chunk(None, "alpha")
+        rec["section_path"] = "Intro"  # should be list[str]
+        _write_chunks(self.chunks_path, [rec])
+        driver = FakeDriver()
+        embedding = FakeEmbedding()
+        with self.assertRaises(PreflightError):
+            synchronize(
+                chunks_path=self.chunks_path,
+                embedding_provider=embedding,
+                driver=driver,
+            )
+        self.assertEqual(driver.executed, [])
+        self.assertEqual(driver.executed_many, [])
+        self.assertEqual(driver.tx_opened, 0)
+        self.assertEqual(embedding.embed_calls, [])
+
+    def test_no_synchronization_transaction_for_preflight_failures(self) -> None:
+        """A preflight failure MUST not open any transaction (impl-
+        spec §10.4: the transaction wraps the live read + writes +
+        validation only after preflight passes)."""
+        bad = _chunk(None, "x" * 4)
+        _write_chunks(self.chunks_path, [bad])
+        driver = FakeDriver()
+        embedding = FakeEmbedding(token_count_fn=lambda t: 700)
+        try:
+            synchronize(
+                chunks_path=self.chunks_path,
+                embedding_provider=embedding,
+                driver=driver,
+            )
+        except OversizeChunkError:
+            pass
+        self.assertEqual(
+            driver.tx_opened, 0,
+            msg="preflight failure must NOT open a synchronization transaction",
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
-
-
 # ---------------------------------------------------------------------------
 # §10.6 run metadata.
 # ---------------------------------------------------------------------------
@@ -742,8 +1165,8 @@ class RunMetadataTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
         _write_chunks(self.chunks_path, [
-            _chunk("c_0000000000000001", "alpha body"),
-            _chunk("c_0000000000000002", "beta body", chunk_index=1),
+            _chunk(None, "alpha body"),
+            _chunk(None, "beta body", chunk_index=1),
         ])
         self.driver = FakeDriver()
         self.embedding = FakeEmbedding()
@@ -793,7 +1216,7 @@ class RunMetadataTests(unittest.TestCase):
         pre_sha = hashlib.sha256(self.chunks_path.read_bytes()).hexdigest()
         with self.chunks_path.open("a", encoding="utf-8") as fh:
             fh.write(
-                json.dumps(_chunk("c_0000000000000099", "garbage", chunk_index=99))
+                json.dumps(_chunk(None, "garbage", chunk_index=99))
                 + "\n"
             )
         self.assertEqual(before.canonical_chunks_sha256, pre_sha)
@@ -813,8 +1236,8 @@ class TransactionAtomicityTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
         _write_chunks(self.chunks_path, [
-            _chunk("c_0000000000000001", "alpha"),
-            _chunk("c_0000000000000002", "beta"),
+            _chunk(None, "alpha"),
+            _chunk(None, "beta", chunk_index=1),
         ])
 
     def tearDown(self) -> None:
@@ -833,7 +1256,7 @@ class TransactionAtomicityTests(unittest.TestCase):
                 "source_text_sha256": hashlib.sha256(b"orphan").hexdigest(),
             },
             {
-                "chunk_id": "c_0000000000000001",  # sha-drift
+                "chunk_id": CHUNK_A1,  # sha-drift
                 "embedding_model": PINED_IDENTITY,
                 "source_text_sha256": "0" * 64,
             },
@@ -998,14 +1421,14 @@ class OrphanDeleteContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.chunks_path = Path(self.tmp.name) / "chunks.jsonl"
-        _write_chunks(self.chunks_path, [_chunk("c_0000000000000001", "alpha")])
+        _write_chunks(self.chunks_path, [_chunk(None, "alpha")])
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
     def test_orphan_text_never_passed_to_embed(self) -> None:
         driver = FakeDriver(initial_rows=[
-            _row("c_0000000000000001", "alpha"),
+            _row(CHUNK_A1, "alpha"),
             _row("c_deadbeefdeadbeef", "orphan body that must not be embedded"),
         ])
         embedding = FakeEmbedding()
