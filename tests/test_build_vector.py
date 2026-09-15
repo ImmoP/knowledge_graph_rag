@@ -912,6 +912,34 @@ class CanonicalChunkValidationTests(unittest.TestCase):
         rec = self._good(chunk_id=bogus)
         self._expect_preflight_error([rec], "does not re-derive")
 
+    def test_non_ascii_section_path_matches_canonical_producer(self) -> None:
+        """The preflight's ``_derive_chunk_id`` MUST byte-for-byte
+        match the canonical producer
+        (``src/chunk/chunker.py`` ``json.dumps(section_path)`` with
+        the library defaults — ``ensure_ascii=True``). The two
+        diverge for any non-ASCII section name: ``json.dumps(["x"])
+        with default settings escapes to ``["\\u00dcberblick"]``
+        while ``ensure_ascii=False`` produces ``["Überblick"]``,
+        yielding different SHA1 prefixes. A regression that proves
+        the fix MUST fail under the broken ``ensure_ascii=False``
+        implementation.
+        """
+        import hashlib as _hashlib
+        # Canonical producer formula verbatim — no ensure_ascii override.
+        canonical_chunk_id = "c_" + _hashlib.sha1(
+            f"W100000001|{json.dumps(['Überblick'])}|0".encode("utf-8")
+        ).hexdigest()[:16]
+        rec = self._good(
+            chunk_id=canonical_chunk_id,
+            section_path=["Überblick"],
+        )
+        _write_chunks(self.chunks_path, [rec])
+        # Must NOT raise — the preflight re-derives using the SAME
+        # json.dumps defaults the canonical producer used.
+        records = run_preflight(
+            self.chunks_path, token_counter=lambda t: 1,
+        )
+        self.assertEqual(records[0].chunk_id, canonical_chunk_id)
     def test_unsorted_records_fail(self) -> None:
         cid_high = _derive_chunk_id(
             doc_id="W100000001", section_path=["Z"], chunk_index=0,

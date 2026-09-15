@@ -185,9 +185,14 @@ def _derive_chunk_id(*, doc_id: str, section_path: list[str], chunk_index: int) 
     spec is a canonical contract, not a build_graph implementation
     detail, and the algorithm is five lines.
     """
-    payload = (
-        f"{doc_id}|{json.dumps(section_path, ensure_ascii=False)}|{chunk_index}"
-    )
+    # Match the canonical producer ``src/chunk/chunker.py`` byte-for-byte:
+    # ``json.dumps(section_path)`` with its normal defaults — no
+    # ``ensure_ascii=False``, no other overrides. ``json.dumps``'s
+    # default is ``ensure_ascii=True``, so non-ASCII section
+    # names are escaped to ``\uXXXX`` form. Using
+    # ``ensure_ascii=False`` here would produce a different SHA1 for
+    # any non-ASCII section path and silently corrupt re-derivation.
+    payload = f"{doc_id}|{json.dumps(section_path)}|{chunk_index}"
     digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
     return "c_" + digest[:16]
 
@@ -196,7 +201,6 @@ def _is_int_not_bool(value: object) -> bool:
     """``True`` only for ``int`` values that are NOT ``bool``
     (Python's ``bool`` is a subclass of ``int``)."""
     return isinstance(value, int) and not isinstance(value, bool)
-
 
 # ---------------------------------------------------------------------------
 # Top-level orchestrator.
