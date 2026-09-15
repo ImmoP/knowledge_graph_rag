@@ -17,7 +17,7 @@ import re
 from typing import Any
 
 
-# Spec §6.1 — every identifier that flows through the graph must re-emerge
+# Spec §8.1 — every identifier that flows through the graph must re-emerge
 # byte-for-byte from a single canonical JSON serialisation. These separators
 # match the rest of the codebase (src/graph/entity_resolution.py, etc.).
 _JSON_SEPARATORS = (",", ":")
@@ -55,6 +55,8 @@ def sha256_hex(payload: Any) -> str:
 CHUNK_ID_RE = re.compile(r"^c_[0-9a-f]{16}$")
 OPENALEX_ID_RE = re.compile(r"^W[0-9]+$")
 ENTITY_ID_RE = re.compile(r"^e_[0-9a-f]{16}$")
+MENTION_ID_RE = re.compile(r"^m_[0-9a-f]{16}$")
+ASSERTION_ID_RE = re.compile(r"^a_[0-9a-f]{16}$")
 
 
 def is_chunk_id(value: Any) -> bool:
@@ -132,6 +134,29 @@ def entity_subtype_label(entity_type: str) -> str | None:
     if entity_type in {"document", "chunk"}:
         return None
     return pascal_case(entity_type)
+
+
+# ---------------------------------------------------------------------------
+# Chunk-ID re-derivation (chunk-record §3 + neo4j-ingestion §2.1 rule 2).
+# ---------------------------------------------------------------------------
+
+
+def derive_chunk_id(*, doc_id: str, section_path: list, chunk_index: int) -> str:
+    """Re-derive a chunk_id under the chunk-record §3 contract.
+
+    ``chunk_id = "c_" + sha1(f"{doc_id}|{json.dumps(section_path)}|{chunk_index}")[:16]``.
+
+    The producer canonicalises the JSON dump with no spaces and
+    ``sort_keys=False`` (the chunk-record shape uses an ordered list,
+    not a dict), matching what the upstream chunker writes.
+    """
+    if not isinstance(section_path, list):
+        raise TypeError(
+            f"section_path must be a list, got {type(section_path).__name__}"
+        )
+    payload = f"{doc_id}|{json.dumps(section_path, ensure_ascii=False)}|{chunk_index}"
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
+    return "c_" + digest[:16]
 
 
 # ---------------------------------------------------------------------------

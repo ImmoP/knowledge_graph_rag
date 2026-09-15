@@ -20,3 +20,6 @@ tests/_entity_resolution_tmp/
 
 # Temporary local infrastructure test credentials
 .env.issue18-live
+
+# Repo-relative scratch directory used by graph-ingestion tests
+tests/_build_graph_tmp/
