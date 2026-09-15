@@ -273,6 +273,14 @@ class ResolutionProvenanceTests(_FixtureTestCase):
         with self.assertRaises(PreflightError) as cm:
             run_preflight()
         self.assertIn("outside", str(cm.exception))
+    def test_boolean_resolution_score_is_rejected(self) -> None:
+        rows = self._read_jsonl(self.paths.entity_resolutions)
+        rows[0]["resolution_score"] = True
+        self._write_jsonl(self.paths.entity_resolutions, rows)
+        with self.assertRaises(PreflightError) as cm:
+            run_preflight()
+        self.assertIn("resolution_score", str(cm.exception))
+
 
     def test_entity_type_mismatch_between_mention_and_entity_is_rejected(self) -> None:
         rows = self._read_jsonl(self.paths.entity_resolutions)
@@ -342,6 +350,49 @@ class PreflightRejectionTests(_FixtureTestCase):
         with self.assertRaises(PreflightError) as cm:
             run_preflight()
         self.assertIn("does not re-derive under the chunk contract", str(cm.exception))
+    def test_empty_section_path_component_is_rejected(self) -> None:
+        rows = self._read_jsonl(self.paths.chunks)
+        rows[0]["section_path"] = [""]
+        self._write_jsonl(self.paths.chunks, rows)
+        patch_extractions_manifest(self.paths.extractions_manifest)
+        with self.assertRaises(PreflightError) as cm:
+            run_preflight()
+        self.assertIn("non-empty components", str(cm.exception))
+
+    def test_negative_chunk_index_is_rejected(self) -> None:
+        rows = self._read_jsonl(self.paths.chunks)
+        rows[0]["chunk_index"] = -1
+        self._write_jsonl(self.paths.chunks, rows)
+        patch_extractions_manifest(self.paths.extractions_manifest)
+        with self.assertRaises(PreflightError) as cm:
+            run_preflight()
+        self.assertIn("non-negative int", str(cm.exception))
+
+    def test_wrong_token_estimate_is_rejected(self) -> None:
+        rows = self._read_jsonl(self.paths.chunks)
+        rows[0]["token_estimate"] += 1
+        self._write_jsonl(self.paths.chunks, rows)
+        patch_extractions_manifest(self.paths.extractions_manifest)
+        with self.assertRaises(PreflightError) as cm:
+            run_preflight()
+        self.assertIn("len(text) // 4", str(cm.exception))
+
+    def test_invalid_chunk_offsets_are_rejected(self) -> None:
+        original_chunks = self.paths.chunks.read_bytes()
+        original_manifest = self.paths.extractions_manifest.read_bytes()
+        for char_start, char_end in ((True, 2), (3, 3), (-1, 5)):
+            with self.subTest(char_start=char_start, char_end=char_end):
+                self.paths.chunks.write_bytes(original_chunks)
+                self.paths.extractions_manifest.write_bytes(original_manifest)
+                rows = self._read_jsonl(self.paths.chunks)
+                rows[0]["char_start"] = char_start
+                rows[0]["char_end"] = char_end
+                self._write_jsonl(self.paths.chunks, rows)
+                patch_extractions_manifest(self.paths.extractions_manifest)
+                with self.assertRaises(PreflightError) as cm:
+                    run_preflight()
+                self.assertIn("char_", str(cm.exception))
+
 
     def test_chunk_doc_id_not_in_manifest_is_rejected(self) -> None:
         rows = self._read_jsonl(self.paths.chunks)
@@ -458,6 +509,72 @@ class PreflightRejectionTests(_FixtureTestCase):
         with self.assertRaises(PreflightError) as cm:
             run_preflight()
         self.assertIn("extraction_complete", str(cm.exception))
+
+
+class AliasesContractTests(_FixtureTestCase):
+    """§2 rule 1 + §4.4: aliases.json is required and alias chains
+    resolve to their terminal target before CITES filtering."""
+
+    def _set_aliases(self, aliases: dict[str, str]) -> None:
+        self.paths.aliases.write_text(
+            json.dumps(aliases, sort_keys=True, indent=2) + "\n"
+        )
+
+    def _set_references(self, doc_id: str, referenced_works: list[str]) -> None:
+        import hashlib
+
+        raw_path = self.paths.openalex_dir / f"{doc_id}.json"
+        raw = json.loads(raw_path.read_text())
+        raw["referenced_works"] = referenced_works
+        raw_path.write_text(json.dumps(raw, sort_keys=True, ensure_ascii=False))
+        manifest = self._read_jsonl(self.paths.manifest)
+        for row in manifest:
+            if row["openalex_id"] == doc_id:
+                row["sha256"] = hashlib.sha256(raw_path.read_bytes()).hexdigest()
+        self._write_jsonl(self.paths.manifest, manifest)
+
+    def test_missing_aliases_file_fails_and_preserves_manifest(self) -> None:
+        self._ingest(FakeDriver())
+        prior = self.paths.graph_manifest.read_bytes()
+        self.paths.aliases.unlink()
+        with self.assertRaises(PreflightError) as cm:
+            run_ingestion(driver=FakeDriver(), manifest_path=self.paths.graph_manifest)
+        self.assertIn("aliases.json", str(cm.exception))
+        self.assertEqual(self.paths.graph_manifest.read_bytes(), prior)
+
+    def test_transitive_alias_chain_resolves_to_in_corpus_terminal(self) -> None:
+        self._set_references("W100000001", ["W900000001"])
+        self._set_aliases(
+            {"W900000001": "W900000002", "W900000002": "W100000003"}
+        )
+        bundle = run_preflight()
+        self.assertIn(("W100000001", "W100000003"), bundle.citation_pairs)
+
+    def test_alias_chain_induced_self_loop_is_removed(self) -> None:
+        self._set_references("W100000001", ["W900000001"])
+        self._set_aliases(
+            {"W900000001": "W900000002", "W900000002": "W100000001"}
+        )
+        bundle = run_preflight()
+        self.assertNotIn(("W100000001", "W100000001"), bundle.citation_pairs)
+
+    def test_terminal_alias_outside_corpus_is_filtered(self) -> None:
+        self._set_references("W100000001", ["W900000001"])
+        self._set_aliases(
+            {"W900000001": "W900000002", "W900000002": "W900000003"}
+        )
+        bundle = run_preflight()
+        self.assertFalse(
+            any(source == "W100000001" and target == "W900000003" for source, target in bundle.citation_pairs)
+        )
+
+    def test_cyclic_aliases_are_rejected(self) -> None:
+        self._set_aliases(
+            {"W900000001": "W900000002", "W900000002": "W900000001"}
+        )
+        with self.assertRaises(PreflightError) as cm:
+            run_preflight()
+        self.assertIn("cycle", str(cm.exception))
 
 
 class EntityResolutionManifestTests(_FixtureTestCase):

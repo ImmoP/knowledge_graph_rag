@@ -540,21 +540,59 @@ def _validate_chunks(path: Path, documents: dict) -> dict:
             )
         section_path = row["section_path"]
         if not isinstance(section_path, list) or not all(
-            isinstance(p, str) for p in section_path
+            isinstance(component, str) and bool(component)
+            for component in section_path
         ):
             raise PreflightError(
-                f"chunk {cid!r}: section_path must be list[str]"
+                f"chunk {cid!r}: section_path must be list[str] with "
+                "non-empty components"
             )
         chunk_index = row["chunk_index"]
-        if isinstance(chunk_index, bool) or not isinstance(chunk_index, int):
+        if (
+            isinstance(chunk_index, bool)
+            or not isinstance(chunk_index, int)
+            or chunk_index < 0
+        ):
             raise PreflightError(
-                f"chunk {cid!r}: chunk_index must be int, got "
-                f"{type(chunk_index).__name__}"
+                f"chunk {cid!r}: chunk_index must be a non-negative int"
             )
         text = row["text"]
         if not isinstance(text, str) or not text:
             raise PreflightError(
                 f"chunk {cid!r}: text must be a non-empty string"
+            )
+        token_estimate = row["token_estimate"]
+        expected_token_estimate = len(text) // 4
+        if (
+            isinstance(token_estimate, bool)
+            or not isinstance(token_estimate, int)
+            or token_estimate != expected_token_estimate
+        ):
+            raise PreflightError(
+                f"chunk {cid!r}: token_estimate must equal len(text) // 4 "
+                f"({expected_token_estimate}), got {token_estimate!r}"
+            )
+        char_start = row["char_start"]
+        char_end = row["char_end"]
+        if (
+            isinstance(char_start, bool)
+            or isinstance(char_end, bool)
+            or not isinstance(char_start, int)
+            or not isinstance(char_end, int)
+        ):
+            raise PreflightError(
+                f"chunk {cid!r}: char_start and char_end must be integers"
+            )
+        if char_start == -1:
+            if char_end != -1:
+                raise PreflightError(
+                    f"chunk {cid!r}: char_end must be -1 when char_start "
+                    "uses the -1 escape hatch"
+                )
+        elif not (char_end > char_start >= 0):
+            raise PreflightError(
+                f"chunk {cid!r}: offsets must satisfy char_end > "
+                "char_start >= 0 or both be -1"
             )
         derived = derive_chunk_id(
             doc_id=doc_id, section_path=section_path, chunk_index=chunk_index
@@ -921,7 +959,7 @@ def _validate_resolution_record(record: dict, *, mentions: dict, entities: dict)
             f"entity_resolutions: resolution_method {method!r} for {mid!r} "
             f"not in {sorted(_ALLOWED_RESOLUTION_METHODS)}"
         )
-    if not isinstance(score, (int, float)):
+    if isinstance(score, bool) or not isinstance(score, (int, float)):
         raise PreflightError(
             f"entity_resolutions: resolution_score for {mid!r} must be numeric"
         )
@@ -954,12 +992,28 @@ def _validate_resolution_record(record: dict, *, mentions: dict, entities: dict)
 # ---------------------------------------------------------------------------
 
 
-def _load_aliases(path: Path) -> dict:
-    """§4.4: acyclic alias graph (key/value pairs of canonical OpenAlex
-    IDs). An absent file is allowed.
+def _resolve_alias(openalex_id: str, aliases: dict[str, str]) -> str:
+    """Follow an alias chain to its terminal OpenAlex ID.
+
+    The helper is deliberately small: aliases are already validated as
+    OpenAlex IDs, and a repeated node is the only invalid state.
     """
-    if not path.is_file():
-        return {}
+    current = openalex_id
+    seen: set[str] = set()
+    while current in aliases:
+        if current in seen:
+            raise PreflightError(f"aliases.json: cycle through {openalex_id!r}")
+        seen.add(current)
+        current = aliases[current]
+    return current
+
+
+def _load_aliases(path: Path) -> dict:
+    """Load the required aliases file and validate an acyclic mapping.
+
+    A present ``{}`` is valid. File presence is enforced by the global
+    required-input gate before this function runs.
+    """
     try:
         raw = json.loads(path.read_text())
     except json.JSONDecodeError as exc:
@@ -972,13 +1026,7 @@ def _load_aliases(path: Path) -> dict:
                 f"aliases.json: invalid id {key!r}->{value!r} (must be W...)"
             )
     for key in raw:
-        seen: set = set()
-        current = key
-        while current in raw:
-            if current in seen:
-                raise PreflightError(f"aliases.json: cycle through {key!r}")
-            seen.add(current)
-            current = raw[current]
+        _resolve_alias(key, raw)
     return dict(raw)
 
 
@@ -1035,7 +1083,7 @@ def _build_citation_source(
         raw_ids = _canonicalize_referenced_works(raw.get("referenced_works"))
         records.append({"doc_id": doc_id, "referenced_work_ids": raw_ids})
         for cited in raw_ids:
-            target = aliases.get(cited, cited)
+            target = _resolve_alias(cited, aliases)
             if target == doc_id:
                 continue
             if target not in documents:
@@ -1079,6 +1127,7 @@ def run_preflight(
         entities_path,
         entity_resolutions_path,
         entity_resolution_manifest_path,
+        aliases_path,
     ):
         if not path.is_file():
             raise PreflightError(f"required input missing: {path}")
@@ -1312,7 +1361,7 @@ def run_preflight(
     entity_resolutions_sha = _file_sha256(entity_resolutions_path)
     entity_resolution_manifest_sha = _file_sha256(entity_resolution_manifest_path)
     manifest_sha = _file_sha256(manifest_path)
-    aliases_sha = _file_sha256(aliases_path) if aliases_path.is_file() else ""
+    aliases_sha = _file_sha256(aliases_path)
 
     inputs = {
         "manifest_path": _canonical_repo_relative(manifest_path),
@@ -1332,8 +1381,8 @@ def run_preflight(
         "entity_resolutions_sha256": entity_resolutions_sha,
         "entity_resolution_manifest_path": _canonical_repo_relative(entity_resolution_manifest_path),
         "entity_resolution_manifest_sha256": entity_resolution_manifest_sha,
-        "aliases_path": _canonical_repo_relative(aliases_path) if aliases_path.is_file() else None,
-        "aliases_sha256": aliases_sha or None,
+        "aliases_path": _canonical_repo_relative(aliases_path),
+        "aliases_sha256": aliases_sha,
     }
 
     return PreflightBundle(
