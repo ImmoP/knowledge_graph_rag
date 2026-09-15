@@ -297,19 +297,15 @@ def run_preflight(
                 "non-negative int"
             )
 
-        # 7. duplicate chunk_index within one doc_id
-        per_doc_indices.setdefault(doc_id, set()).add(chunk_index)
-        if len(per_doc_indices[doc_id]) != sum(
-            1 for _ in records if _.doc_id == doc_id
-        ) + 1:
-            # ``sum(1 for _ in records if _.doc_id == doc_id)`` already
-            # counted records for this doc; if the set's size exceeds
-            # the count, a duplicate chunk_index was just added. This
-            # double-check survives the records.append(...) order.
+        # 7. duplicate chunk_index within one doc_id. ``per_doc_indices``
+        # is the constant-time structure; membership is the check.
+        indices = per_doc_indices.setdefault(doc_id, set())
+        if chunk_index in indices:
             raise PreflightError(
                 f"chunks.jsonl line {line_no}: duplicate chunk_index "
                 f"{chunk_index} within doc_id {doc_id!r}"
             )
+        indices.add(chunk_index)
 
         # 8. text (non-empty str)
         text = raw["text"]
