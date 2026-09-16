@@ -438,6 +438,16 @@ class TestStrictPublication(EvalFixture):
                 with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                     author.main(["--input", "draft.jsonl", "--output", str(self.root / "eval" / name)])
 
+    def test_cli_rejects_valid_output_names_outside_eval_directory(self):
+        for output in (
+            self.root / "questions.jsonl",
+            self.root / "other" / "questions.jsonl",
+            self.root / "other" / "questions.v2.jsonl",
+        ):
+            with self.subTest(output=output):
+                with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                    author.main(["--input", "draft.jsonl", "--output", str(output)])
+
     def test_injected_graph_reader_is_not_closed(self):
         class ClosingGraph(FakeGraph):
             def __init__(self, **kwargs):

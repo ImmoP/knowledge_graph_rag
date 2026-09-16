@@ -487,7 +487,9 @@ def _close_graph_reader(graph_reader: GraphReader) -> None:
 
 
 def _output_path_is_supported(output_path: Path) -> bool:
-    return bool(re.fullmatch(r"questions(?:\.v[1-9][0-9]*)?\.jsonl", output_path.name))
+    return output_path.parent.name == "eval" and bool(
+        re.fullmatch(r"questions(?:\.v[1-9][0-9]*)?\.jsonl", output_path.name)
+    )
 
 
 def main(
