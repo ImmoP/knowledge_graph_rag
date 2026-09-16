@@ -70,8 +70,6 @@ from src.providers.budget import BudgetExceeded
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CHUNKS_PATH = REPO_ROOT / "data" / "derived" / "chunks.jsonl"
 DEFAULT_ONTOLOGY_PATH = REPO_ROOT / "ontology.yaml"
-DEFAULT_OUTPUT_JSONL = REPO_ROOT / "data" / "extractions_v2.jsonl"
-DEFAULT_OUTPUT_REJECTS = REPO_ROOT / "data" / "extractions_v2.rejects.jsonl"
 
 V2_ENTITY_PROMPT_FILENAME = prompts_module.ENTITY_PROMPT_FILE_V2
 V2_RELATION_PROMPT_FILENAME = prompts_module.RELATION_PROMPT_FILE_V2
@@ -108,19 +106,9 @@ def _atomic_rewrite_jsonl(path: Path, lines: Iterable[str]) -> None:
         raise
 
 
-def _append_rejects(path: Path, records: list) -> None:
-    """Append one JSONL line per reject record (inlined v1 helper)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        for r in records:
-            fh.write(json.dumps(r, ensure_ascii=False, sort_keys=True))
-            fh.write("\n")
-
-
 # ---------- preflight -------------------------------------------------
 
 
-@dataclass(frozen=True)
 class PreflightErrorV2(RuntimeError):
     """Raised at startup when a hard v2 preflight gate fails."""
 
@@ -477,7 +465,7 @@ def _run_entity_phase_v2(
             "chunk_id": chunk_id,
             "phase": "entity",
             "attempt": attempts,
-            "gate": "aligner",
+            "gate": "alignment",
             "reason": r.reason.value,
             "offending_record": r.to_record(),
             "aligner_reject": True,
@@ -698,7 +686,7 @@ def _run_relation_phase_v2(
             "chunk_id": chunk_id,
             "phase": "relation",
             "attempt": attempts,
-            "gate": "aligner",
+            "gate": "alignment",
             "reason": r.reason.value,
             "offending_record": r.to_record(),
             "aligner_reject": True,
@@ -820,11 +808,11 @@ def preflight_v2(
 def run_extraction_v2(
     *,
     provider: LLMProvider,
+    output_jsonl: Path,
+    output_rejects: Path,
     chunks_path: Path = DEFAULT_CHUNKS_PATH,
     ontology_path: Path = DEFAULT_ONTOLOGY_PATH,
     prompts_dir: Path = prompts_module.PROMPTS_DIR,
-    output_jsonl: Path = DEFAULT_OUTPUT_JSONL,
-    output_rejects: Path = DEFAULT_OUTPUT_REJECTS,
     max_tokens: int = 2048,
     temperature: float = 0.0,
 ) -> RunResultV2:
@@ -861,6 +849,7 @@ def run_extraction_v2(
     assertions_by_chunk: dict = {}
     statuses_by_chunk: dict = {}
     budget_aborted = False
+    collected_rejects: list = []
 
     try:
         for chunk in chunks:
@@ -921,11 +910,14 @@ def run_extraction_v2(
                 relation_outcome=relation_outcome,
             )
 
-            new_rejects = entity_outcome.reject_records + relation_outcome.reject_records
-            if new_rejects:
-                _append_rejects(output_rejects, new_rejects)
+            collected_rejects.extend(
+                entity_outcome.reject_records + relation_outcome.reject_records
+            )
 
-        # Final pass: atomic write of the canonical JSONL.
+        # Final pass: atomic write of the canonical JSONL and the
+        # reject log. The reject log is rewritten (truncates any
+        # stale content) on every run so reused output paths
+        # never carry over rejects from a previous run.
         for cid in list(mentions_by_chunk):
             mentions_by_chunk[cid].sort(key=lambda r: r.get("mention_id", ""))
         for cid in list(assertions_by_chunk):
@@ -938,6 +930,10 @@ def run_extraction_v2(
                 assertions_by_chunk=assertions_by_chunk,
                 statuses_by_chunk=statuses_by_chunk,
             ),
+        )
+        _atomic_rewrite_jsonl(
+            output_rejects,
+            (json.dumps(r, ensure_ascii=False, sort_keys=True) for r in collected_rejects),
         )
 
         total_mentions = sum(len(v) for v in mentions_by_chunk.values())
@@ -954,7 +950,7 @@ def run_extraction_v2(
             mention_count=total_mentions,
             assertion_count=total_assertions,
             complete_chunk_count=total_complete,
-            reject_count=_count_rejects(statuses_by_chunk),
+            reject_count=len(collected_rejects),
             budget_aborted=budget_aborted,
         )
     except BudgetExceeded:
@@ -971,6 +967,10 @@ def run_extraction_v2(
                 statuses_by_chunk=statuses_by_chunk,
             ),
         )
+        _atomic_rewrite_jsonl(
+            output_rejects,
+            (json.dumps(r, ensure_ascii=False, sort_keys=True) for r in collected_rejects),
+        )
         return RunResultV2(
             exit_code=1,
             run_id=run_id,
@@ -982,7 +982,7 @@ def run_extraction_v2(
             complete_chunk_count=sum(
                 1 for s in statuses_by_chunk.values() if s.get("extraction_complete")
             ),
-            reject_count=_count_rejects(statuses_by_chunk),
+            reject_count=len(collected_rejects),
             budget_aborted=True,
         )
 
@@ -995,21 +995,6 @@ def _merge_usage(a: Usage, b: Usage) -> Usage:
             (a.cost_usd or 0.0) + (b.cost_usd or 0.0) or None
         ),
     )
-
-
-def _count_rejects(statuses_by_chunk: dict) -> int:
-    """Approximate total reject count from per-chunk phase outcomes.
-
-    The reject log (jsonl append-only) is the source of truth; this
-    helper only counts per-chunk phase-level rejects already recorded
-    on the chunk_status record.
-    """
-    n = 0
-    for status in statuses_by_chunk.values():
-        phases = status.get("phases", {})
-        n += phases.get("entity", {}).get("failure_count", 0)
-        n += phases.get("relation", {}).get("failure_count", 0)
-    return n
 
 
 

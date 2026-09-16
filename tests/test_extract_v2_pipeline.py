@@ -380,7 +380,7 @@ class TestAlignerZeroOccurrences(unittest.TestCase):
             self.assertEqual(cs["phases"]["entity"]["failure_count"], 1)
             rejects = _read_jsonl(outs["rejects"])
             self.assertEqual(len(rejects), 1)
-            self.assertEqual(rejects[0]["gate"], "aligner")
+            self.assertEqual(rejects[0]["gate"], "alignment")
             self.assertEqual(rejects[0]["aligner_reason"], "ZERO_OCCURRENCES")
             self.assertTrue(rejects[0]["aligner_reject"])
 
@@ -898,7 +898,6 @@ class TestCacheHitsAndMisses(unittest.TestCase):
 
 
 class TestDeterministicOrdering(unittest.TestCase):
-
     def test_records_sorted_by_chunk_kind_id(self):
         """Records are sorted by (chunk_id, kind_rank, record_id).
 
@@ -958,4 +957,144 @@ class TestDeterministicOrdering(unittest.TestCase):
             records = _read_jsonl(outs["jsonl"])
             kinds = [r["kind"] for r in records]
             self.assertEqual(kinds, ["mention", "assertion", "chunk_status"])
+
+
+# --- 15: T3a output paths are caller-supplied (no persistent defaults)
+
+
+class TestOutputPathRequirement(unittest.TestCase):
+
+    def test_run_extraction_v2_requires_output_paths(self):
+        """run_extraction_v2 must reject calls that omit output_jsonl
+        or output_rejects; the runner must never read or write a
+        persistent T3a default artifact path."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            with self.assertRaises(TypeError):
+                pipeline_v2.run_extraction_v2(
+                    chunks_path=world["chunks"],
+                    ontology_path=world["ontology"],
+                    prompts_dir=world["prompts"],
+                    provider=_FakeLLM(),
+                )
+
+    def test_pipeline_v2_module_has_no_persistent_default_output_paths(self):
+        """No constant in pipeline_v2.py points at a persistent
+        ``data/...`` artifact path that the runner would silently
+        write to when callers omit output_jsonl / output_rejects.
+        Canonical v2 artifact paths belong to T3b."""
+        import src.extract.pipeline_v2 as p2
+        for name in ("DEFAULT_OUTPUT_JSONL", "DEFAULT_OUTPUT_REJECTS"):
+            self.assertFalse(
+                hasattr(p2, name),
+                f"pipeline_v2 must not expose {name} (T3b owns canonical paths)",
+            )
+
+
+# --- 16: PreflightErrorV2 carries its message ------------------------
+
+
+class TestPreflightErrorV2(unittest.TestCase):
+
+    def test_preflight_error_v2_carries_message(self):
+        """A failed preflight raises PreflightErrorV2 with the
+        expected message rather than TypeError."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            outs = _outputs(root)
+            # Delete the ontology file to force a preflight failure.
+            world["ontology"].unlink()
+            with self.assertRaises(pipeline_v2.PreflightErrorV2) as cm:
+                pipeline_v2.run_extraction_v2(
+                    chunks_path=world["chunks"],
+                    ontology_path=world["ontology"],
+                    prompts_dir=world["prompts"],
+                    output_jsonl=outs["jsonl"],
+                    output_rejects=outs["rejects"],
+                    provider=_FakeLLM(),
+                )
+            self.assertIn("ontology", str(cm.exception))
+
+
+# --- 17: schema reject contributes to reject_count -----------------
+
+
+class TestSchemaRejectCounted(unittest.TestCase):
+
+    def test_schema_reject_increments_reject_count(self):
+        """LLMValidationError produces a schema reject; the
+        resulting ``RunResultV2.reject_count`` must include that
+        schema reject even though the phase ``failure_count``
+        remains 0 (per the frozen completion semantics)."""
+
+        class _BoomLLM(LLMProvider):
+            name = "boom"
+            model = "boom"
+
+            def generate(self, system, user, *, max_tokens=1024, temperature=0.0):
+                return "", Usage()
+
+            def generate_json(self, system, user, schema, *, max_tokens=1024, temperature=0.0):
+                raise LLMValidationError(
+                    model_output="not json",
+                    schema=schema,
+                    validation_error=ValueError("bad shape"),
+                )
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            outs = _outputs(root)
+            result = pipeline_v2.run_extraction_v2(
+                chunks_path=world["chunks"],
+                ontology_path=world["ontology"],
+                prompts_dir=world["prompts"],
+                output_jsonl=outs["jsonl"],
+                output_rejects=outs["rejects"],
+                provider=_BoomLLM(),
+            )
+            # Two schema rejects (entity + relation). Phase
+            # ``failure_count`` for both stays 0 per the frozen
+            # completion semantics; ``reject_count`` must still
+            # include them.
+            self.assertEqual(result.reject_count, 2)
+            cs_records = [
+                r for r in _read_jsonl(outs["jsonl"])
+                if r["kind"] == "chunk_status"
+            ]
+            self.assertEqual(len(cs_records), 1)
+            cs = cs_records[0]
+            self.assertEqual(cs["phases"]["entity"]["failure_count"], 0)
+            self.assertEqual(cs["phases"]["entity"]["status"], "rejected")
+            self.assertEqual(cs["phases"]["relation"]["failure_count"], 0)
+            self.assertEqual(cs["phases"]["relation"]["status"], "rejected")
+
+
+# --- 18: fresh-run truncates stale reject artifact ------------------
+
+
+class TestFreshRunRejectsAreClean(unittest.TestCase):
+
+    def test_stale_reject_content_absent_after_fresh_run(self):
+        """A T3a fresh run must not retain stale reject lines when
+        the caller reuses ``output_rejects``. The runner truncates
+        the reject artifact before writing current-run rejects."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            outs = _outputs(root)
+            # Pre-seed a stale reject line that the new run must
+            # discard (no current chunk produces a reject).
+            outs["rejects"].parent.mkdir(parents=True, exist_ok=True)
+            stale = {"chunk_id": "stale", "phase": "stale", "gate": "stale"}
+            outs["rejects"].write_text(
+                json.dumps(stale) + "\n", encoding="utf-8",
+            )
+            _run(world, outputs=outs)
+            # Fresh run produces zero rejects; the stale line must
+            # be gone.
+            rejects = _read_jsonl(outs["rejects"])
+            self.assertEqual(rejects, [])
 
