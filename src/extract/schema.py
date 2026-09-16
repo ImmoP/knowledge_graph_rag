@@ -23,6 +23,13 @@ import yaml
 #: generated together from the same ontology.
 SCHEMA_VERSION = 1
 
+#: Schema version for the v2 extraction contract (#51, #47). The v2
+#: model-facing schemas do not require the model to author char
+#: offsets; the deterministic exact-span v2 aligner (#49) derives
+#: offsets from the chunk text. v1 callers keep using
+#: ``SCHEMA_VERSION``.
+SCHEMA_VERSION_V2 = 2
+
 #: Symbolic names matching the ontology's ``extraction_prompt`` values.
 ENTITY_PROMPT_NAME = "extract_entities_v1"
 RELATION_PROMPT_NAME = "extract_relations_v1"
@@ -145,6 +152,92 @@ def relation_pass_schema(ontology: dict) -> dict:
             "char_start": {"type": "integer", "minimum": 0},
             "char_end": {"type": "integer", "minimum": 1},
             "confidence": {"type": "string", "enum": list(CONFIDENCE_VALUES)},
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["assertions"],
+        "properties": {"assertions": {"type": "array", "items": assertion}},
+    }
+
+
+def entity_pass_v2_schema(ontology: dict) -> dict:
+    """JSON Schema for the v2 entity-pass output shape (#51).
+
+    Top-level: ``{"mentions": [...]}``. The model does not author
+    ``char_start`` / ``char_end``; the deterministic exact-span v2
+    aligner (#49) derives those offsets from the chunk text and an
+    optional ``occurrence_index``. ``surface_form`` is the literal
+    span the aligner locates; ``canonical_form`` is the LLM's
+    normalised name; ``confidence`` is the closed set from spec
+    §3.1.1. ``occurrence_index`` is an optional non-negative integer
+    index into the ordered list of identical literals in the chunk
+    text.
+    """
+    et_names = [et["name"] for et in extracted_entity_types(ontology)]
+    mention = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "entity_type",
+            "surface_form",
+            "canonical_form",
+            "confidence",
+        ],
+        "properties": {
+            "entity_type": {"type": "string", "enum": et_names},
+            "surface_form": {"type": "string", "minLength": 1},
+            "canonical_form": {"type": "string", "minLength": 1},
+            "confidence": {"type": "string", "enum": list(CONFIDENCE_VALUES)},
+            "occurrence_index": {"type": "integer", "minimum": 0},
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["mentions"],
+        "properties": {"mentions": {"type": "array", "items": mention}},
+    }
+
+
+def relation_pass_v2_schema(ontology: dict) -> dict:
+    """JSON Schema for the v2 relation-pass output shape (#51).
+
+    Top-level: ``{"assertions": [...]}``. The model does not author
+    ``char_start`` / ``char_end``; the deterministic exact-span v2
+    aligner (#49) derives those offsets from the chunk text and an
+    optional ``occurrence_index``. ``evidence_quote`` is required
+    and is the literal span the aligner locates; endpoint ``kind``
+    is the two-literal set ``document|mention`` per spec §3.1.2.
+    """
+    rt_names = [rt["name"] for rt in extracted_relation_types(ontology)]
+    endpoint = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["kind", "id"],
+        "properties": {
+            "kind": {"type": "string", "enum": list(ENDPOINT_KINDS)},
+            "id": {"type": "string", "minLength": 1},
+        },
+    }
+    assertion = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "relation_type",
+            "subject_ref",
+            "object_ref",
+            "evidence_quote",
+            "confidence",
+        ],
+        "properties": {
+            "relation_type": {"type": "string", "enum": rt_names},
+            "subject_ref": endpoint,
+            "object_ref": endpoint,
+            "evidence_quote": {"type": "string", "minLength": 1},
+            "confidence": {"type": "string", "enum": list(CONFIDENCE_VALUES)},
+            "occurrence_index": {"type": "integer", "minimum": 0},
         },
     }
     return {

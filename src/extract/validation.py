@@ -489,3 +489,91 @@ def build_validated_assertion(
         evidence=canonical_evidence,
         confidence=raw_assertion["confidence"],
     )
+
+
+# ---------- v2 persisted-record dataclasses (#51) --------------------
+#
+# Following the v1 convention used above, "Validated" means the
+# caller has already passed the relevant v2 validation / alignment
+# gates. The dataclasses themselves do not perform the gates and
+# do not call the deterministic exact-span v2 aligner (#49). They
+# carry the canonical v2 record fields and emit the canonical JSONL
+# record via ``to_record()``.
+
+
+@dataclass(frozen=True)
+class ValidatedV2Mention:
+    """A v2 mention record that has passed the relevant v2 gates (#51).
+
+    Precondition: the caller has already run the v2 evidence and
+    ontology gates and obtained the v2 ``mention_id`` from
+    ``ids.mention_id_v2``. The literal text (``surface_form``)
+    lives at the top level; ``evidence`` contains only the three
+    spec-mandated offsets + sha fields, with no literal
+    duplication.
+    """
+
+    mention_id: str
+    chunk_id: str
+    doc_id: str
+    entity_type: str
+    surface_form: str
+    canonical_form: str
+    evidence: dict
+    confidence: str
+
+    def to_record(self) -> dict:
+        from src.extract.schema import SCHEMA_VERSION_V2
+
+        return {
+            "kind": "mention",
+            "schema_version": SCHEMA_VERSION_V2,
+            "mention_id": self.mention_id,
+            "chunk_id": self.chunk_id,
+            "doc_id": self.doc_id,
+            "entity_type": self.entity_type,
+            "surface_form": self.surface_form,
+            "canonical_form": self.canonical_form,
+            "evidence": dict(self.evidence),
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True)
+class ValidatedV2Assertion:
+    """A v2 assertion record that has passed the relevant v2 gates (#51).
+
+    Precondition: the caller has already run the v2 evidence and
+    ontology gates and obtained the v2 ``assertion_id`` from
+    ``ids.assertion_id_v2``. The literal text (``evidence_quote``)
+    lives at the top level; ``evidence`` contains only the three
+    spec-mandated offsets + sha fields, with no literal
+    duplication.
+    """
+
+    assertion_id: str
+    chunk_id: str
+    doc_id: str
+    relation_type: str
+    subject_ref: dict
+    object_ref: dict
+    evidence_quote: str
+    evidence: dict
+    confidence: str
+
+    def to_record(self) -> dict:
+        from src.extract.schema import SCHEMA_VERSION_V2
+
+        return {
+            "kind": "assertion",
+            "schema_version": SCHEMA_VERSION_V2,
+            "assertion_id": self.assertion_id,
+            "chunk_id": self.chunk_id,
+            "doc_id": self.doc_id,
+            "relation_type": self.relation_type,
+            "subject_ref": dict(self.subject_ref),
+            "object_ref": dict(self.object_ref),
+            "evidence_quote": self.evidence_quote,
+            "evidence": dict(self.evidence),
+            "confidence": self.confidence,
+        }
