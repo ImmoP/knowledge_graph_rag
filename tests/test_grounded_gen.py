@@ -8,6 +8,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -193,6 +194,19 @@ class GroundedGeneratorFixture(unittest.TestCase):
 
     def test_empty_evidence_abstains_without_provider_call(self) -> None:
         result = self.generator.generate(self.request(()))
+        self.assertEqual(result.answer_text, "ABSTAIN")
+        self.assertTrue(result.abstained)
+        self.assertEqual(result.citations, ())
+        self.assertEqual(result.claims, ())
+        self.assertEqual(result.claim_support, ())
+        self.assertEqual(result.usage_calls, ())
+        self.assertEqual(result.evidence_fingerprint, _independent_fingerprint(()))
+        self.assertEqual(self.provider.calls, 0)
+
+    def test_empty_evidence_abstains_when_prompt_artifact_is_unreadable(self) -> None:
+        with patch("src.grounded_gen.Path.read_text", side_effect=OSError):
+            result = self.generator.generate(self.request(()))
+
         self.assertEqual(result.answer_text, "ABSTAIN")
         self.assertTrue(result.abstained)
         self.assertEqual(result.citations, ())

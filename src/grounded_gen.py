@@ -120,8 +120,8 @@ class GenerationTraceEvent:
     def __init__(
         self,
         *,
-        prompt_filename: str,
-        prompt_content_sha256: str,
+        prompt_filename: str | None,
+        prompt_content_sha256: str | None,
         evidence_fingerprint: str,
         usage_calls: tuple[Usage, ...],
         provider_call_count: int,
@@ -507,14 +507,12 @@ class GroundedGenerator:
         """
         self.preflight(request)
         fingerprint = evidence_fingerprint(request.evidence)
-        prompt_sha = self._prompt_content_sha256()
-        user_prompt = self.render_user_prompt(request)
 
         if not request.evidence:
             self._record_trace(
                 GenerationTraceEvent(
-                    prompt_filename=PROMPT_FILENAME,
-                    prompt_content_sha256=prompt_sha,
+                    prompt_filename=None,
+                    prompt_content_sha256=None,
                     evidence_fingerprint=fingerprint,
                     usage_calls=(),
                     provider_call_count=0,
@@ -531,6 +529,9 @@ class GroundedGenerator:
                 usage_calls=(),
                 evidence_fingerprint=fingerprint,
             )
+
+        prompt_sha = self._prompt_content_sha256()
+        user_prompt = self.render_user_prompt(request)
 
         first_text, first_usage = self._provider.generate(
             SYSTEM_PROMPT,
