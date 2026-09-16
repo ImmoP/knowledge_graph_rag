@@ -73,8 +73,8 @@ class AlignedAssertion:
     chunk_id: str
     candidate_id: str | None
     relation_type: str
-    subject_ref: dict = field(compare=False)
-    object_ref: dict = field(compare=False)
+    subject_ref: dict = field(hash=False)
+    object_ref: dict = field(hash=False)
     evidence_quote: str
     confidence: str
     char_start: int

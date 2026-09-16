@@ -74,28 +74,46 @@ class TestEnumerationInvariants(unittest.TestCase):
 
     CHUNK_TEXT = "The quick brown fox jumps over the lazy dog. The quick brown fox is fast."
 
-    def test_left_to_right_non_overlapping(self):
-        starts = _enumerate_occurrences(self.CHUNK_TEXT, "quick brown fox")
-        self.assertEqual(len(starts), 2)
-        for i, s in enumerate(starts):
-            self.assertEqual(s, self.CHUNK_TEXT.find("quick brown fox") if i == 0 else starts[i])
-        for i in range(len(starts) - 1):
-            self.assertLess(starts[i], starts[i + 1])
-            end_i = starts[i] + len("quick brown fox")
-            self.assertLessEqual(end_i, starts[i + 1])
+    def _assert_starts(self, chunk_text: str, literal: str, expected: list[int]) -> None:
+        starts = _enumerate_occurrences(chunk_text, literal)
+        self.assertEqual(starts, expected)
+        # Every returned start yields the exact literal at that offset.
         for s in starts:
-            self.assertEqual((s, s + len("quick brown fox")), (s, s + len("quick brown fox")))
+            self.assertEqual(chunk_text[s:s + len(literal)], literal)
+        # Strictly monotonic; previous end <= next start (non-overlapping).
+        for prev, nxt in zip(starts, starts[1:]):
+            self.assertLess(prev, nxt)
+            self.assertLessEqual(prev + len(literal), nxt)
 
-    def test_adjacent_matches_not_merged_or_overlapped(self):
-        self.assertEqual(_enumerate_occurrences("abab", "ab"), [0, 2])
-        # "aaaa" with literal "aa" yields [0, 2], not overlapping.
-        self.assertEqual(_enumerate_occurrences("aaaa", "aa"), [0, 2])
+    def test_ordinary_repeated_literal(self):
+        # Two non-contiguous matches in CHUNK_TEXT.
+        literal = "quick brown fox"
+        self._assert_starts(self.CHUNK_TEXT, literal, [4, 49])
 
-    def test_empty_literal_yields_no_occurrences(self):
+    def test_adjacent_non_overlapping_occurrences(self):
+        # "abab" with literal "ab" yields [0, 2], not [0, 2, 2...].
+        self._assert_starts("abab", "ab", [0, 2])
+
+    def test_potentially_overlapping_returns_only_leftmost(self):
+        # "aaaa" with literal "aa": overlapping substrings exist at 0, 1, 2,
+        # but only non-overlapping starts [0, 2] must be returned.
+        self._assert_starts("aaaa", "aa", [0, 2])
+
+    def test_exact_start_offsets_for_repeated_word(self):
+        # "the" appears 3 times at known offsets in this fixture.
+        self._assert_starts(
+            "the cat and the dog and the bird", "the", [0, 12, 24]
+        )
+
+    def test_empty_and_absent_literals(self):
         self.assertEqual(_enumerate_occurrences("anything", ""), [])
-
-    def test_absent_literal_yields_no_occurrences(self):
         self.assertEqual(_enumerate_occurrences("hello world", "xyz"), [])
+
+    def test_single_occurrence(self):
+        self._assert_starts("alpha beta gamma", "beta", [6])
+
+    def test_literal_at_end_and_start(self):
+        self._assert_starts("xxabxxab", "ab", [2, 6])
 
 
 class TestProviderDependency(unittest.TestCase):
@@ -476,6 +494,68 @@ class TestNoStringLenientMatch(unittest.TestCase):
         accepted, rejects = align_mentions(decomposed, cands, chunk_id=CHUNK_ID)
         self.assertEqual(accepted, [])
         self.assertEqual(rejects[0].reason, RejectReason.ZERO_OCCURRENCES)
+
+
+class TestAlignedAssertionEquality(unittest.TestCase):
+    """Regression: subject_ref / object_ref MUST participate in equality.
+
+    Two aligned assertions differing only in endpoints must not compare
+    equal. Endpoints are dict fields, which are unhashable, so they
+    must opt out of hashing (hash=False) but not out of equality
+    (compare=True).
+    """
+
+    def _make(self, *, subject_ref: dict, object_ref: dict):
+        # Construct directly to isolate the equality / hash semantics
+        # under test from the mention-alignment pipeline.
+        from src.extract.align import AlignedAssertion  # local import
+
+        return AlignedAssertion(
+            chunk_id=CHUNK_ID,
+            candidate_id="r1",
+            relation_type="PREDICATE",
+            subject_ref=subject_ref,
+            object_ref=object_ref,
+            evidence_quote="some quote",
+            confidence="stated",
+            char_start=0,
+            char_end=11,
+        )
+
+    def test_different_subject_ref_unequal(self):
+        a = self._make(
+            subject_ref={"kind": "mention", "id": "m1"},
+            object_ref={"kind": "mention", "id": "m2"},
+        )
+        b = self._make(
+            subject_ref={"kind": "mention", "id": "m2"},
+            object_ref={"kind": "mention", "id": "m1"},
+        )
+        self.assertNotEqual(a.subject_ref, b.subject_ref)
+        self.assertNotEqual(a, b)
+
+    def test_different_object_ref_unequal(self):
+        a = self._make(
+            subject_ref={"kind": "document", "id": "d1"},
+            object_ref={"kind": "document", "id": "d1"},
+        )
+        b = self._make(
+            subject_ref={"kind": "document", "id": "d1"},
+            object_ref={"kind": "document", "id": "d2"},
+        )
+        self.assertNotEqual(a.object_ref, b.object_ref)
+        self.assertNotEqual(a, b)
+
+    def test_identical_assertions_equal(self):
+        a = self._make(
+            subject_ref={"kind": "document", "id": "d1"},
+            object_ref={"kind": "document", "id": "d1"},
+        )
+        b = self._make(
+            subject_ref={"kind": "document", "id": "d1"},
+            object_ref={"kind": "document", "id": "d1"},
+        )
+        self.assertEqual(a, b)
 
 
 if __name__ == "__main__":
