@@ -166,6 +166,119 @@ def check_assertion_evidence(
         )
 
 
+# ---------- v2 evidence gate (#53) -----------------------------------
+#
+# Additive only. The v1 helpers ``check_mention_evidence`` and
+# ``check_assertion_evidence`` above are not modified. The v2 helpers
+# below enforce the v2 contract documented in #47 / #51 / #53:
+#
+# * ``chunk_text[char_start:char_end] == surface_form`` (mention) or
+#   ``== evidence_quote`` (assertion) BYTE-EQUAL. No whitespace
+#   normalisation, no case folding, no diacritic folding, no Unicode
+#   normalisation, no contains / fuzzy / paraphrase / similarity check.
+# * ``source_text_sha256`` equals the locally derived
+#   ``sha256(chunk_text.encode("utf-8")).hexdigest()``.
+# * offsets in range.
+#
+# The v2 aligner (#49) already produces aligned mentions / assertions
+# whose stored ``surface_form`` / ``evidence_quote`` is a verbatim
+# substring at the recorded offsets, so this gate primarily guards
+# (a) SHA drift from a malformed provider cache hit, and (b) future
+# regressions in record construction. A direct caller bypassing
+# ``align.align_mentions`` / ``align.align_relations`` is caught here
+# as well.
+
+
+def check_mention_evidence_v2(
+    *,
+    mention: dict,
+    chunk_text: str,
+    expected_source_text_sha256: str,
+) -> None:
+    """Gate 3 for v2 mentions (#53).
+
+    Verifies that ``chunk_text[char_start:char_end]`` is byte-equal
+    to ``surface_form`` and that ``source_text_sha256`` matches the
+    locally derived hash of ``chunk_text``. The literal match is
+    exact: no whitespace normalisation, no case folding, no diacritic
+    folding. Whitespace-different / case-different / Unicode-different
+    versions of the literal are rejected.
+    """
+    ev = mention["evidence"]
+    char_start = ev["char_start"]
+    char_end = ev["char_end"]
+    _check_offsets(
+        char_start=char_start,
+        char_end=char_end,
+        chunk_text=chunk_text,
+        where="mention evidence (v2)",
+    )
+    span_text = chunk_text[char_start:char_end]
+    surface = mention.get("surface_form", "")
+    if not isinstance(surface, str):
+        raise EvidenceError(
+            f"mention surface_form must be a string (v2); got "
+            f"{type(surface).__name__}"
+        )
+    if span_text != surface:
+        raise EvidenceError(
+            f"mention evidence byte-equality failed (v2): "
+            f"chunk_text[{char_start},{char_end}) = {span_text!r} "
+            f"!= surface_form {surface!r}"
+        )
+    if ev["source_text_sha256"] != expected_source_text_sha256:
+        raise EvidenceError(
+            f"mention source_text_sha256 drift (v2): stored "
+            f"{ev['source_text_sha256']!r} != chunk "
+            f"{expected_source_text_sha256!r}"
+        )
+
+
+def check_assertion_evidence_v2(
+    *,
+    assertion: dict,
+    chunk_text: str,
+    expected_source_text_sha256: str,
+) -> None:
+    """Gate 3 for v2 assertions (#53).
+
+    Verifies that ``chunk_text[char_start:char_end]`` is byte-equal
+    to ``evidence_quote`` and that ``source_text_sha256`` matches the
+    locally derived hash of ``chunk_text``. The literal match is
+    exact: no whitespace normalisation, no case folding, no diacritic
+    folding. ``evidence_quote``-only-whitespace (and any other
+    non-empty-but-not-byte-equal case) is rejected.
+    """
+    ev = assertion["evidence"]
+    char_start = ev["char_start"]
+    char_end = ev["char_end"]
+    _check_offsets(
+        char_start=char_start,
+        char_end=char_end,
+        chunk_text=chunk_text,
+        where="assertion evidence (v2)",
+    )
+    span_text = chunk_text[char_start:char_end]
+    quote = assertion.get("evidence_quote", "")
+    if not isinstance(quote, str):
+        raise EvidenceError(
+            f"assertion evidence_quote must be a string (v2); got "
+            f"{type(quote).__name__}"
+        )
+    if span_text != quote:
+        raise EvidenceError(
+            f"assertion evidence byte-equality failed (v2): "
+            f"chunk_text[{char_start},{char_end}) = {span_text!r} "
+            f"!= evidence_quote {quote!r}"
+        )
+    if ev["source_text_sha256"] != expected_source_text_sha256:
+        raise EvidenceError(
+            f"assertion source_text_sha256 drift (v2): stored "
+            f"{ev['source_text_sha256']!r} != chunk "
+            f"{expected_source_text_sha256!r}"
+        )
+
+
 # ---------- ontology gate --------------------------------------------
 
 
