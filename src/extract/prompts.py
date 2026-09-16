@@ -30,6 +30,20 @@ RELATION_PROMPT_FILE = "extract_relations_v1.txt"
 ENTITY_PROMPT_PATH = PROMPTS_DIR / ENTITY_PROMPT_FILE
 RELATION_PROMPT_PATH = PROMPTS_DIR / RELATION_PROMPT_FILE
 
+# --- v2 prompt artifacts (#53) ---------------------------------------
+#
+# Additive only. v1 callers continue to use ``ENTITY_PROMPT_FILE`` /
+# ``RELATION_PROMPT_FILE`` / ``verify_prompt_artifacts(...)``. The v2
+# filenames live alongside the v1 ones under ``prompts/`` and are
+# verified by ``verify_prompt_artifacts_v2(...)`` with the same
+# fail-closed contract.
+
+ENTITY_PROMPT_FILE_V2 = "extract_entities_v2.txt"
+RELATION_PROMPT_FILE_V2 = "extract_relations_v2.txt"
+
+ENTITY_PROMPT_PATH_V2 = PROMPTS_DIR / ENTITY_PROMPT_FILE_V2
+RELATION_PROMPT_PATH_V2 = PROMPTS_DIR / RELATION_PROMPT_FILE_V2
+
 
 class PromptArtifactMissing(RuntimeError):
     """Raised at startup when a required prompt artifact is absent.
@@ -62,6 +76,42 @@ def verify_prompt_artifacts(
     for name, path in (
         (ENTITY_PROMPT_FILE, base / ENTITY_PROMPT_FILE),
         (RELATION_PROMPT_FILE, base / RELATION_PROMPT_FILE),
+    ):
+        if not path.is_file():
+            raise PromptArtifactMissing(
+                f"required prompt artifact missing: {path}"
+            )
+        raw = path.read_bytes()
+        out[name] = {
+            "path": path,
+            "filename": name,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "bytes": raw,
+            "text": raw.decode("utf-8"),
+        }
+    return out
+
+
+def verify_prompt_artifacts_v2(
+    prompts_dir: Path | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Read the v2 prompt files from disk; fail closed if any is missing.
+
+    Additive companion to :func:`verify_prompt_artifacts`. Reads only
+    the v2 filenames (``extract_entities_v2.txt``,
+    ``extract_relations_v2.txt``) and never touches the v1 files. v1
+    callers do not invoke this helper.
+
+    Returns the same per-template ``{path, filename, sha256, bytes,
+    text}`` dict shape as the v1 verifier so callers can mix the v2
+    file-content hashes into the extraction cache identity and any
+    future manifest without ad-hoc parsing.
+    """
+    base = Path(prompts_dir) if prompts_dir is not None else PROMPTS_DIR
+    out: dict[str, dict[str, Any]] = {}
+    for name, path in (
+        (ENTITY_PROMPT_FILE_V2, base / ENTITY_PROMPT_FILE_V2),
+        (RELATION_PROMPT_FILE_V2, base / RELATION_PROMPT_FILE_V2),
     ):
         if not path.is_file():
             raise PromptArtifactMissing(
