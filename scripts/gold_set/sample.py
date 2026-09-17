@@ -17,7 +17,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.eval.leakage import DEFAULT_ONTOLOGY_PATH, LeakageError, load_frozen_exclusions
+from src.eval.leakage import (  # noqa: E402
+    DEFAULT_ONTOLOGY_PATH,
+    LeakageError,
+    load_frozen_exclusions,
+)
 
 GOLD_SET_SEED = 0x9E3779B1
 SAMPLER_SEED_TEXT = "9e3779b1"
