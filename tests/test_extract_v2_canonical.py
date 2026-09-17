@@ -1042,6 +1042,11 @@ class TestManifestStructuralValidation(unittest.TestCase):
             self._mutated_manifest(lambda m: m.pop("cumulative_tokens")),
         )
 
+    def test_missing_resumed_from_run_id_hard_fails(self):
+        self._assert_structural_hard_fail(
+            self._mutated_manifest(lambda m: m.pop("resumed_from_run_id")),
+        )
+
     def test_wrong_type_audit_field_hard_fails(self):
         self._assert_structural_hard_fail(
             self._mutated_manifest(lambda m: m.update(cumulative_tokens="30")),

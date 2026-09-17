@@ -1414,7 +1414,11 @@ def _read_existing_v2_manifest(path: Path) -> dict | None:
             raise PreflightErrorV2(
                 f"canonical: manifest at {path} has invalid {key}"
             )
-    resumed_from = rec.get("resumed_from_run_id")
+    if "resumed_from_run_id" not in rec:
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} missing resumed_from_run_id"
+        )
+    resumed_from = rec["resumed_from_run_id"]
     if resumed_from is not None and type(resumed_from) is not str:
         raise PreflightErrorV2(
             f"canonical: manifest at {path} has invalid resumed_from_run_id"
