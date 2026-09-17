@@ -137,6 +137,16 @@ class PreflightReportV2:
     max_tokens: int | None = None
     temperature: float | None = None
     cache_format_version: str | None = None
+    system_prompt_sha256: str
+    alignment_algorithm_version: str
+    alignment_algorithm_sha256: str
+    pipeline_version: str
+    schema_version: int
+    provider_name: str
+    provider_model: str
+    max_tokens: int
+    temperature: float
+    cache_format_version: str
 
 
 def _file_sha256(path: Path) -> str:
@@ -202,7 +212,7 @@ def _preflight_v2(
 
     prompt_artifacts = prompts_module.verify_prompt_artifacts_v2(prompts_dir)
 
-    system_prompt = _render_system_v2()
+    system_prompt = _render_system_v2() if require_pipeline_version else None
     align_path = Path(__file__).resolve().parent / "align.py"
 
     report = PreflightReportV2(
@@ -216,16 +226,20 @@ def _preflight_v2(
         prompt_relation_sha256=prompt_artifacts[V2_RELATION_PROMPT_FILENAME]["sha256"],
         prompt_relation_filename=V2_RELATION_PROMPT_FILENAME,
         system_prompt=system_prompt,
-        system_prompt_sha256=hashlib.sha256(system_prompt.encode("utf-8")).hexdigest(),
-        alignment_algorithm_version=align_module.ALIGNMENT_ALGORITHM_VERSION,
-        alignment_algorithm_sha256=hashlib.sha256(align_path.read_bytes()).hexdigest(),
+        system_prompt_sha256=(hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()
+                              if system_prompt is not None else None),
+        alignment_algorithm_version=(align_module.ALIGNMENT_ALGORITHM_VERSION
+                                     if require_pipeline_version else None),
+        alignment_algorithm_sha256=(hashlib.sha256(align_path.read_bytes()).hexdigest()
+                                    if require_pipeline_version else None),
         pipeline_version=_pipeline_version_v2() if require_pipeline_version else None,
-        schema_version=schema_module.SCHEMA_VERSION_V2,
-        provider_name=provider.name,
-        provider_model=provider.model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        cache_format_version=CACHE_FORMAT_VERSION,
+        schema_version=(schema_module.SCHEMA_VERSION_V2
+                        if require_pipeline_version else None),
+        provider_name=(provider.name if require_pipeline_version and provider else None),
+        provider_model=(provider.model if require_pipeline_version and provider else None),
+        max_tokens=max_tokens if require_pipeline_version else None,
+        temperature=temperature if require_pipeline_version else None,
+        cache_format_version=CACHE_FORMAT_VERSION if require_pipeline_version else None,
     )
     return ontology, chunks, prompt_artifacts, report
 
@@ -234,7 +248,7 @@ def _preflight_v2(
 
 
 def _utc_now_compact() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%MSSZ")
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def _pipeline_version_v2() -> str:
@@ -271,6 +285,26 @@ def _pipeline_version_v2() -> str:
     return sha
 
 
+def _run_id_fingerprint_v2_fresh(*, preflight: PreflightReportV2) -> str:
+    """Short fingerprint over the 4 always-resolved preflight fields.
+
+    The T3a fresh-run :func:`run_extraction_v2` entry resolves only
+    the disk-backed identity fields (chunks / ontology / prompt
+    templates) — it does not pin system prompt, provider, or
+    runner settings because fresh-run semantics intentionally
+    ignore them. The fingerprint keeps the T3a ``run_id`` stable
+    across the T3b refactor and does not require any optional
+    preflight field.
+    """
+    parts = [
+        preflight.chunks_sha256,
+        preflight.ontology_sha256,
+        preflight.prompt_entity_sha256,
+        preflight.prompt_relation_sha256,
+    ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
 def _run_id_fingerprint_v2(*, preflight: PreflightReportV2) -> str:
     """Short fingerprint over the 11 resume-identity dimensions (#55).
 
@@ -278,6 +312,11 @@ def _run_id_fingerprint_v2(*, preflight: PreflightReportV2) -> str:
     pipeline that runs against a freshly-checked-out commit must
     produce a resume-compatible ``run_id`` so the operator can
     resume after ``git pull`` without losing the carry-forward.
+
+    The canonical v2 preflight resolves every one of these fields;
+    a missing value here means the caller asked for the canonical
+    fingerprint without first calling the canonical preflight, and
+    the runner surfaces that as a programmer error.
     """
     parts = [
         str(preflight.schema_version),
@@ -293,7 +332,21 @@ def _run_id_fingerprint_v2(*, preflight: PreflightReportV2) -> str:
         preflight.alignment_algorithm_version,
         preflight.alignment_algorithm_sha256,
     ]
+    if any(p is None for p in parts):
+        raise PreflightErrorV2(
+            "canonical: preflight did not resolve every resume-identity "
+            "field; run_extraction_v2_canonical requires the canonical "
+            "preflight (require_pipeline_version=True)."
+        )
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _make_run_id_v2_fresh(*, preflight: PreflightReportV2) -> str:
+    return (
+        _utc_now_compact()
+        + "-"
+        + _run_id_fingerprint_v2_fresh(preflight=preflight)
+    )
 
 
 def _make_run_id_v2(*, preflight: PreflightReportV2) -> str:
@@ -871,23 +924,21 @@ def preflight_v2(
     chunks_path: Path,
     ontology_path: Path,
     prompts_dir: Path = prompts_module.PROMPTS_DIR,
-    provider: LLMProvider,
-    max_tokens: int = 2048,
-    temperature: float = 0.0,
 ) -> PreflightReportV2:
     """Load ontology + chunks + v2 prompt artifacts; fail closed.
 
-    Returns a :class:`PreflightReportV2`. Used by callers that want
-    to fail early on missing artifacts before invoking
-    :func:`run_extraction_v2` or :func:`run_extraction_v2_canonical`.
+    Standalone preflight helper — the resume-identity fields
+    (``provider``, ``max_tokens``, ``temperature``) are intentionally
+    not part of the standalone surface; the canonical
+    :func:`run_extraction_v2_canonical` entry passes its
+    ``provider`` / settings through the internal helper. Returns a
+    :class:`PreflightReportV2` whose identity-only fields are
+    resolved here and whose runner-only fields stay ``None``.
     """
     _, _, _, report = _preflight_v2(
         chunks_path=chunks_path,
         ontology_path=ontology_path,
         prompts_dir=prompts_dir,
-        provider=provider,
-        max_tokens=max_tokens,
-        temperature=temperature,
     )
     return report
 
@@ -929,7 +980,7 @@ def run_extraction_v2(
     entity_artifact = prompt_artifacts[V2_ENTITY_PROMPT_FILENAME]
     relation_artifact = prompt_artifacts[V2_RELATION_PROMPT_FILENAME]
 
-    run_id = _make_run_id_v2(preflight=report)
+    run_id = _make_run_id_v2_fresh(preflight=report)
     mentions_by_chunk: dict = {}
     assertions_by_chunk: dict = {}
     statuses_by_chunk: dict = {}
@@ -1278,49 +1329,101 @@ def _read_existing_v2_records(path: Path) -> tuple[list, list, dict]:
 
 
 def _read_existing_v2_rejects(path: Path) -> list:
-    """Load strictly versioned canonical reject records."""
+    """Load and strictly validate committed canonical reject JSONL."""
     rejects: list = []
     if not path.is_file():
         return rejects
-    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if not raw.strip():
+    for lineno, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not raw_line.strip():
             continue
         try:
-            rec = json.loads(raw)
+            rec = json.loads(raw_line)
         except json.JSONDecodeError as exc:
             raise PreflightErrorV2(f"canonical: malformed rejects JSONL at {path}:{lineno}: {exc}") from exc
         if not isinstance(rec, dict):
             raise PreflightErrorV2(f"canonical: reject at {path}:{lineno} is not an object")
         sv = rec.get("schema_version")
         if type(sv) is not int or sv != schema_module.SCHEMA_VERSION_V2:
-            raise PreflightErrorV2(f"canonical: reject at {path}:{lineno} has invalid schema_version={sv!r}")
+            raise PreflightErrorV2(
+                f"canonical: reject at {path}:{lineno} has schema_version={sv!r}; "
+                f"expected SCHEMA_VERSION_V2={schema_module.SCHEMA_VERSION_V2}"
+            )
         rejects.append(rec)
     return rejects
 
 
 def _canonical_reject_records(rejects: list) -> Iterable[dict]:
+    """Add the canonical schema discriminator without changing T3a rejects."""
     for reject in rejects:
         yield {"schema_version": schema_module.SCHEMA_VERSION_V2, **reject}
 
-
 def _read_existing_v2_manifest(path: Path) -> dict | None:
-    """Load a closed, structurally valid canonical manifest."""
-    if not path.is_file(): return None
-    try: rec = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc: raise PreflightErrorV2(f"canonical: manifest at {path} is not valid JSON: {exc}") from exc
-    if not isinstance(rec, dict): raise PreflightErrorV2(f"canonical: manifest at {path} is not a JSON object")
-    keys = {"schema_version","run_id","resumed_from_run_id","chunks_sha256","ontology_sha256","prompt_template_sha256","system_prompt_sha256","provider","model","max_tokens","temperature","alignment_algorithm_version","alignment_algorithm_sha256","ontology_version","prompt_template_files","chunks_path","ontology_path","pipeline_version","cache_format_version","wall_clock_started_at","wall_clock_ended_at","cumulative_tokens","cumulative_cost_usd","reject_count","chunk_count_total","chunk_count_complete"}
-    if set(rec) != keys: raise PreflightErrorV2(f"canonical: manifest at {path} must have exactly required keys")
-    ints=("schema_version","ontology_version","max_tokens","cumulative_tokens","reject_count","chunk_count_total","chunk_count_complete")
-    strings=("run_id","chunks_sha256","ontology_sha256","system_prompt_sha256","provider","model","alignment_algorithm_version","alignment_algorithm_sha256","chunks_path","ontology_path","pipeline_version","cache_format_version","wall_clock_started_at","wall_clock_ended_at")
-    if type(rec["schema_version"]) is not int or rec["schema_version"] != schema_module.SCHEMA_VERSION_V2: raise PreflightErrorV2("canonical: manifest has invalid schema_version")
-    if any(type(rec[x]) is not int for x in ints) or any(type(rec[x]) is not str for x in strings): raise PreflightErrorV2("canonical: manifest has invalid scalar types")
-    if rec["resumed_from_run_id"] is not None and type(rec["resumed_from_run_id"]) is not str: raise PreflightErrorV2("canonical: manifest has invalid resumed_from_run_id")
-    if type(rec["temperature"]) is not float or type(rec["cumulative_cost_usd"]) is not float: raise PreflightErrorV2("canonical: manifest has invalid float types")
-    for key in ("prompt_template_sha256","prompt_template_files"):
-        if type(rec[key]) is not list or len(rec[key]) != 2 or any(type(x) is not str for x in rec[key]): raise PreflightErrorV2(f"canonical: manifest has invalid {key}")
-    return rec
+    """Load a structurally closed canonical manifest.
 
+    Hard-fails on: malformed JSON, non-object, schema_version
+    mismatch, unknown extra keys. The remaining resume-identity
+    fields (#2-#11 per #55) are NOT type-validated here — a missing
+    field, wrong container/type, or differing value is a semantic
+    identity mismatch that :func:`_identity_matches_v2` classifies
+    as "fresh, no error" rather than a structural corruption.
+    Audit-only structural fields (``cumulative_tokens`` /
+    ``cumulative_cost_usd`` / ``wall_clock_*``) remain strict so a
+    corrupt commit cannot silently seed wrong usage or wall-clock
+    bookkeeping.
+    """
+    if not path.is_file():
+        return None
+    try:
+        rec = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise PreflightErrorV2(f"canonical: manifest at {path} is not valid JSON: {exc}") from exc
+    if not isinstance(rec, dict):
+        raise PreflightErrorV2(f"canonical: manifest at {path} is not a JSON object")
+    known_keys = {
+        "schema_version", "run_id", "resumed_from_run_id", "chunks_sha256", "ontology_sha256",
+        "prompt_template_sha256", "system_prompt_sha256", "provider", "model", "max_tokens",
+        "temperature", "alignment_algorithm_version", "alignment_algorithm_sha256", "ontology_version",
+        "prompt_template_files", "chunks_path", "ontology_path", "pipeline_version", "cache_format_version",
+        "wall_clock_started_at", "wall_clock_ended_at", "cumulative_tokens", "cumulative_cost_usd",
+        "reject_count", "chunk_count_total", "chunk_count_complete",
+    }
+    # Unknown extra keys are a structural corruption — reject
+    # silently-foreign commits. Missing keys are an identity
+    # mismatch (handled by _identity_matches_v2), not a structural
+    # corruption — they must not hard-fail here.
+    extra = set(rec) - known_keys
+    if extra:
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} has unknown extra keys: "
+            f"{sorted(extra)}"
+        )
+    if "schema_version" not in rec:
+        raise PreflightErrorV2(f"canonical: manifest at {path} missing schema_version")
+    if type(rec["schema_version"]) is not int or rec["schema_version"] != schema_module.SCHEMA_VERSION_V2:
+        raise PreflightErrorV2(f"canonical: manifest at {path} has invalid schema_version")
+    # Audit-only structural fields stay strict — wrong types here
+    # are a corrupt commit (e.g. cumulative_tokens cast to string)
+    # rather than an identity mismatch.
+    audit_ints = (
+        "ontology_version", "cumulative_tokens", "reject_count",
+        "chunk_count_total", "chunk_count_complete",
+    )
+    if any(type(rec[key]) is not int for key in audit_ints):
+        raise PreflightErrorV2(f"canonical: manifest at {path} has invalid audit int field types")
+    audit_strings = (
+        "run_id", "chunks_path", "ontology_path", "pipeline_version",
+        "cache_format_version", "wall_clock_started_at", "wall_clock_ended_at",
+    )
+    if any(type(rec[key]) is not str for key in audit_strings):
+        raise PreflightErrorV2(f"canonical: manifest at {path} has invalid audit string field types")
+    if rec["resumed_from_run_id"] is not None and type(rec["resumed_from_run_id"]) is not str:
+        raise PreflightErrorV2(f"canonical: manifest at {path} has invalid resumed_from_run_id")
+    if type(rec["cumulative_cost_usd"]) is not float:
+        raise PreflightErrorV2(f"canonical: manifest at {path} has invalid cumulative_cost_usd type")
+    # Resume-identity fields (#2-#11): no type/value check here.
+    # Anything wrong here is an identity mismatch handled by
+    # _identity_matches_v2 below (returns False -> fresh run).
+    return rec
 
 def _identity_matches_v2(
     *,
@@ -1365,7 +1468,7 @@ def _identity_matches_v2(
         preflight.prompt_relation_sha256,
     ]
     if (type(prev_prompts) is not list or len(prev_prompts) != 2
-            or any(type(x) is not str for x in prev_prompts)
+            or any(type(value) is not str for value in prev_prompts)
             or prev_prompts != cur_prompts):
         return False
     return True
@@ -1400,125 +1503,65 @@ def _carry_forward_for_chunk(
     Failure on any condition returns ``False``; the caller
     silently narrows the resume for that chunk only.
     """
-    from src.extract import ids as ids_module_inner
-
     chunk_id = chunk["chunk_id"]
     doc_id = chunk["doc_id"]
     text = chunk["text"]
     chunk_sha = validation_module.source_text_sha256(text)
-
-    if not isinstance(status, dict):
+    if (not isinstance(status, dict) or status.get("kind") != "chunk_status"
+            or type(status.get("schema_version")) is not int
+            or status.get("schema_version") != schema_module.SCHEMA_VERSION_V2
+            or status.get("doc_id") != doc_id or status.get("chunk_id") != chunk_id
+            or status.get("extraction_complete") is not True):
         return False
-    if status.get("kind") != "chunk_status":
+    phases = status.get("phases")
+    if not isinstance(phases, dict): return False
+    ent, rel = phases.get("entity"), phases.get("relation")
+    if not isinstance(ent, dict) or not isinstance(rel, dict): return False
+    if (ent.get("status") != "validated" or rel.get("status") != "validated"
+            or ent.get("failure_count") != 0 or rel.get("failure_count") != 0
+            or ent.get("mention_count") != len(mentions) or rel.get("assertion_count") != len(assertions)):
         return False
-    if status.get("schema_version") != schema_module.SCHEMA_VERSION_V2:
-        return False
-    if status.get("doc_id") != doc_id:
-        return False
-    if status.get("chunk_id") != chunk_id:
-        return False
-    if status.get("extraction_complete") is not True:
-        return False
-    phases = status.get("phases") or {}
-    ent = phases.get("entity") or {}
-    rel = phases.get("relation") or {}
-    if ent.get("status") != "validated" or ent.get("failure_count", 0) != 0:
-        return False
-    if rel.get("status") != "validated" or rel.get("failure_count", 0) != 0:
-        return False
-    if ent.get("mention_count", -1) != len(mentions):
-        return False
-    if rel.get("assertion_count", -1) != len(assertions):
-        return False
-
-    mention_index = {m["mention_id"]: m for m in mentions}
-    entity_types = {m.get("mention_id"): m.get("entity_type") for m in mentions}
-
-    for m in mentions:
-        if m.get("schema_version") != schema_module.SCHEMA_VERSION_V2:
-            return False
-        if m.get("kind") != "mention":
-            return False
-        if m.get("chunk_id") != chunk_id:
-            return False
-        if m.get("doc_id") != doc_id:
-            return False
-        ev = m.get("evidence") or {}
+    mention_index: dict[str, dict] = {}
+    entity_types: dict[str, str] = {}
+    for mention in mentions:
         try:
-            if ids_module_inner.rederive_v2_mention_id(m) != m["mention_id"]:
-                return False
-            cs = int(ev["char_start"])
-            ce = int(ev["char_end"])
-            if not (0 <= cs < ce <= len(text)):
-                return False
-            validation_module.check_mention_evidence_v2(mention=m, chunk_text=text, expected_source_text_sha256=chunk_sha)
-            validation_module.check_mention_ontology(mention=m, ontology=ontology)
-        except (KeyError, TypeError, ValueError, validation_module.EvidenceError, validation_module.OntologyError):
-            return False
-
-    for a in assertions:
-        if a.get("schema_version") != schema_module.SCHEMA_VERSION_V2:
-            return False
-        if a.get("kind") != "assertion":
-            return False
-        if a.get("chunk_id") != chunk_id:
-            return False
-        if a.get("doc_id") != doc_id:
-            return False
-        ev = a.get("evidence") or {}
+            if (not isinstance(mention, dict) or mention.get("kind") != "mention"
+                    or type(mention.get("schema_version")) is not int
+                    or mention.get("schema_version") != schema_module.SCHEMA_VERSION_V2
+                    or mention.get("chunk_id") != chunk_id or mention.get("doc_id") != doc_id
+                    or ids_module.rederive_v2_mention_id(mention) != mention["mention_id"]): return False
+            validation_module.check_mention_evidence_v2(mention=mention, chunk_text=text, expected_source_text_sha256=chunk_sha)
+            validation_module.check_mention_ontology(mention=mention, ontology=ontology)
+            mention_index[mention["mention_id"]] = mention
+            entity_types[mention["mention_id"]] = mention["entity_type"]
+        except (KeyError, TypeError, ValueError, validation_module.EvidenceError, validation_module.OntologyError): return False
+    for assertion in assertions:
         try:
-            if ids_module_inner.rederive_v2_assertion_id(a) != a["assertion_id"]:
-                return False
-            acs = int(ev["char_start"])
-            ace = int(ev["char_end"])
-            if not (0 <= acs < ace <= len(text)):
-                return False
-            validation_module.check_assertion_evidence_v2(assertion=a, chunk_text=text, expected_source_text_sha256=chunk_sha)
-            validation_module.check_assertion_ontology(assertion=a, ontology=ontology, doc_id=doc_id, same_chunk_mentions=mention_index, entity_type_for_mention=entity_types)
-        except (KeyError, TypeError, ValueError, validation_module.EvidenceError, validation_module.OntologyError):
-            return False
-        for label, ref in (
-            ("subject_ref", a.get("subject_ref")),
-            ("object_ref", a.get("object_ref")),
-        ):
-            if not isinstance(ref, dict):
-                return False
-            kind = ref.get("kind")
-            ref_id = ref.get("id")
-            if kind == "mention":
-                if not isinstance(ref_id, str):
-                    return False
-                # #49 ENDPOINT_NOT_CONTAINED: defer the
-                # containment check to the aligner helper
-                # rather than recompute it locally.
-                target = mention_index.get(ref_id)
-                if target is None:
-                    return False
-                mention_spans = {mid: (m["evidence"]["char_start"], m["evidence"]["char_end"]) for mid, m in mention_index.items()}
-                if not align_module._endpoint_span_contained(
-                    relation_start=acs,
-                    relation_end=ace,
-                    endpoint=ref,
-                    aligned_mentions_by_id=mention_spans,
-                ):
-                    return False
-            elif kind == "document":
-                if ref_id != doc_id:
-                    return False
-            else:
-                return False
+            if (not isinstance(assertion, dict) or assertion.get("kind") != "assertion"
+                    or type(assertion.get("schema_version")) is not int
+                    or assertion.get("schema_version") != schema_module.SCHEMA_VERSION_V2
+                    or assertion.get("chunk_id") != chunk_id or assertion.get("doc_id") != doc_id
+                    or ids_module.rederive_v2_assertion_id(assertion) != assertion["assertion_id"]): return False
+            validation_module.check_assertion_evidence_v2(assertion=assertion, chunk_text=text, expected_source_text_sha256=chunk_sha)
+            validation_module.check_assertion_ontology(assertion=assertion, ontology=ontology, doc_id=doc_id, same_chunk_mentions=mention_index, entity_type_for_mention=entity_types)
+            span = assertion["evidence"]
+            for ref in (assertion["subject_ref"], assertion["object_ref"]):
+                if ref["kind"] == "mention":
+                    endpoint = mention_index[ref["id"]]["evidence"]
+                    if not (span["char_start"] <= endpoint["char_start"] and endpoint["char_end"] <= span["char_end"]): return False
+                elif ref["kind"] == "document" and ref["id"] != doc_id: return False
+        except (KeyError, TypeError, ValueError, validation_module.EvidenceError, validation_module.OntologyError): return False
     return True
-
 
 def run_extraction_v2_canonical(
     *,
     provider: LLMProvider,
-    chunks_path: Path = DEFAULT_CHUNKS_PATH,
-    ontology_path: Path = DEFAULT_ONTOLOGY_PATH,
-    prompts_dir: Path = prompts_module.PROMPTS_DIR,
     output_jsonl: Path = DEFAULT_OUTPUT_V2_JSONL,
     output_rejects: Path = DEFAULT_OUTPUT_V2_REJECTS,
     output_manifest: Path = DEFAULT_OUTPUT_V2_MANIFEST,
+    chunks_path: Path = DEFAULT_CHUNKS_PATH,
+    ontology_path: Path = DEFAULT_ONTOLOGY_PATH,
+    prompts_dir: Path = prompts_module.PROMPTS_DIR,
     max_tokens: int = 2048,
     temperature: float = 0.0,
 ) -> RunResultV2Canonical:
@@ -1752,7 +1795,6 @@ def run_extraction_v2_canonical(
         manifest = ManifestV2(
             schema_version=report.schema_version,
             run_id=run_id,
-            pipeline_version=report.pipeline_version,
             resumed_from_run_id=resumed_from,
             chunks_sha256=report.chunks_sha256,
             ontology_sha256=report.ontology_sha256,
@@ -1774,6 +1816,7 @@ def run_extraction_v2_canonical(
             ),
             chunks_path=str(report.chunks_path),
             ontology_path=str(report.ontology_path),
+            pipeline_version=report.pipeline_version,
             cache_format_version=report.cache_format_version,
             wall_clock_started_at=started_at,
             wall_clock_ended_at=ended_at,
@@ -1835,7 +1878,6 @@ def run_extraction_v2_canonical(
         manifest = ManifestV2(
             schema_version=report.schema_version,
             run_id=run_id,
-            pipeline_version=report.pipeline_version,
             resumed_from_run_id=resumed_from,
             chunks_sha256=report.chunks_sha256,
             ontology_sha256=report.ontology_sha256,
@@ -1857,6 +1899,7 @@ def run_extraction_v2_canonical(
             ),
             chunks_path=str(report.chunks_path),
             ontology_path=str(report.ontology_path),
+            pipeline_version=report.pipeline_version,
             cache_format_version=report.cache_format_version,
             wall_clock_started_at=started_at,
             wall_clock_ended_at=ended_at,
