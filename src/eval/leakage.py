@@ -248,6 +248,8 @@ def load_frozen_exclusions(
         raise LeakageError(f"malformed leakage artifact {leakage_path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise LeakageError("leakage artifact must be a JSON object")
+    if raw != _serialize(payload):
+        raise LeakageError("leakage artifact is not in canonical serialized form")
     if set(payload) != _REQUIRED_KEYS:
         missing = sorted(_REQUIRED_KEYS - set(payload))
         extra = sorted(set(payload) - _REQUIRED_KEYS)
