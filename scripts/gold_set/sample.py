@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from src.eval.leakage import DEFAULT_ONTOLOGY_PATH, LeakageError, load_frozen_exclusions
 
 GOLD_SET_SEED = 0x9E3779B1
@@ -444,13 +448,12 @@ def run_sample(
 
 
 def _default_paths() -> dict[str, Path]:
-    root = Path(__file__).resolve().parents[2]
     return {
-        "chunks": root / "data" / "derived" / "chunks.jsonl",
-        "manifest": root / "data" / "manifest.jsonl",
-        "leakage": root / "eval" / "held_out_leakage.v1.json",
-        "ontology": root / "ontology.yaml",
-        "output": root / "data" / "gold_set" / "sample.v1.jsonl",
+        "chunks": ROOT / "data" / "derived" / "chunks.jsonl",
+        "manifest": ROOT / "data" / "manifest.jsonl",
+        "leakage": ROOT / "eval" / "held_out_leakage.v1.json",
+        "ontology": ROOT / "ontology.yaml",
+        "output": ROOT / "data" / "gold_set" / "sample.v1.jsonl",
     }
 
 
