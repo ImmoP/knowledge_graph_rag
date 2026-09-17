@@ -248,8 +248,6 @@ def load_frozen_exclusions(
         raise LeakageError(f"malformed leakage artifact {leakage_path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise LeakageError("leakage artifact must be a JSON object")
-    if raw != _serialize(payload):
-        raise LeakageError("leakage artifact is not in canonical serialized form")
     if set(payload) != _REQUIRED_KEYS:
         missing = sorted(_REQUIRED_KEYS - set(payload))
         extra = sorted(set(payload) - _REQUIRED_KEYS)
@@ -320,6 +318,8 @@ def load_frozen_exclusions(
         raise LeakageError(
             "leakage artifact excluded_chunk_ids must equal union(question_chunk_map)"
         )
+    if raw != _serialize(payload):
+        raise LeakageError("leakage artifact is not in canonical serialized form")
     return set(excluded)
 
 
