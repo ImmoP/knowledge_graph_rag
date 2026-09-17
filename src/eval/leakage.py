@@ -78,6 +78,19 @@ def _parse_jsonl_bytes(data: bytes, label: str) -> list[dict[str, Any]]:
     return records
 
 
+def _chunk_ids_from_bytes(data: bytes) -> set[str]:
+    records = _parse_jsonl_bytes(data, "chunks")
+    chunk_ids: set[str] = set()
+    for index, record in enumerate(records, 1):
+        value = record.get("chunk_id")
+        if not isinstance(value, str) or not _CHUNK_ID_RE.fullmatch(value):
+            raise LeakageError(f"chunks record {index}: invalid chunk_id {value!r}")
+        if value in chunk_ids:
+            raise LeakageError(f"chunks record {index}: duplicate chunk_id {value}")
+        chunk_ids.add(value)
+    return chunk_ids
+
+
 def _question_chunk_map(records: Sequence[dict[str, Any]]) -> dict[str, list[str]]:
     mapping: dict[str, list[str]] = {}
     for record in records:
@@ -195,15 +208,21 @@ def freeze_leakage(
         )
 
     records = _parse_jsonl_bytes(initial["draft"], "draft")
-    candidate = _serialize(
-        _payload(
-            initial["draft"],
-            initial["chunks"],
-            initial["manifest"],
-            initial["ontology"],
-            records,
-        )
+    payload = _payload(
+        initial["draft"],
+        initial["chunks"],
+        initial["manifest"],
+        initial["ontology"],
+        records,
     )
+    missing = sorted(
+        set(payload["excluded_chunk_ids"]) - _chunk_ids_from_bytes(initial["chunks"])
+    )
+    if missing:
+        raise LeakageError(
+            f"draft evidence/support references unknown chunks: {missing[:5]}"
+        )
+    candidate = _serialize(payload)
     return _publish(output_path, candidate)
 
 
