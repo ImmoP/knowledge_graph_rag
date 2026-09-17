@@ -690,5 +690,39 @@ class TestCliDispatch(unittest.TestCase):
         self.assertNotIn("unknown argument", proc.stdout + proc.stderr)
 
 
+
+class TestCanonicalFunctionContract(unittest.TestCase):
+    """Public signature contract (#55)."""
+
+    def test_run_extraction_v2_canonical_parameter_order(self) -> None:
+        """The canonical keyword-only argument order is pinned by #55.
+
+        Any drift here would silently break CLI contract consumers
+        that pass values positionally by name or rely on argument
+        ordinal for documentation/tracing.
+        """
+        import inspect
+        sig = inspect.signature(pipeline_v2.run_extraction_v2_canonical)
+        self.assertEqual(
+            list(sig.parameters),
+            [
+                "provider",
+                "chunks_path",
+                "ontology_path",
+                "prompts_dir",
+                "output_jsonl",
+                "output_rejects",
+                "output_manifest",
+                "max_tokens",
+                "temperature",
+            ],
+        )
+        for name, param in sig.parameters.items():
+            self.assertEqual(
+                param.kind,
+                inspect.Parameter.KEYWORD_ONLY,
+                f"{name} must be keyword-only",
+            )
+
 if __name__ == "__main__":
     unittest.main()

@@ -1488,14 +1488,19 @@ def _carry_forward_for_chunk(
             if kind == "mention":
                 if not isinstance(ref_id, str):
                     return False
+                # #49 ENDPOINT_NOT_CONTAINED: defer the
+                # containment check to the aligner helper
+                # rather than recompute it locally.
                 target = mention_index.get(ref_id)
                 if target is None:
                     return False
-                tcs = int(target["evidence"]["char_start"])
-                tce = int(target["evidence"]["char_end"])
-                # #49 ENDPOINT_NOT_CONTAINED: endpoint span must
-                # lie fully inside the assertion's evidence span.
-                if not (acs <= tcs and tce <= ace):
+                mention_spans = {mid: (m["evidence"]["char_start"], m["evidence"]["char_end"]) for mid, m in mention_index.items()}
+                if not align_module._endpoint_span_contained(
+                    relation_start=acs,
+                    relation_end=ace,
+                    endpoint=ref,
+                    aligned_mentions_by_id=mention_spans,
+                ):
                     return False
             elif kind == "document":
                 if ref_id != doc_id:
@@ -1508,12 +1513,12 @@ def _carry_forward_for_chunk(
 def run_extraction_v2_canonical(
     *,
     provider: LLMProvider,
-    output_jsonl: Path = DEFAULT_OUTPUT_V2_JSONL,
-    output_rejects: Path = DEFAULT_OUTPUT_V2_REJECTS,
-    output_manifest: Path = DEFAULT_OUTPUT_V2_MANIFEST,
     chunks_path: Path = DEFAULT_CHUNKS_PATH,
     ontology_path: Path = DEFAULT_ONTOLOGY_PATH,
     prompts_dir: Path = prompts_module.PROMPTS_DIR,
+    output_jsonl: Path = DEFAULT_OUTPUT_V2_JSONL,
+    output_rejects: Path = DEFAULT_OUTPUT_V2_REJECTS,
+    output_manifest: Path = DEFAULT_OUTPUT_V2_MANIFEST,
     max_tokens: int = 2048,
     temperature: float = 0.0,
 ) -> RunResultV2Canonical:
