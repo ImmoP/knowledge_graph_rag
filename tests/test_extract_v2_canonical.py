@@ -178,6 +178,38 @@ def _dpr_relation_payload(chunk_id, doc_id, mention_mid):
     }]}
 
 
+def _seed_canonical_run(world, outs, *, scripts=None):
+    """Produce a valid prior canonical artifact set.
+
+    Returns ``(llm, result, mention_id)`` so callers can assert on the
+    provider calls the seeding run consumed.
+    """
+    from src.extract.ids import mention_id_v2
+
+    text = _dpr_text()
+    mention_mid = mention_id_v2(
+        chunk_id="c_000",
+        source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        entity_type="method",
+        char_start=text.index("DPR"),
+        char_end=text.index("DPR") + 3,
+    )
+    llm = _RecordingLLM(scripts=scripts or [
+        _dpr_entity_payload(),
+        _dpr_relation_payload("c_000", "W1", mention_mid),
+    ])
+    result = pipeline_v2.run_extraction_v2_canonical(
+        provider=llm,
+        chunks_path=world["chunks"],
+        ontology_path=world["ontology"],
+        prompts_dir=world["prompts"],
+        output_jsonl=outs["jsonl"],
+        output_rejects=outs["rejects"],
+        output_manifest=outs["manifest"],
+    )
+    return llm, result, mention_mid
+
+
 class _RecordingLLM(LLMProvider):
     """Scripted LLM that records every system-prompt SHA it sees."""
 
@@ -435,14 +467,32 @@ class TestCarryForwardSilentNarrowing(unittest.TestCase):
         ]), mention_mid
 
     def _rerun_assert_no_hardfail_and_recomputed(self, world, outs):
-        # Use a deterministic LLM that emits clean records.
-        fresh_llm, _ = self._clean_llm_for_rerun()
+        """The corrupted chunk must actually be re-run, not carried.
+
+        A carried record would satisfy ``extraction_complete`` too, so
+        the load-bearing assertion is that the provider was called for
+        the invalidated chunk (one fixture chunk = 2 JSON calls: entity
+        + relation) and that the resulting records are valid again.
+        """
+        fresh_llm, mention_mid = self._clean_llm_for_rerun()
         result = self._rerun(world, outs, fresh_llm)
         self.assertEqual(result.exit_code, 0)
+        self.assertEqual(
+            len(fresh_llm.system_calls), 2,
+            "invalidated chunk must be re-run through both provider phases",
+        )
         records = _read_jsonl(outs["jsonl"])
         statuses = [r for r in records if r["kind"] == "chunk_status"]
         self.assertEqual(len(statuses), 1)
         self.assertTrue(statuses[0]["extraction_complete"])
+        mentions = [r for r in records if r["kind"] == "mention"]
+        assertions = [r for r in records if r["kind"] == "assertion"]
+        self.assertEqual([m["mention_id"] for m in mentions], [mention_mid])
+        self.assertEqual(len(assertions), 1)
+        self.assertEqual(
+            assertions[0]["object_ref"], {"kind": "mention", "id": mention_mid},
+        )
+        self.assertEqual(assertions[0]["evidence_quote"], "DPR for retrieval")
 
     def test_mention_id_mismatch_narrows(self):
         with tempfile.TemporaryDirectory() as td:
@@ -499,7 +549,10 @@ class TestCarryForwardSilentNarrowing(unittest.TestCase):
             def mutate(recs):
                 for r in recs:
                     if r["kind"] == "assertion":
-                        r["evidence"]["quote"] = "definitely-not-in-chunk"
+                        # ``evidence_quote`` is the persisted top-level
+                        # field and is NOT part of the assertion ID, so
+                        # the failure lands on the evidence gate.
+                        r["evidence_quote"] = "definitely-not-in-chunk"
                         return
             self._rewrite_jsonl(outs, mutate=mutate)
             self._rerun_assert_no_hardfail_and_recomputed(world, outs)
@@ -514,7 +567,7 @@ class TestCarryForwardSilentNarrowing(unittest.TestCase):
             def mutate(recs):
                 for r in recs:
                     if r["kind"] == "mention":
-                        r["source_text_sha256"] = "0" * 64
+                        r["evidence"]["source_text_sha256"] = "0" * 64
                         return
             self._rewrite_jsonl(outs, mutate=mutate)
             self._rerun_assert_no_hardfail_and_recomputed(world, outs)
@@ -571,13 +624,32 @@ class TestCarryForwardSilentNarrowing(unittest.TestCase):
             world = self._world(root)
             outs = _canonical_outputs(root)
             self._initial_run(world, outs)
+            from src.extract.ids import assertion_id_v2
+            text = _dpr_text()
+            quote = "we also use BERT for ranking."
+            start = text.index(quote)
+            end = start + len(quote)
+            chunk_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
 
             def mutate(recs):
                 for r in recs:
                     if r["kind"] == "assertion":
-                        r["evidence"]["char_start"] = 50
-                        r["evidence"]["char_end"] = 60
-                        r["evidence"]["quote"] = _dpr_text()[50:60]
+                        # Evidence stays byte-exact, but the span no
+                        # longer contains the referenced mention span
+                        # (#49 ENDPOINT_NOT_CONTAINED). The ID is
+                        # rederived so the ID gate still passes.
+                        r["evidence"]["char_start"] = start
+                        r["evidence"]["char_end"] = end
+                        r["evidence_quote"] = quote
+                        r["assertion_id"] = assertion_id_v2(
+                            chunk_id=r["chunk_id"],
+                            source_text_sha256=chunk_sha,
+                            relation_type=r["relation_type"],
+                            subject_ref=r["subject_ref"],
+                            object_ref=r["object_ref"],
+                            char_start=start,
+                            char_end=end,
+                        )
                         return
             self._rewrite_jsonl(outs, mutate=mutate)
             self._rerun_assert_no_hardfail_and_recomputed(world, outs)
@@ -763,111 +835,68 @@ class TestCLIExactDispatch(unittest.TestCase):
 
 class TestCrashOrdering(unittest.TestCase):
 
-    def test_post_unlink_provider_crash_leaves_no_manifest(self):
-        """If the LLM raises after manifest unlink but before final
-        manifest write, the manifest must be ABSENT (so the next
-        invocation classifies as fresh, not corrupt)."""
+    def test_crash_during_first_artifact_rewrite_leaves_no_manifest(self):
+        """Provider calls precede the commit phase, so a provider
+        exception cannot simulate a crash after the manifest unlink.
+        Fail the FIRST artifact rewrite that follows
+        ``_invalidate_prior_manifest`` instead."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             world = _write_world(root)
             outs = _canonical_outputs(root)
-            llm = _FailingAfterFirstLLM()
-            with self.assertRaises(RuntimeError):
-                pipeline_v2.run_extraction_v2_canonical(
-                    provider=llm,
-                    chunks_path=world["chunks"],
-                    ontology_path=world["ontology"],
-                    prompts_dir=world["prompts"],
-                    output_jsonl=outs["jsonl"],
-                    output_rejects=outs["rejects"],
-                    output_manifest=outs["manifest"],
-                )
+            _seed_canonical_run(world, outs)
+            self.assertTrue(outs["manifest"].is_file())
+            # Invalidate the carried chunk so the next run does work.
+            records = _read_jsonl(outs["jsonl"])
+            for rec in records:
+                if rec["kind"] == "chunk_status":
+                    rec["extraction_complete"] = False
+            outs["jsonl"].write_text(
+                "\n".join(json.dumps(r) for r in records) + "\n",
+            )
+
+            def boom(path, lines):
+                raise OSError("simulated crash after manifest unlink")
+
+            original = pipeline_v2._atomic_rewrite_jsonl
+            pipeline_v2._atomic_rewrite_jsonl = boom
+            try:
+                with self.assertRaises(OSError):
+                    _seed_canonical_run(world, outs)
+            finally:
+                pipeline_v2._atomic_rewrite_jsonl = original
             self.assertFalse(
                 outs["manifest"].is_file(),
-                "manifest must NOT exist after a post-unlink crash",
+                "manifest must be absent after a post-unlink crash",
             )
 
-    def test_next_invocation_after_crash_is_clean_fresh_run(self):
-        """After a crash that wiped the manifest, the next invocation
-        runs cleanly from a fresh state."""
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            world = _write_world(root)
-            outs = _canonical_outputs(root)
-            llm = _FailingAfterFirstLLM()
-            with self.assertRaises(RuntimeError):
-                pipeline_v2.run_extraction_v2_canonical(
-                    provider=llm,
-                    chunks_path=world["chunks"],
-                    ontology_path=world["ontology"],
-                    prompts_dir=world["prompts"],
-                    output_jsonl=outs["jsonl"],
-                    output_rejects=outs["rejects"],
-                    output_manifest=outs["manifest"],
-                )
-            from src.extract.ids import mention_id_v2
-            text = _dpr_text()
-            mention_mid = mention_id_v2(
-                chunk_id="c_000",
-                source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                entity_type="method",
-                char_start=text.index("DPR"),
-                char_end=text.index("DPR") + 3,
-            )
-            healthy = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            result = pipeline_v2.run_extraction_v2_canonical(
-                provider=healthy,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
+            healthy, result, _ = _seed_canonical_run(world, outs)
             self.assertEqual(result.exit_code, 0)
+            self.assertIsNone(
+                result.resumed_from_run_id,
+                "no committed manifest ⇒ next run must be fresh",
+            )
+            self.assertEqual(len(healthy.system_calls), 2)
             self.assertTrue(outs["manifest"].is_file())
-            self.assertEqual(result.resumed_from_run_id, None)
 
-    def test_pre_unlink_provider_crash_preserves_old_artifact_set(self):
-        """If the LLM raises BEFORE the post-unlink commit (e.g. very
-        first call), the OLD valid manifest/jsonl/rejects must remain
-        on disk byte-for-byte — a failed new run cannot clobber a
-        known-good state."""
+    def test_pre_commit_provider_crash_preserves_old_artifact_set(self):
+        """A provider failure happens before the commit phase, so the
+        prior canonical set must survive byte-for-byte."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             world = _write_world(root)
             outs = _canonical_outputs(root)
-            from src.extract.ids import mention_id_v2
-            text = _dpr_text()
-            mention_mid = mention_id_v2(
-                chunk_id="c_000",
-                source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                entity_type="method",
-                char_start=text.index("DPR"),
-                char_end=text.index("DPR") + 3,
-            )
-            healthy = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            pipeline_v2.run_extraction_v2_canonical(
-                provider=healthy,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
+            _seed_canonical_run(world, outs)
+            # Force identity mismatch so new provider work is required.
+            manifest = json.loads(outs["manifest"].read_text())
+            manifest["chunks_sha256"] = "0" * 64
+            outs["manifest"].write_text(json.dumps(manifest))
             old_manifest_bytes = outs["manifest"].read_bytes()
             old_jsonl_bytes = outs["jsonl"].read_bytes()
             old_rejects_bytes = outs["rejects"].read_bytes()
-            old_run_id = json.loads(old_manifest_bytes)["run_id"]
+
             crashing_llm = _FailingAfterFirstLLM()
-            try:
+            with self.assertRaises(RuntimeError):
                 pipeline_v2.run_extraction_v2_canonical(
                     provider=crashing_llm,
                     chunks_path=world["chunks"],
@@ -877,122 +906,160 @@ class TestCrashOrdering(unittest.TestCase):
                     output_rejects=outs["rejects"],
                     output_manifest=outs["manifest"],
                 )
-            except RuntimeError:
-                pass
-            # If the post-unlink ran (provider raised inside the
-            # rewrite path), the manifest must be absent. If it did
-            # not, the manifest must be byte-equal to the prior run.
-            if outs["manifest"].is_file():
-                self.assertEqual(outs["manifest"].read_bytes(), old_manifest_bytes)
-                self.assertEqual(
-                    json.loads(outs["manifest"].read_bytes())["run_id"],
-                    old_run_id,
-                )
-            # The JSONL and rejects are also rewritable; either they
-            # are absent (post-unlink crashed before rewrite) or they
-            # are byte-equal to the prior run.
-            if outs["jsonl"].is_file():
-                self.assertEqual(outs["jsonl"].read_bytes(), old_jsonl_bytes)
-            if outs["rejects"].is_file():
-                self.assertEqual(outs["rejects"].read_bytes(), old_rejects_bytes)
+            self.assertEqual(crashing_llm.calls, 1)
+            self.assertEqual(outs["manifest"].read_bytes(), old_manifest_bytes)
+            self.assertEqual(outs["jsonl"].read_bytes(), old_jsonl_bytes)
+            self.assertEqual(outs["rejects"].read_bytes(), old_rejects_bytes)
 
 
 # --- F: audit-only identity fields don't block resume ---------------
 
 
 class TestAuditOnlyIdentityFields(unittest.TestCase):
+    """``ontology_version`` / ``pipeline_version`` are audit-only: a
+    difference must still resume and carry the valid chunk forward."""
 
-    def _initial_run(self, world, outs):
-        from src.extract.ids import mention_id_v2
-        text = _dpr_text()
-        mention_mid = mention_id_v2(
-            chunk_id="c_000",
-            source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-            entity_type="method",
-            char_start=text.index("DPR"),
-            char_end=text.index("DPR") + 3,
-        )
-        llm = _RecordingLLM(scripts=[
-            _dpr_entity_payload(),
-            _dpr_relation_payload("c_000", "W1", mention_mid),
-        ])
-        pipeline_v2.run_extraction_v2_canonical(
-            provider=llm,
-            chunks_path=world["chunks"],
-            ontology_path=world["ontology"],
-            prompts_dir=world["prompts"],
-            output_jsonl=outs["jsonl"],
-            output_rejects=outs["rejects"],
-            output_manifest=outs["manifest"],
-        )
+    def _assert_audit_field_resumes(self, key, value):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            outs = _canonical_outputs(root)
+            _, prior, _ = _seed_canonical_run(world, outs)
+            manifest = json.loads(outs["manifest"].read_text())
+            manifest[key] = value
+            outs["manifest"].write_text(json.dumps(manifest))
+
+            llm, result, _ = _seed_canonical_run(world, outs)
+            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.resumed_from_run_id, prior.run_id)
+            self.assertEqual(
+                len(llm.system_calls), 0,
+                f"{key} is audit-only; the valid chunk must be carried",
+            )
+            self.assertEqual(result.complete_chunk_count, 1)
 
     def test_ontology_version_differs_resume_compatible(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            world = _write_world(root)
-            outs = _canonical_outputs(root)
-            self._initial_run(world, outs)
-            manifest = json.loads(outs["manifest"].read_text())
-            manifest["ontology_version"] = 999
-            outs["manifest"].write_text(json.dumps(manifest))
-            from src.extract.ids import mention_id_v2
-            text = _dpr_text()
-            mention_mid = mention_id_v2(
-                chunk_id="c_000",
-                source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                entity_type="method",
-                char_start=text.index("DPR"),
-                char_end=text.index("DPR") + 3,
-            )
-            llm = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            result = pipeline_v2.run_extraction_v2_canonical(
-                provider=llm,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
-            self.assertEqual(result.exit_code, 0)
-            self.assertTrue(outs["manifest"].is_file())
+        self._assert_audit_field_resumes("ontology_version", 999)
 
     def test_pipeline_version_differs_resume_compatible(self):
+        self._assert_audit_field_resumes("pipeline_version", "0" * 40)
+
+
+# --- F2: semantic identity mismatch = silent fresh run --------------
+
+
+class TestIdentityMismatchNarrowsToFreshRun(unittest.TestCase):
+    """Resume-identity fields #2-#11 are semantic: a missing field,
+    wrong type, or different value means "fresh run", never an error."""
+
+    def _assert_fresh_run(self, mutate):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             world = _write_world(root)
             outs = _canonical_outputs(root)
-            self._initial_run(world, outs)
+            _seed_canonical_run(world, outs)
             manifest = json.loads(outs["manifest"].read_text())
-            manifest["pipeline_version"] = "0" * 40
+            mutate(manifest)
             outs["manifest"].write_text(json.dumps(manifest))
-            from src.extract.ids import mention_id_v2
-            text = _dpr_text()
-            mention_mid = mention_id_v2(
-                chunk_id="c_000",
-                source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                entity_type="method",
-                char_start=text.index("DPR"),
-                char_end=text.index("DPR") + 3,
-            )
-            llm = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            result = pipeline_v2.run_extraction_v2_canonical(
-                provider=llm,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
+
+            llm, result, _ = _seed_canonical_run(world, outs)
             self.assertEqual(result.exit_code, 0)
-            self.assertTrue(outs["manifest"].is_file())
+            self.assertIsNone(result.resumed_from_run_id)
+            self.assertEqual(len(llm.system_calls), 2)
+            self.assertEqual(result.complete_chunk_count, 1)
+
+    def test_missing_chunks_sha256_is_fresh(self):
+        self._assert_fresh_run(lambda m: m.pop("chunks_sha256"))
+
+    def test_bool_max_tokens_is_fresh(self):
+        self._assert_fresh_run(lambda m: m.update(max_tokens=True))
+
+    def test_int_temperature_is_fresh(self):
+        self._assert_fresh_run(lambda m: m.update(temperature=0))
+
+    def test_malformed_prompt_template_sha256_is_fresh(self):
+        self._assert_fresh_run(
+            lambda m: m.update(prompt_template_sha256={"entity": "a" * 64}),
+        )
+
+    def _assert_hard_fail(self, mutate):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            outs = _canonical_outputs(root)
+            _seed_canonical_run(world, outs)
+            manifest = json.loads(outs["manifest"].read_text())
+            mutate(manifest)
+            outs["manifest"].write_text(json.dumps(manifest))
+            with self.assertRaises(pipeline_v2.PreflightErrorV2):
+                _seed_canonical_run(world, outs)
+
+    def test_missing_schema_version_hard_fails(self):
+        self._assert_hard_fail(lambda m: m.pop("schema_version"))
+
+    def test_bool_schema_version_hard_fails(self):
+        self._assert_hard_fail(lambda m: m.update(schema_version=True))
+
+    def test_wrong_schema_version_hard_fails(self):
+        self._assert_hard_fail(lambda m: m.update(schema_version=1))
+
+
+# --- F3: manifest structural validation -----------------------------
+
+
+class TestManifestStructuralValidation(unittest.TestCase):
+    """Structural corruption hard-fails with ``PreflightErrorV2`` —
+    never a leaked ``KeyError``."""
+
+    def _assert_structural_hard_fail(self, manifest_text):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            outs = _canonical_outputs(root)
+            _seed_canonical_run(world, outs)
+            outs["manifest"].write_text(manifest_text)
+            with self.assertRaises(pipeline_v2.PreflightErrorV2):
+                _seed_canonical_run(world, outs)
+
+    def _mutated_manifest(self, mutate):
+        manifest = json.loads(_minimal_valid_manifest())
+        mutate(manifest)
+        return json.dumps(manifest)
+
+    def test_malformed_json_hard_fails(self):
+        self._assert_structural_hard_fail("{not valid json")
+
+    def test_non_object_hard_fails(self):
+        self._assert_structural_hard_fail("[]")
+
+    def test_unknown_extra_key_hard_fails(self):
+        self._assert_structural_hard_fail(
+            self._mutated_manifest(lambda m: m.update(surprise="x")),
+        )
+
+    def test_missing_audit_field_hard_fails(self):
+        self._assert_structural_hard_fail(
+            self._mutated_manifest(lambda m: m.pop("cumulative_tokens")),
+        )
+
+    def test_wrong_type_audit_field_hard_fails(self):
+        self._assert_structural_hard_fail(
+            self._mutated_manifest(lambda m: m.update(cumulative_tokens="30")),
+        )
+
+    def test_prompt_template_files_wrong_length_hard_fails(self):
+        self._assert_structural_hard_fail(
+            self._mutated_manifest(
+                lambda m: m.update(prompt_template_files=["only_one.txt"]),
+            ),
+        )
+
+    def test_prompt_template_files_wrong_member_type_hard_fails(self):
+        self._assert_structural_hard_fail(
+            self._mutated_manifest(
+                lambda m: m.update(prompt_template_files=["a.txt", 2]),
+            ),
+        )
 
 
 # --- G: usage / reject lifecycle ------------------------------------
@@ -1053,85 +1120,28 @@ class TestUsageAndRejectLifecycle(unittest.TestCase):
             root = Path(td)
             world = _write_world(root)
             outs = _canonical_outputs(root)
-            from src.extract.ids import mention_id_v2
-            text = _dpr_text()
-            mention_mid = mention_id_v2(
-                chunk_id="c_000",
-                source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                entity_type="method",
-                char_start=text.index("DPR"),
-                char_end=text.index("DPR") + 3,
-            )
-            llm1 = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            pipeline_v2.run_extraction_v2_canonical(
-                provider=llm1,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
+            _seed_canonical_run(world, outs)
             # Mutate chunks_sha256 (resume-identity field).
             manifest = json.loads(outs["manifest"].read_text())
             manifest["chunks_sha256"] = "0" * 64
             outs["manifest"].write_text(json.dumps(manifest))
-            llm2 = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            result = pipeline_v2.run_extraction_v2_canonical(
-                provider=llm2,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
+
+            llm, result, _ = _seed_canonical_run(world, outs)
             self.assertEqual(result.exit_code, 0)
+            self.assertEqual(len(llm.system_calls), 2)
             new_manifest = json.loads(outs["manifest"].read_text())
             self.assertEqual(new_manifest["resumed_from_run_id"], None)
-            # Fresh run = only this run's usage (no seed).
-            # Two phases = 60 (10+20 per call).
+            # Fresh run = only this run's usage (no seed): 2 x 30.
             self.assertEqual(new_manifest["cumulative_tokens"], 60)
 
     def test_carried_chunks_contribute_no_old_rejects(self):
-        """Carried-forward chunks carry their mentions and assertions
-        but the prior rejects JSONL is rewritten from scratch from the
-        current run — it must NOT include stale rejects from the prior
-        run that no longer apply (since the carried chunk is the
-        canonical truth, not the old reject log)."""
+        """A carried chunk is the canonical truth; the prior reject log
+        is rewritten from the current run only."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             world = _write_world(root)
             outs = _canonical_outputs(root)
-            from src.extract.ids import mention_id_v2
-            text = _dpr_text()
-            mention_mid = mention_id_v2(
-                chunk_id="c_000",
-                source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                entity_type="method",
-                char_start=text.index("DPR"),
-                char_end=text.index("DPR") + 3,
-            )
-            llm1 = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            pipeline_v2.run_extraction_v2_canonical(
-                provider=llm1,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
-            # Inject a stale reject into the rejects file.
+            _, prior, _ = _seed_canonical_run(world, outs)
             with outs["rejects"].open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps({
                     "schema_version": 2,
@@ -1139,64 +1149,48 @@ class TestUsageAndRejectLifecycle(unittest.TestCase):
                     "phase": "entity",
                     "reason": "STALE_REJECT",
                 }) + "\n")
-            # Rerun. The carried chunk means no new rejects; the stale
-            # one must be gone from the rewritten file.
-            llm2 = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            pipeline_v2.run_extraction_v2_canonical(
-                provider=llm2,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
+
+            llm, result, _ = _seed_canonical_run(world, outs)
+            self.assertEqual(result.resumed_from_run_id, prior.run_id)
+            self.assertEqual(len(llm.system_calls), 0)
             rejects = _read_jsonl(outs["rejects"])
-            self.assertEqual(len(rejects), 0, f"stale reject survived: {rejects}")
+            self.assertEqual(rejects, [])
+            manifest = json.loads(outs["manifest"].read_text())
+            self.assertEqual(manifest["reject_count"], len(rejects))
 
     def test_fresh_run_strips_stale_rejects(self):
-        """When resume identity mismatches, the entire artifact set is
-        rewritten from scratch — the prior rejects log cannot survive."""
+        """Without a prior manifest the sibling artifacts are
+        uncommitted: the run is fresh and rewrites the reject log."""
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             world = _write_world(root)
             outs = _canonical_outputs(root)
-            # Create a stale manifest with non-resumable identity and
-            # a stale reject log.
             outs["rejects"].write_text(json.dumps({
                 "schema_version": 2, "chunk_id": "c_stale",
                 "phase": "entity", "reason": "STALE",
             }) + "\n")
-            from src.extract.ids import mention_id_v2
-            text = _dpr_text()
-            mention_mid = mention_id_v2(
-                chunk_id="c_000",
-                source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                entity_type="method",
-                char_start=text.index("DPR"),
-                char_end=text.index("DPR") + 3,
-            )
-            llm = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            # No prior manifest yet → fresh run → stale rejects must
-            # not appear in the rewritten file.
-            pipeline_v2.run_extraction_v2_canonical(
-                provider=llm,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
+
+            _, result, _ = _seed_canonical_run(world, outs)
+            self.assertIsNone(result.resumed_from_run_id)
             rejects = _read_jsonl(outs["rejects"])
-            stale = [r for r in rejects if r.get("chunk_id") == "c_stale"]
-            self.assertEqual(len(stale), 0, "stale reject survived fresh run")
+            self.assertEqual(
+                [r for r in rejects if r.get("chunk_id") == "c_stale"], [],
+            )
+
+    def test_manifest_reject_count_matches_reject_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            outs = _canonical_outputs(root)
+            # Malformed entity payload ⇒ Gate 1 emits rejects.
+            _seed_canonical_run(world, outs, scripts=[
+                {"mentions": "this-is-not-a-list"},
+                {"assertions": []},
+            ])
+            rejects = _read_jsonl(outs["rejects"])
+            self.assertGreater(len(rejects), 0)
+            manifest = json.loads(outs["manifest"].read_text())
+            self.assertEqual(manifest["reject_count"], len(rejects))
 
 
 # --- ancillary regressions ------------------------------------------
@@ -1211,28 +1205,7 @@ class TestRunIdFormat(unittest.TestCase):
             root = Path(td)
             world = _write_world(root)
             outs = _canonical_outputs(root)
-            from src.extract.ids import mention_id_v2
-            text = _dpr_text()
-            mention_mid = mention_id_v2(
-                chunk_id="c_000",
-                source_text_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                entity_type="method",
-                char_start=text.index("DPR"),
-                char_end=text.index("DPR") + 3,
-            )
-            llm = _RecordingLLM(scripts=[
-                _dpr_entity_payload(),
-                _dpr_relation_payload("c_000", "W1", mention_mid),
-            ])
-            pipeline_v2.run_extraction_v2_canonical(
-                provider=llm,
-                chunks_path=world["chunks"],
-                ontology_path=world["ontology"],
-                prompts_dir=world["prompts"],
-                output_jsonl=outs["jsonl"],
-                output_rejects=outs["rejects"],
-                output_manifest=outs["manifest"],
-            )
+            _seed_canonical_run(world, outs)
             manifest = json.loads(outs["manifest"].read_text())
             self.assertRegex(manifest["run_id"], pat)
             self.assertEqual(manifest["resumed_from_run_id"], None)
@@ -1252,3 +1225,52 @@ class TestPreflightV2PublicSignature(unittest.TestCase):
             names, ["chunks_path", "ontology_path", "prompts_dir"],
             f"preflight_v2 signature drifted: {names}",
         )
+
+    def test_preflight_v2_runs_without_provider_or_git(self):
+        """T3a preflight resolves only the disk-backed identity fields;
+        provider / runner / ``git rev-parse HEAD`` stay unresolved."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            world = _write_world(root)
+            report = pipeline_v2.preflight_v2(
+                chunks_path=world["chunks"],
+                ontology_path=world["ontology"],
+                prompts_dir=world["prompts"],
+            )
+            self.assertEqual(report.chunks_path, world["chunks"])
+            self.assertIsNone(report.pipeline_version)
+            self.assertIsNone(report.provider_name)
+            self.assertIsNone(report.max_tokens)
+            self.assertIsNone(report.temperature)
+
+
+class TestCanonicalFunctionContract(unittest.TestCase):
+
+    def test_run_extraction_v2_canonical_parameter_order(self):
+        """The canonical keyword-only argument order is pinned by #55."""
+        import inspect
+        sig = inspect.signature(pipeline_v2.run_extraction_v2_canonical)
+        self.assertEqual(
+            list(sig.parameters),
+            [
+                "provider",
+                "chunks_path",
+                "ontology_path",
+                "prompts_dir",
+                "output_jsonl",
+                "output_rejects",
+                "output_manifest",
+                "max_tokens",
+                "temperature",
+            ],
+        )
+        for name, param in sig.parameters.items():
+            self.assertEqual(
+                param.kind,
+                inspect.Parameter.KEYWORD_ONLY,
+                f"{name} must be keyword-only",
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()
