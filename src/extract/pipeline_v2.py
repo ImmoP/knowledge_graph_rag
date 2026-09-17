@@ -126,16 +126,17 @@ class PreflightReportV2:
     prompt_entity_filename: str
     prompt_relation_sha256: str
     prompt_relation_filename: str
-    system_prompt_sha256: str
-    alignment_algorithm_version: str
-    alignment_algorithm_sha256: str
-    pipeline_version: str
-    schema_version: int
-    provider_name: str
-    provider_model: str
-    max_tokens: int
-    temperature: float
-    cache_format_version: str
+    system_prompt: str | None = None
+    system_prompt_sha256: str | None = None
+    alignment_algorithm_version: str | None = None
+    alignment_algorithm_sha256: str | None = None
+    pipeline_version: str | None = None
+    schema_version: int | None = None
+    provider_name: str | None = None
+    provider_model: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    cache_format_version: str | None = None
 
 
 def _file_sha256(path: Path) -> str:
@@ -167,9 +168,10 @@ def _preflight_v2(
     chunks_path: Path,
     ontology_path: Path,
     prompts_dir: Path,
-    provider: LLMProvider,
-    max_tokens: int,
-    temperature: float,
+    provider: LLMProvider | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+    require_pipeline_version: bool = False,
 ) -> tuple[dict, list, dict, PreflightReportV2]:
     """Load ontology + chunks + v2 prompt artifacts; fail closed.
 
@@ -213,14 +215,11 @@ def _preflight_v2(
         prompt_entity_filename=V2_ENTITY_PROMPT_FILENAME,
         prompt_relation_sha256=prompt_artifacts[V2_RELATION_PROMPT_FILENAME]["sha256"],
         prompt_relation_filename=V2_RELATION_PROMPT_FILENAME,
-        system_prompt_sha256=hashlib.sha256(
-            system_prompt.encode("utf-8")
-        ).hexdigest(),
+        system_prompt=system_prompt,
+        system_prompt_sha256=hashlib.sha256(system_prompt.encode("utf-8")).hexdigest(),
         alignment_algorithm_version=align_module.ALIGNMENT_ALGORITHM_VERSION,
-        alignment_algorithm_sha256=hashlib.sha256(
-            align_path.read_bytes()
-        ).hexdigest(),
-        pipeline_version=_pipeline_version_v2(),
+        alignment_algorithm_sha256=hashlib.sha256(align_path.read_bytes()).hexdigest(),
+        pipeline_version=_pipeline_version_v2() if require_pipeline_version else None,
         schema_version=schema_module.SCHEMA_VERSION_V2,
         provider_name=provider.name,
         provider_model=provider.model,
@@ -445,6 +444,7 @@ def _run_entity_phase_v2(
     temperature: float,
     schema: dict,
     preflight: PreflightReportV2,
+    system_prompt: str | None = None,
 ) -> tuple[PhaseOutcomeV2, list[ValidatedV2Mention], Usage]:
     """v2 entity pass: schema gate, aligner, evidence gate, ontology gate.
 
@@ -481,7 +481,7 @@ def _run_entity_phase_v2(
         nonlocal attempts
         attempts += 1
         return provider.generate_json(
-            _render_system_v2(),
+            system_prompt if system_prompt is not None else _render_system_v2(),
             entity_user,
             schema,
             max_tokens=max_tokens,
@@ -644,6 +644,7 @@ def _run_relation_phase_v2(
     preflight: PreflightReportV2,
     same_chunk_mentions: list,
     entity_type_for_mention: dict,
+    system_prompt: str | None = None,
 ) -> tuple[PhaseOutcomeV2, list[ValidatedV2Assertion], Usage]:
     """v2 relation pass: schema gate, aligner + containment, evidence gate, ontology gate.
 
@@ -694,7 +695,7 @@ def _run_relation_phase_v2(
         nonlocal attempts
         attempts += 1
         return provider.generate_json(
-            _render_system_v2(),
+            system_prompt if system_prompt is not None else _render_system_v2(),
             relation_user,
             schema,
             max_tokens=max_tokens,
@@ -1104,6 +1105,7 @@ class RunResultV2Canonical:
 
     exit_code: int
     run_id: str
+    pipeline_version: str
     resumed_from_run_id: str | None
     records_written: int
     mention_count: int
@@ -1276,64 +1278,47 @@ def _read_existing_v2_records(path: Path) -> tuple[list, list, dict]:
 
 
 def _read_existing_v2_rejects(path: Path) -> list:
-    """Load v2 ``extractions.v2.rejects.jsonl`` into a list.
-
-    Reject records are run-internal audit entries and need not
-    carry ``schema_version``; they carry ``chunk_id`` + ``phase`` +
-    ``gate`` by phase-runner contract. Malformed JSON / non-object
-    records raise :class:`PreflightErrorV2` with line numbers.
-    Returns ``[]`` when ``path`` is absent.
-    """
+    """Load strictly versioned canonical reject records."""
     rejects: list = []
     if not path.is_file():
         return rejects
-    for lineno, raw_line in enumerate(
-        path.read_text(encoding="utf-8").splitlines(), start=1
-    ):
-        line = raw_line.strip()
-        if not line:
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not raw.strip():
             continue
         try:
-            rec = json.loads(line)
+            rec = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise PreflightErrorV2(
-                f"canonical: malformed rejects JSONL at {path}:{lineno}: {exc}"
-            ) from exc
+            raise PreflightErrorV2(f"canonical: malformed rejects JSONL at {path}:{lineno}: {exc}") from exc
         if not isinstance(rec, dict):
-            raise PreflightErrorV2(
-                f"canonical: reject at {path}:{lineno} is not an object"
-            )
+            raise PreflightErrorV2(f"canonical: reject at {path}:{lineno} is not an object")
+        sv = rec.get("schema_version")
+        if type(sv) is not int or sv != schema_module.SCHEMA_VERSION_V2:
+            raise PreflightErrorV2(f"canonical: reject at {path}:{lineno} has invalid schema_version={sv!r}")
         rejects.append(rec)
     return rejects
 
 
-def _read_existing_v2_manifest(path: Path) -> dict | None:
-    """Load the v2 manifest. ``None`` when absent.
+def _canonical_reject_records(rejects: list) -> Iterable[dict]:
+    for reject in rejects:
+        yield {"schema_version": schema_module.SCHEMA_VERSION_V2, **reject}
 
-    Fail-closed on unparseable JSON, non-object payload, or
-    ``schema_version != SCHEMA_VERSION_V2``. These are hard errors
-    because the operator-facing contract is "manifest present ⇒
-    every other artifact in the set is consistent with this
-    manifest".
-    """
-    if not path.is_file():
-        return None
-    try:
-        rec = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise PreflightErrorV2(
-            f"canonical: manifest at {path} is not valid JSON: {exc}"
-        ) from exc
-    if not isinstance(rec, dict):
-        raise PreflightErrorV2(
-            f"canonical: manifest at {path} is not a JSON object"
-        )
-    sv = rec.get("schema_version")
-    if type(sv) is not int or sv != schema_module.SCHEMA_VERSION_V2:
-        raise PreflightErrorV2(
-            f"canonical: manifest at {path} has schema_version={sv!r}; "
-            f"expected SCHEMA_VERSION_V2={schema_module.SCHEMA_VERSION_V2}"
-        )
+
+def _read_existing_v2_manifest(path: Path) -> dict | None:
+    """Load a closed, structurally valid canonical manifest."""
+    if not path.is_file(): return None
+    try: rec = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc: raise PreflightErrorV2(f"canonical: manifest at {path} is not valid JSON: {exc}") from exc
+    if not isinstance(rec, dict): raise PreflightErrorV2(f"canonical: manifest at {path} is not a JSON object")
+    keys = {"schema_version","run_id","resumed_from_run_id","chunks_sha256","ontology_sha256","prompt_template_sha256","system_prompt_sha256","provider","model","max_tokens","temperature","alignment_algorithm_version","alignment_algorithm_sha256","ontology_version","prompt_template_files","chunks_path","ontology_path","pipeline_version","cache_format_version","wall_clock_started_at","wall_clock_ended_at","cumulative_tokens","cumulative_cost_usd","reject_count","chunk_count_total","chunk_count_complete"}
+    if set(rec) != keys: raise PreflightErrorV2(f"canonical: manifest at {path} must have exactly required keys")
+    ints=("schema_version","ontology_version","max_tokens","cumulative_tokens","reject_count","chunk_count_total","chunk_count_complete")
+    strings=("run_id","chunks_sha256","ontology_sha256","system_prompt_sha256","provider","model","alignment_algorithm_version","alignment_algorithm_sha256","chunks_path","ontology_path","pipeline_version","cache_format_version","wall_clock_started_at","wall_clock_ended_at")
+    if type(rec["schema_version"]) is not int or rec["schema_version"] != schema_module.SCHEMA_VERSION_V2: raise PreflightErrorV2("canonical: manifest has invalid schema_version")
+    if any(type(rec[x]) is not int for x in ints) or any(type(rec[x]) is not str for x in strings): raise PreflightErrorV2("canonical: manifest has invalid scalar types")
+    if rec["resumed_from_run_id"] is not None and type(rec["resumed_from_run_id"]) is not str: raise PreflightErrorV2("canonical: manifest has invalid resumed_from_run_id")
+    if type(rec["temperature"]) is not float or type(rec["cumulative_cost_usd"]) is not float: raise PreflightErrorV2("canonical: manifest has invalid float types")
+    for key in ("prompt_template_sha256","prompt_template_files"):
+        if type(rec[key]) is not list or len(rec[key]) != 2 or any(type(x) is not str for x in rec[key]): raise PreflightErrorV2(f"canonical: manifest has invalid {key}")
     return rec
 
 
@@ -1371,14 +1356,17 @@ def _identity_matches_v2(
         ),
     )
     for key, expected in fields:
-        if prev_manifest.get(key) != expected:
+        actual = prev_manifest.get(key)
+        if type(actual) is not type(expected) or actual != expected:
             return False
     prev_prompts = prev_manifest.get("prompt_template_sha256")
     cur_prompts = [
         preflight.prompt_entity_sha256,
         preflight.prompt_relation_sha256,
     ]
-    if not isinstance(prev_prompts, list) or list(prev_prompts) != cur_prompts:
+    if (type(prev_prompts) is not list or len(prev_prompts) != 2
+            or any(type(x) is not str for x in prev_prompts)
+            or prev_prompts != cur_prompts):
         return False
     return True
 
@@ -1389,6 +1377,7 @@ def _carry_forward_for_chunk(
     status: dict,
     mentions: list,
     assertions: list,
+    ontology: dict,
 ) -> bool:
     """True iff a prior chunk is safe to carry forward (#55 §"Carry-forward").
 
@@ -1443,6 +1432,7 @@ def _carry_forward_for_chunk(
         return False
 
     mention_index = {m["mention_id"]: m for m in mentions}
+    entity_types = {m.get("mention_id"): m.get("entity_type") for m in mentions}
 
     for m in mentions:
         if m.get("schema_version") != schema_module.SCHEMA_VERSION_V2:
@@ -1461,11 +1451,9 @@ def _carry_forward_for_chunk(
             ce = int(ev["char_end"])
             if not (0 <= cs < ce <= len(text)):
                 return False
-            if text[cs:ce] != m.get("surface_form", ""):
-                return False
-            if ev.get("source_text_sha256") != chunk_sha:
-                return False
-        except (KeyError, TypeError, ValueError):
+            validation_module.check_mention_evidence_v2(mention=m, chunk_text=text, expected_source_text_sha256=chunk_sha)
+            validation_module.check_mention_ontology(mention=m, ontology=ontology)
+        except (KeyError, TypeError, ValueError, validation_module.EvidenceError, validation_module.OntologyError):
             return False
 
     for a in assertions:
@@ -1485,9 +1473,9 @@ def _carry_forward_for_chunk(
             ace = int(ev["char_end"])
             if not (0 <= acs < ace <= len(text)):
                 return False
-            if ev.get("source_text_sha256") != chunk_sha:
-                return False
-        except (KeyError, TypeError, ValueError):
+            validation_module.check_assertion_evidence_v2(assertion=a, chunk_text=text, expected_source_text_sha256=chunk_sha)
+            validation_module.check_assertion_ontology(assertion=a, ontology=ontology, doc_id=doc_id, same_chunk_mentions=mention_index, entity_type_for_mention=entity_types)
+        except (KeyError, TypeError, ValueError, validation_module.EvidenceError, validation_module.OntologyError):
             return False
         for label, ref in (
             ("subject_ref", a.get("subject_ref")),
@@ -1561,6 +1549,7 @@ def run_extraction_v2_canonical(
         provider=provider,
         max_tokens=max_tokens,
         temperature=temperature,
+        require_pipeline_version=True,
     )
 
     schemas = {
@@ -1590,6 +1579,12 @@ def run_extraction_v2_canonical(
                 f"canonical: manifest present at {output_manifest} "
                 f"but canonical rejects are missing at {output_rejects}"
             )
+    prev_mentions: list = []
+    prev_assertions: list = []
+    prev_statuses: dict = {}
+    if prev_manifest is not None:
+        prev_mentions, prev_assertions, prev_statuses = _read_existing_v2_records(output_jsonl)
+        _read_existing_v2_rejects(output_rejects)
     identity_ok = _identity_matches_v2(
         prev_manifest=prev_manifest, preflight=report,
     )
@@ -1607,9 +1602,6 @@ def run_extraction_v2_canonical(
         rfc = prev_manifest.get("cumulative_cost_usd", 0.0)
         if isinstance(rfc, (int, float)):
             cumulative_cost = float(rfc)
-        prev_mentions, prev_assertions, prev_statuses = _read_existing_v2_records(
-            output_jsonl
-        )
         prev_mentions_by_chunk: dict = {}
         for m in prev_mentions:
             prev_mentions_by_chunk.setdefault(m["chunk_id"], []).append(m)
@@ -1624,7 +1616,7 @@ def run_extraction_v2_canonical(
             ms = prev_mentions_by_chunk.get(cid, [])
             as_ = prev_assertions_by_chunk.get(cid, [])
             if _carry_forward_for_chunk(
-                chunk=chunk, status=status, mentions=ms, assertions=as_,
+                chunk=chunk, status=status, mentions=ms, assertions=as_, ontology=ontology,
             ):
                 carry_mentions_by_chunk[cid] = ms
                 carry_assertions_by_chunk[cid] = as_
@@ -1660,6 +1652,7 @@ def run_extraction_v2_canonical(
                     temperature=temperature,
                     schema=schemas["entity"],
                     preflight=report,
+                    system_prompt=report.system_prompt,
                 )
             except BudgetExceeded:
                 budget_aborted = True
@@ -1693,6 +1686,7 @@ def run_extraction_v2_canonical(
                     preflight=report,
                     same_chunk_mentions=validated_mentions,
                     entity_type_for_mention=entity_type_lookup,
+                    system_prompt=report.system_prompt,
                 )
             except BudgetExceeded:
                 budget_aborted = True
@@ -1741,7 +1735,7 @@ def run_extraction_v2_canonical(
             output_rejects,
             (
                 json.dumps(r, ensure_ascii=False, sort_keys=True)
-                for r in collected_rejects
+                for r in _canonical_reject_records(collected_rejects)
             ),
         )
 
@@ -1753,6 +1747,7 @@ def run_extraction_v2_canonical(
         manifest = ManifestV2(
             schema_version=report.schema_version,
             run_id=run_id,
+            pipeline_version=report.pipeline_version,
             resumed_from_run_id=resumed_from,
             chunks_sha256=report.chunks_sha256,
             ontology_sha256=report.ontology_sha256,
@@ -1774,7 +1769,6 @@ def run_extraction_v2_canonical(
             ),
             chunks_path=str(report.chunks_path),
             ontology_path=str(report.ontology_path),
-            pipeline_version=report.pipeline_version,
             cache_format_version=report.cache_format_version,
             wall_clock_started_at=started_at,
             wall_clock_ended_at=ended_at,
@@ -1792,6 +1786,7 @@ def run_extraction_v2_canonical(
         return RunResultV2Canonical(
             exit_code=1 if budget_aborted else 0,
             run_id=run_id,
+            pipeline_version=report.pipeline_version,
             resumed_from_run_id=resumed_from,
             records_written=total_mentions + total_assertions + len(statuses_by_chunk),
             mention_count=total_mentions,
@@ -1824,7 +1819,7 @@ def run_extraction_v2_canonical(
             output_rejects,
             (
                 json.dumps(r, ensure_ascii=False, sort_keys=True)
-                for r in collected_rejects
+                for r in _canonical_reject_records(collected_rejects)
             ),
         )
         ended_at = _utc_now_compact()
@@ -1835,6 +1830,7 @@ def run_extraction_v2_canonical(
         manifest = ManifestV2(
             schema_version=report.schema_version,
             run_id=run_id,
+            pipeline_version=report.pipeline_version,
             resumed_from_run_id=resumed_from,
             chunks_sha256=report.chunks_sha256,
             ontology_sha256=report.ontology_sha256,
@@ -1856,7 +1852,6 @@ def run_extraction_v2_canonical(
             ),
             chunks_path=str(report.chunks_path),
             ontology_path=str(report.ontology_path),
-            pipeline_version=report.pipeline_version,
             cache_format_version=report.cache_format_version,
             wall_clock_started_at=started_at,
             wall_clock_ended_at=ended_at,
@@ -1872,6 +1867,7 @@ def run_extraction_v2_canonical(
         return RunResultV2Canonical(
             exit_code=1,
             run_id=run_id,
+            pipeline_version=report.pipeline_version,
             resumed_from_run_id=resumed_from,
             records_written=total_mentions + total_assertions + len(statuses_by_chunk),
             mention_count=total_mentions,

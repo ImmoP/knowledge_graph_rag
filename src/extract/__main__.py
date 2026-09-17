@@ -22,9 +22,12 @@ from src.providers import BudgetExceeded, make_llm
 
 
 def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] == "v2":
+    if len(sys.argv) == 1:
+        return _main_v1()
+    if len(sys.argv) == 2 and sys.argv[1] == "v2":
         return _main_canonical_v2()
-    return _main_v1()
+    print("usage: python -m src.extract [v2]", file=sys.stderr)
+    return 2
 
 
 def _main_v1() -> int:
@@ -96,11 +99,4 @@ def _main_canonical_v2() -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] != "v2":
-        print(
-            f"usage: python -m src.extract [v2]\n"
-            f"unknown argument: {sys.argv[1]!r}",
-            file=sys.stderr,
-        )
-        sys.exit(2)
     sys.exit(main())
