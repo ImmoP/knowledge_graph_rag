@@ -13,6 +13,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.eval.leakage import (  # noqa: E402
+    DEFAULT_ONTOLOGY_PATH,
+    LeakageError,
+    load_frozen_exclusions,
+)
+
 GOLD_SET_SEED = 0x9E3779B1
 SAMPLER_SEED_TEXT = "9e3779b1"
 SAMPLER_VERSION = "gold-set-sample.v1"
@@ -21,7 +31,6 @@ SAMPLE_SIZE = 120
 CENTRAL_PAPERS = ("W3015883388", "W3039017601", "W3021397474")
 CENTRAL_QUOTA = 20
 NON_CENTRAL_QUOTA = 12
-HELD_OUT_QUESTION_COUNT = 45
 SECTION_DEPTH_TARGETS = (6, 24, 88, 2)
 LENGTH_TARGETS = (40, 40, 40)
 LENGTH_LABELS = ("short", "medium", "long")
@@ -96,13 +105,6 @@ def _integer(record: dict, key: str, where: str) -> int:
     return value
 
 
-def _strings(record: dict, key: str, where: str, *, nonempty: bool = False) -> list[str]:
-    value = record.get(key)
-    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
-        raise SampleError(f"{where}: {key} must be a list of non-empty strings")
-    if nonempty and not value:
-        raise SampleError(f"{where}: {key} must be non-empty")
-    return value
 
 
 def _load_chunks(path: Path) -> list[Chunk]:
@@ -149,38 +151,6 @@ def _load_manifest(path: Path) -> list[ManifestPaper]:
         papers.append(ManifestPaper(openalex_id, cited_by_count))
     return papers
 
-
-def _load_exclusions(path: Path, chunk_ids: set[str]) -> set[str]:
-    records = _read_jsonl(path, allow_empty=True)
-    if len(records) != HELD_OUT_QUESTION_COUNT:
-        raise SampleError(
-            f"questions file must contain exactly {HELD_OUT_QUESTION_COUNT} records "
-            f"(got {len(records)})"
-        )
-    excluded: set[str] = set()
-    for line_number, record in enumerate(records, 1):
-        where = f"{path}:{line_number}"
-        if _string(record, "split", where) != "held_out":
-            raise SampleError(f"{where}: split must be exactly 'held_out'")
-        supporting = _strings(record, "supporting_chunk_ids", where, nonempty=True)
-        for chunk_id in supporting:
-            if not CHUNK_ID_RE.fullmatch(chunk_id):
-                raise SampleError(f"{where}: invalid supporting chunk ID {chunk_id!r}")
-            excluded.add(chunk_id)
-        evidence_path = record.get("evidence_path")
-        if not isinstance(evidence_path, list):
-            raise SampleError(f"{where}: evidence_path must be a list")
-        for step_index, step in enumerate(evidence_path):
-            if not isinstance(step, dict):
-                raise SampleError(f"{where}: evidence_path[{step_index}] must be an object")
-            for endpoint_name in ("from", "to"):
-                endpoint = _string(step, endpoint_name, f"{where}:evidence_path[{step_index}]")
-                if CHUNK_ID_RE.fullmatch(endpoint):
-                    excluded.add(endpoint)
-    missing = sorted(excluded - chunk_ids)
-    if missing:
-        raise SampleError(f"questions reference unknown chunks: {missing[:5]}")
-    return excluded
 
 
 def _select_papers(
@@ -447,12 +417,25 @@ def _publish(output_path: Path, payload: bytes) -> None:
 def run_sample(
     chunks_path: Path,
     manifest_path: Path,
-    questions_path: Path,
+    leakage_path: Path,
     output_path: Path,
+    *,
+    ontology_path: Path = DEFAULT_ONTOLOGY_PATH,
 ) -> int:
     chunks = _load_chunks(chunks_path)
     manifest = _load_manifest(manifest_path)
-    exclusions = _load_exclusions(questions_path, {chunk.chunk_id for chunk in chunks})
+    try:
+        exclusions = load_frozen_exclusions(
+            leakage_path,
+            chunks_path=chunks_path,
+            manifest_path=manifest_path,
+            ontology_path=ontology_path,
+        )
+    except LeakageError as exc:
+        raise SampleError(str(exc)) from exc
+    missing = sorted(exclusions - {chunk.chunk_id for chunk in chunks})
+    if missing:
+        raise SampleError(f"leakage artifact references unknown chunks: {missing[:5]}")
     mid, long = _select_papers(manifest, chunks, exclusions)
     selected_papers = [*CENTRAL_PAPERS, *mid, *long]
     tiers = {
@@ -469,12 +452,12 @@ def run_sample(
 
 
 def _default_paths() -> dict[str, Path]:
-    root = Path(__file__).resolve().parents[2]
     return {
-        "chunks": root / "data" / "derived" / "chunks.jsonl",
-        "manifest": root / "data" / "manifest.jsonl",
-        "questions": root / "eval" / "questions.jsonl",
-        "output": root / "data" / "gold_set" / "sample.v1.jsonl",
+        "chunks": ROOT / "data" / "derived" / "chunks.jsonl",
+        "manifest": ROOT / "data" / "manifest.jsonl",
+        "leakage": ROOT / "eval" / "held_out_leakage.v1.json",
+        "ontology": ROOT / "ontology.yaml",
+        "output": ROOT / "data" / "gold_set" / "sample.v1.jsonl",
     }
 
 
@@ -483,7 +466,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Deterministic 120-chunk gold-set sampler")
     parser.add_argument("--chunks", type=Path, default=defaults["chunks"])
     parser.add_argument("--manifest", type=Path, default=defaults["manifest"])
-    parser.add_argument("--questions", type=Path, default=defaults["questions"])
+    parser.add_argument("--leakage", type=Path, default=defaults["leakage"])
+    parser.add_argument("--ontology", type=Path, default=defaults["ontology"])
     parser.add_argument("--output", type=Path, default=defaults["output"])
     return parser
 
@@ -491,7 +475,13 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
-        count = run_sample(args.chunks, args.manifest, args.questions, args.output)
+        count = run_sample(
+            args.chunks,
+            args.manifest,
+            args.leakage,
+            args.output,
+            ontology_path=args.ontology,
+        )
     except SampleError as exc:
         print(f"sample failed: {exc}", file=sys.stderr)
         return 2
