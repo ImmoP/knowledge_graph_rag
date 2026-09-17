@@ -37,8 +37,10 @@ Design notes (#53 acceptance gate):
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
+import subprocess
 import tempfile
 import time
 from collections.abc import Iterable
@@ -58,7 +60,7 @@ from src.extract.validation import (
     ValidatedV2Assertion,
     ValidatedV2Mention,
 )
-from src.providers.cache import extraction_cache_scope
+from src.providers.cache import CACHE_FORMAT_VERSION, extraction_cache_scope
 from src.providers.protocol import (
     LLMProvider,
     LLMValidationError,
@@ -124,6 +126,17 @@ class PreflightReportV2:
     prompt_entity_filename: str
     prompt_relation_sha256: str
     prompt_relation_filename: str
+    system_prompt: str | None = None
+    system_prompt_sha256: str | None = None
+    alignment_algorithm_version: str | None = None
+    alignment_algorithm_sha256: str | None = None
+    pipeline_version: str | None = None
+    schema_version: int | None = None
+    provider_name: str | None = None
+    provider_model: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    cache_format_version: str | None = None
 
 
 def _file_sha256(path: Path) -> str:
@@ -155,10 +168,19 @@ def _preflight_v2(
     chunks_path: Path,
     ontology_path: Path,
     prompts_dir: Path,
+    provider: LLMProvider | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+    require_pipeline_version: bool = False,
 ) -> tuple[dict, list, dict, PreflightReportV2]:
     """Load ontology + chunks + v2 prompt artifacts; fail closed.
 
     Returns ``(ontology, chunks, prompt_artifacts, report)``.
+
+    The system prompt and aligner sha256 are computed here so the
+    canonical run_id fingerprint has a single source of truth and
+    every disk artifact carries the same value the runtime will
+    use.
     """
     if not chunks_path.is_file():
         raise PreflightErrorV2(f"chunks file not found: {chunks_path}")
@@ -180,6 +202,9 @@ def _preflight_v2(
 
     prompt_artifacts = prompts_module.verify_prompt_artifacts_v2(prompts_dir)
 
+    system_prompt = _render_system_v2() if require_pipeline_version else None
+    align_path = Path(__file__).resolve().parent / "align.py"
+
     report = PreflightReportV2(
         chunks_path=chunks_path,
         chunks_sha256=_file_sha256(chunks_path),
@@ -190,6 +215,21 @@ def _preflight_v2(
         prompt_entity_filename=V2_ENTITY_PROMPT_FILENAME,
         prompt_relation_sha256=prompt_artifacts[V2_RELATION_PROMPT_FILENAME]["sha256"],
         prompt_relation_filename=V2_RELATION_PROMPT_FILENAME,
+        system_prompt=system_prompt,
+        system_prompt_sha256=(hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()
+                              if system_prompt is not None else None),
+        alignment_algorithm_version=(align_module.ALIGNMENT_ALGORITHM_VERSION
+                                     if require_pipeline_version else None),
+        alignment_algorithm_sha256=(hashlib.sha256(align_path.read_bytes()).hexdigest()
+                                    if require_pipeline_version else None),
+        pipeline_version=_pipeline_version_v2() if require_pipeline_version else None,
+        schema_version=(schema_module.SCHEMA_VERSION_V2
+                        if require_pipeline_version else None),
+        provider_name=(provider.name if require_pipeline_version and provider else None),
+        provider_model=(provider.model if require_pipeline_version and provider else None),
+        max_tokens=max_tokens if require_pipeline_version else None,
+        temperature=temperature if require_pipeline_version else None,
+        cache_format_version=CACHE_FORMAT_VERSION if require_pipeline_version else None,
     )
     return ontology, chunks, prompt_artifacts, report
 
@@ -197,32 +237,114 @@ def _preflight_v2(
 # ---------- run state -------------------------------------------------
 
 
-@dataclass
-class RunStateV2:
-    """Mutable per-run state for the v2 runner (#53)."""
-
-    preflight: PreflightReportV2
-    started_at: str
-    usage: Usage = field(default_factory=Usage)
-    budget_aborted: bool = False
-
-
 def _utc_now_compact() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def _run_fingerprint(*, preflight: PreflightReportV2) -> str:
-    blob = "|".join((
+def _pipeline_version_v2() -> str:
+    """Return the current ``git rev-parse HEAD`` for manifest audit.
+
+    Fail-closed: a non-zero exit / empty stdout / missing git
+    binary raises :class:`PreflightErrorV2`. The canonical run-id
+    fingerprint excludes ``pipeline_version``, but the manifest
+    still carries it as an audit field so operators can trace
+    which codebase produced a given artifact set.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        raise PreflightErrorV2(
+            f"pipeline_version: git rev-parse HEAD failed ({exc!r})"
+        ) from exc
+    if proc.returncode != 0:
+        raise PreflightErrorV2(
+            "pipeline_version: git rev-parse HEAD exited "
+            f"non-zero ({proc.returncode}); stderr={proc.stderr.strip()!r}"
+        )
+    sha = proc.stdout.strip()
+    if not sha:
+        raise PreflightErrorV2(
+            "pipeline_version: git rev-parse HEAD returned empty stdout"
+        )
+    return sha
+
+
+def _run_id_fingerprint_v2_fresh(*, preflight: PreflightReportV2) -> str:
+    """Short fingerprint over the 4 always-resolved preflight fields.
+
+    The T3a fresh-run :func:`run_extraction_v2` entry resolves only
+    the disk-backed identity fields (chunks / ontology / prompt
+    templates) — it does not pin system prompt, provider, or
+    runner settings because fresh-run semantics intentionally
+    ignore them. The fingerprint keeps the T3a ``run_id`` stable
+    across the T3b refactor and does not require any optional
+    preflight field.
+    """
+    parts = [
         preflight.chunks_sha256,
         preflight.ontology_sha256,
         preflight.prompt_entity_sha256,
         preflight.prompt_relation_sha256,
-    ))
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+    ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
 
 
-def _make_run_id(*, preflight: PreflightReportV2) -> str:
-    return _utc_now_compact() + "-" + _run_fingerprint(preflight=preflight)
+def _run_id_fingerprint_v2(*, preflight: PreflightReportV2) -> str:
+    """Short fingerprint over the 11 resume-identity dimensions (#55).
+
+    ``pipeline_version`` is intentionally excluded: an unchanged
+    pipeline that runs against a freshly-checked-out commit must
+    produce a resume-compatible ``run_id`` so the operator can
+    resume after ``git pull`` without losing the carry-forward.
+
+    The canonical v2 preflight resolves every one of these fields;
+    a missing value here means the caller asked for the canonical
+    fingerprint without first calling the canonical preflight, and
+    the runner surfaces that as a programmer error.
+    """
+    parts = [
+        str(preflight.schema_version),
+        preflight.chunks_sha256,
+        preflight.ontology_sha256,
+        preflight.prompt_entity_sha256,
+        preflight.prompt_relation_sha256,
+        preflight.system_prompt_sha256,
+        preflight.provider_name,
+        preflight.provider_model,
+        str(preflight.max_tokens),
+        str(preflight.temperature),
+        preflight.alignment_algorithm_version,
+        preflight.alignment_algorithm_sha256,
+    ]
+    if any(p is None for p in parts):
+        raise PreflightErrorV2(
+            "canonical: preflight did not resolve every resume-identity "
+            "field; run_extraction_v2_canonical requires the canonical "
+            "preflight (require_pipeline_version=True)."
+        )
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _make_run_id_v2_fresh(*, preflight: PreflightReportV2) -> str:
+    return (
+        _utc_now_compact()
+        + "-"
+        + _run_id_fingerprint_v2_fresh(preflight=preflight)
+    )
+
+
+def _make_run_id_v2(*, preflight: PreflightReportV2) -> str:
+    return (
+        _utc_now_compact()
+        + "-"
+        + _run_id_fingerprint_v2(preflight=preflight)
+    )
 
 
 # ---------- phase outcome --------------------------------------------
@@ -365,6 +487,7 @@ def _run_entity_phase_v2(
     temperature: float,
     schema: dict,
     preflight: PreflightReportV2,
+    system_prompt: str | None = None,
 ) -> tuple[PhaseOutcomeV2, list[ValidatedV2Mention], Usage]:
     """v2 entity pass: schema gate, aligner, evidence gate, ontology gate.
 
@@ -401,7 +524,7 @@ def _run_entity_phase_v2(
         nonlocal attempts
         attempts += 1
         return provider.generate_json(
-            _render_system_v2(),
+            system_prompt if system_prompt is not None else _render_system_v2(),
             entity_user,
             schema,
             max_tokens=max_tokens,
@@ -564,6 +687,7 @@ def _run_relation_phase_v2(
     preflight: PreflightReportV2,
     same_chunk_mentions: list,
     entity_type_for_mention: dict,
+    system_prompt: str | None = None,
 ) -> tuple[PhaseOutcomeV2, list[ValidatedV2Assertion], Usage]:
     """v2 relation pass: schema gate, aligner + containment, evidence gate, ontology gate.
 
@@ -614,7 +738,7 @@ def _run_relation_phase_v2(
         nonlocal attempts
         attempts += 1
         return provider.generate_json(
-            _render_system_v2(),
+            system_prompt if system_prompt is not None else _render_system_v2(),
             relation_user,
             schema,
             max_tokens=max_tokens,
@@ -793,9 +917,13 @@ def preflight_v2(
 ) -> PreflightReportV2:
     """Load ontology + chunks + v2 prompt artifacts; fail closed.
 
-    Returns a :class:`PreflightReportV2`. Used by callers that want
-    to fail early on missing artifacts before invoking
-    :func:`run_extraction_v2`.
+    Standalone preflight helper — the resume-identity fields
+    (``provider``, ``max_tokens``, ``temperature``) are intentionally
+    not part of the standalone surface; the canonical
+    :func:`run_extraction_v2_canonical` entry passes its
+    ``provider`` / settings through the internal helper. Returns a
+    :class:`PreflightReportV2` whose identity-only fields are
+    resolved here and whose runner-only fields stay ``None``.
     """
     _, _, _, report = _preflight_v2(
         chunks_path=chunks_path,
@@ -830,6 +958,9 @@ def run_extraction_v2(
         chunks_path=chunks_path,
         ontology_path=ontology_path,
         prompts_dir=prompts_dir,
+        provider=provider,
+        max_tokens=max_tokens,
+        temperature=temperature,
     )
 
     schemas = {
@@ -839,12 +970,7 @@ def run_extraction_v2(
     entity_artifact = prompt_artifacts[V2_ENTITY_PROMPT_FILENAME]
     relation_artifact = prompt_artifacts[V2_RELATION_PROMPT_FILENAME]
 
-    run_state = RunStateV2(
-        preflight=report,
-        started_at=_utc_now_compact(),
-    )
-    run_id = _make_run_id(preflight=report)
-
+    run_id = _make_run_id_v2_fresh(preflight=report)
     mentions_by_chunk: dict = {}
     assertions_by_chunk: dict = {}
     statuses_by_chunk: dict = {}
@@ -866,11 +992,8 @@ def run_extraction_v2(
                     preflight=report,
                 )
             except BudgetExceeded:
-                run_state.budget_aborted = True
                 budget_aborted = True
                 break
-
-            run_state.usage = _merge_usage(run_state.usage, entity_usage)
 
             mentions_by_chunk[chunk_id] = [m.to_record() for m in validated_mentions]
 
@@ -896,11 +1019,8 @@ def run_extraction_v2(
                     entity_type_for_mention=entity_type_lookup,
                 )
             except BudgetExceeded:
-                run_state.budget_aborted = True
                 budget_aborted = True
                 break
-
-            run_state.usage = _merge_usage(run_state.usage, relation_usage)
 
             assertions_by_chunk[chunk_id] = [a.to_record() for a in validated_assertions]
             statuses_by_chunk[chunk_id] = _build_chunk_status_v2(
@@ -995,6 +1115,888 @@ def _merge_usage(a: Usage, b: Usage) -> Usage:
             (a.cost_usd or 0.0) + (b.cost_usd or 0.0) or None
         ),
     )
+
+
+# =====================================================================
+# T3b — Canonical v2 artifact set, manifest, and semantic resume (#55)
+# =====================================================================
+#
+# Companion entry ``run_extraction_v2_canonical`` adds the canonical
+# v2 artifact set (manifest + current-state rejects + per-chunk
+# carry-forward on resume) alongside the frozen T3a fresh-run
+# semantics of ``run_extraction_v2``. Crash-safe ordering is:
+# precompute → unlink prior manifest → atomic JSONL → atomic rejects
+# → atomic manifest LAST.
+
+
+DEFAULT_OUTPUT_V2_JSONL = REPO_ROOT / "data" / "extractions.v2.jsonl"
+DEFAULT_OUTPUT_V2_REJECTS = REPO_ROOT / "data" / "extractions.v2.rejects.jsonl"
+DEFAULT_OUTPUT_V2_MANIFEST = REPO_ROOT / "data" / "extractions.v2.manifest.json"
+
+
+@dataclass(frozen=True)
+class RunResultV2Canonical:
+    """Return value of :func:`run_extraction_v2_canonical`.
+
+    Mirrors :class:`RunResultV2` plus the T3b audit fields:
+    ``resumed_from_run_id``, ``cumulative_tokens``,
+    ``cumulative_cost_usd`` (with zeros on fresh run / mismatch).
+    ``reject_count`` is the current-state canonical reject count.
+    """
+
+    exit_code: int
+    run_id: str
+    pipeline_version: str
+    resumed_from_run_id: str | None
+    records_written: int
+    mention_count: int
+    assertion_count: int
+    complete_chunk_count: int
+    reject_count: int
+    cumulative_tokens: int
+    cumulative_cost_usd: float
+    budget_aborted: bool = False
+
+
+@dataclass(frozen=True)
+class ManifestV2:
+    """Canonical v2 manifest written by ``run_extraction_v2_canonical``.
+
+    11 fields participate in resume identity (also see
+    ``_run_id_fingerprint_v2`` / ``_identity_matches_v2``). The rest
+    are audit-only.
+    """
+
+    schema_version: int
+    run_id: str
+    resumed_from_run_id: str | None
+    chunks_sha256: str
+    ontology_sha256: str
+    prompt_template_sha256: tuple
+    system_prompt_sha256: str
+    provider_name: str
+    provider_model: str
+    max_tokens: int
+    temperature: float
+    alignment_algorithm_version: str
+    alignment_algorithm_sha256: str
+
+    ontology_version: int
+    prompt_template_files: tuple
+    chunks_path: str
+    ontology_path: str
+    pipeline_version: str
+    cache_format_version: str
+    wall_clock_started_at: str
+    wall_clock_ended_at: str
+    cumulative_tokens: int
+    cumulative_cost_usd: float
+    reject_count: int
+    chunk_count_total: int
+    chunk_count_complete: int
+
+    def as_manifest_dict(self) -> dict:
+        return {
+            "schema_version": self.schema_version,
+            "run_id": self.run_id,
+            "resumed_from_run_id": self.resumed_from_run_id,
+            "chunks_sha256": self.chunks_sha256,
+            "ontology_sha256": self.ontology_sha256,
+            "prompt_template_sha256": list(self.prompt_template_sha256),
+            "system_prompt_sha256": self.system_prompt_sha256,
+            "provider": self.provider_name,
+            "model": self.provider_model,
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+            "alignment_algorithm_version": self.alignment_algorithm_version,
+            "alignment_algorithm_sha256": self.alignment_algorithm_sha256,
+            "ontology_version": self.ontology_version,
+            "prompt_template_files": list(self.prompt_template_files),
+            "chunks_path": self.chunks_path,
+            "ontology_path": self.ontology_path,
+            "pipeline_version": self.pipeline_version,
+            "cache_format_version": self.cache_format_version,
+            "wall_clock_started_at": self.wall_clock_started_at,
+            "wall_clock_ended_at": self.wall_clock_ended_at,
+            "cumulative_tokens": self.cumulative_tokens,
+            "cumulative_cost_usd": round(self.cumulative_cost_usd, 8),
+            "reject_count": self.reject_count,
+            "chunk_count_total": self.chunk_count_total,
+            "chunk_count_complete": self.chunk_count_complete,
+        }
+
+
+def _atomic_write_json_canonical(path: Path, payload: dict) -> None:
+    """Atomic JSON write with fsync. The manifest is the durability
+    marker — its atomicity matters because every other artifact is
+    invalid until it appears."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(
+        prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
+    )
+    try:
+        with io.open(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _invalidate_prior_manifest(path: Path) -> None:
+    """Unlink ``path`` if it exists; idempotent.
+
+    Manifest invalidation is a strict unlink per #55 — never a
+    sentinel/empty file. Missing manifest means no prior identity.
+    """
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+
+
+def _read_existing_v2_records(path: Path) -> tuple[list, list, dict]:
+    """Load v2 ``extractions.v2.jsonl`` into ``(mentions, assertions, statuses)``.
+
+    Fail-closed: every record must carry
+    ``schema_version == SCHEMA_VERSION_V2``. Malformed JSON, missing
+    ``chunk_id``, or unknown ``kind`` raise :class:`PreflightErrorV2`
+    with the offending line number. Returns empty maps when ``path``
+    is absent (no prior state → fresh run).
+    """
+    mentions: list = []
+    assertions: list = []
+    statuses: dict = {}
+    if not path.is_file():
+        return mentions, assertions, statuses
+    for lineno, raw_line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise PreflightErrorV2(
+                f"canonical: malformed JSONL at {path}:{lineno}: {exc}"
+            ) from exc
+        if not isinstance(rec, dict):
+            raise PreflightErrorV2(
+                f"canonical: record at {path}:{lineno} is not an object"
+            )
+        sv = rec.get("schema_version")
+        if type(sv) is not int or sv != schema_module.SCHEMA_VERSION_V2:
+            raise PreflightErrorV2(
+                f"canonical: record at {path}:{lineno} has schema_version="
+                f"{sv!r}; expected SCHEMA_VERSION_V2="
+                f"{schema_module.SCHEMA_VERSION_V2}"
+            )
+        kind = rec.get("kind")
+        cid = rec.get("chunk_id")
+        if not isinstance(cid, str):
+            raise PreflightErrorV2(
+                f"canonical: record at {path}:{lineno} missing string chunk_id"
+            )
+        if kind == "mention":
+            mentions.append(rec)
+        elif kind == "assertion":
+            assertions.append(rec)
+        elif kind == "chunk_status":
+            statuses[cid] = rec
+        else:
+            raise PreflightErrorV2(
+                f"canonical: record at {path}:{lineno} has unknown kind={kind!r}"
+            )
+    mentions.sort(key=lambda r: r.get("mention_id", ""))
+    assertions.sort(key=lambda r: r.get("assertion_id", ""))
+    return mentions, assertions, statuses
+
+
+def _read_existing_v2_rejects(path: Path) -> list:
+    """Load and strictly validate committed canonical reject JSONL."""
+    rejects: list = []
+    if not path.is_file():
+        return rejects
+    for lineno, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not raw_line.strip():
+            continue
+        try:
+            rec = json.loads(raw_line)
+        except json.JSONDecodeError as exc:
+            raise PreflightErrorV2(f"canonical: malformed rejects JSONL at {path}:{lineno}: {exc}") from exc
+        if not isinstance(rec, dict):
+            raise PreflightErrorV2(f"canonical: reject at {path}:{lineno} is not an object")
+        sv = rec.get("schema_version")
+        if type(sv) is not int or sv != schema_module.SCHEMA_VERSION_V2:
+            raise PreflightErrorV2(
+                f"canonical: reject at {path}:{lineno} has schema_version={sv!r}; "
+                f"expected SCHEMA_VERSION_V2={schema_module.SCHEMA_VERSION_V2}"
+            )
+        rejects.append(rec)
+    return rejects
+
+
+def _canonical_reject_records(rejects: list) -> Iterable[dict]:
+    """Add the canonical schema discriminator without changing T3a rejects."""
+    for reject in rejects:
+        yield {"schema_version": schema_module.SCHEMA_VERSION_V2, **reject}
+
+
+def _read_existing_v2_manifest(path: Path) -> dict | None:
+    """Load a structurally closed canonical manifest.
+
+    Resume-identity fields other than ``schema_version`` are intentionally
+    not type-checked here: malformed or missing identity is a semantic
+    mismatch handled by :func:`_identity_matches_v2` as a fresh run.
+    """
+    if not path.is_file():
+        return None
+    try:
+        rec = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} is not valid JSON: {exc}"
+        ) from exc
+    if not isinstance(rec, dict):
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} is not a JSON object"
+        )
+
+    known_keys = {
+        "schema_version", "run_id", "resumed_from_run_id", "chunks_sha256",
+        "ontology_sha256", "prompt_template_sha256", "system_prompt_sha256",
+        "provider", "model", "max_tokens", "temperature",
+        "alignment_algorithm_version", "alignment_algorithm_sha256",
+        "ontology_version", "prompt_template_files", "chunks_path",
+        "ontology_path", "pipeline_version", "cache_format_version",
+        "wall_clock_started_at", "wall_clock_ended_at", "cumulative_tokens",
+        "cumulative_cost_usd", "reject_count", "chunk_count_total",
+        "chunk_count_complete",
+    }
+    extra = set(rec) - known_keys
+    if extra:
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} has unknown extra keys: "
+            f"{sorted(extra)}"
+        )
+
+    schema_version = rec.get("schema_version")
+    if (type(schema_version) is not int
+            or schema_version != schema_module.SCHEMA_VERSION_V2):
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} has invalid schema_version"
+        )
+
+    required_types = {
+        "run_id": str,
+        "ontology_version": int,
+        "prompt_template_files": list,
+        "chunks_path": str,
+        "ontology_path": str,
+        "pipeline_version": str,
+        "cache_format_version": str,
+        "wall_clock_started_at": str,
+        "wall_clock_ended_at": str,
+        "cumulative_tokens": int,
+        "cumulative_cost_usd": float,
+        "reject_count": int,
+        "chunk_count_total": int,
+        "chunk_count_complete": int,
+    }
+    for key, expected_type in required_types.items():
+        if key not in rec or type(rec[key]) is not expected_type:
+            raise PreflightErrorV2(
+                f"canonical: manifest at {path} has invalid {key}"
+            )
+    if "resumed_from_run_id" not in rec:
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} missing resumed_from_run_id"
+        )
+    resumed_from = rec["resumed_from_run_id"]
+    if resumed_from is not None and type(resumed_from) is not str:
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} has invalid resumed_from_run_id"
+        )
+    prompt_files = rec["prompt_template_files"]
+    if len(prompt_files) != 2 or any(type(value) is not str for value in prompt_files):
+        raise PreflightErrorV2(
+            f"canonical: manifest at {path} has invalid prompt_template_files"
+        )
+    return rec
+
+
+def _identity_matches_v2(
+    *,
+    prev_manifest: dict | None,
+    preflight: PreflightReportV2,
+) -> bool:
+    """True iff every one of the 11 resume-identity fields matches.
+
+    All 11 must match; any missing field or type mismatch fails
+    closed. ``prev_manifest is None`` returns False (no prior
+    identity → no carry-forward). The list fields
+    (``prompt_template_sha256``) are compared as ordered tuples
+    so a swap invalidates identity.
+    """
+    if not isinstance(prev_manifest, dict):
+        return False
+    fields = (
+        ("schema_version", preflight.schema_version),
+        ("chunks_sha256", preflight.chunks_sha256),
+        ("ontology_sha256", preflight.ontology_sha256),
+        ("system_prompt_sha256", preflight.system_prompt_sha256),
+        ("provider", preflight.provider_name),
+        ("model", preflight.provider_model),
+        ("max_tokens", preflight.max_tokens),
+        ("temperature", preflight.temperature),
+        (
+            "alignment_algorithm_version",
+            preflight.alignment_algorithm_version,
+        ),
+        (
+            "alignment_algorithm_sha256",
+            preflight.alignment_algorithm_sha256,
+        ),
+    )
+    for key, expected in fields:
+        actual = prev_manifest.get(key)
+        if type(actual) is not type(expected) or actual != expected:
+            return False
+    prev_prompts = prev_manifest.get("prompt_template_sha256")
+    cur_prompts = [
+        preflight.prompt_entity_sha256,
+        preflight.prompt_relation_sha256,
+    ]
+    if (type(prev_prompts) is not list or len(prev_prompts) != 2
+            or any(type(value) is not str for value in prev_prompts)
+            or prev_prompts != cur_prompts):
+        return False
+    return True
+
+
+def _carry_forward_for_chunk(
+    *,
+    chunk: dict,
+    status: dict,
+    mentions: list,
+    assertions: list,
+    ontology: dict,
+) -> bool:
+    """True iff a prior chunk is safe to carry forward (#55 §"Carry-forward").
+
+    Enforces every #55 acceptance condition for a single chunk:
+
+    * chunk_status is a v2 chunk_status, ``extraction_complete``
+      is True, both phase statuses are ``validated``, both
+      ``failure_count == 0``, both ``mention_count`` /
+      ``assertion_count`` equal the actual carried counts.
+    * Every carried mention re-derives its v2 ID; its evidence
+      char range matches the chunk text byte-for-byte; its
+      source_text_sha256 equals ``sha256(chunk.text)``.
+    * Every carried assertion re-derives its v2 ID; its
+      source_text_sha256 equals the chunk sha; every mention-kind
+      endpoint resolves to a carried same-chunk mention and is
+      fully contained in the assertion's evidence span (#49
+      ``ENDPOINT_NOT_CONTAINED``); every document-kind endpoint
+      equals ``chunk.doc_id``.
+
+    Failure on any condition returns ``False``; the caller
+    silently narrows the resume for that chunk only.
+    """
+    chunk_id = chunk["chunk_id"]
+    doc_id = chunk["doc_id"]
+    text = chunk["text"]
+    chunk_sha = validation_module.source_text_sha256(text)
+    if (not isinstance(status, dict) or status.get("kind") != "chunk_status"
+            or type(status.get("schema_version")) is not int
+            or status.get("schema_version") != schema_module.SCHEMA_VERSION_V2
+            or status.get("doc_id") != doc_id or status.get("chunk_id") != chunk_id
+            or status.get("extraction_complete") is not True):
+        return False
+    phases = status.get("phases")
+    if not isinstance(phases, dict): return False
+    ent, rel = phases.get("entity"), phases.get("relation")
+    if not isinstance(ent, dict) or not isinstance(rel, dict): return False
+    if (ent.get("status") != "validated" or rel.get("status") != "validated"
+            or ent.get("failure_count") != 0 or rel.get("failure_count") != 0
+            or ent.get("mention_count") != len(mentions) or rel.get("assertion_count") != len(assertions)):
+        return False
+    mention_index: dict[str, dict] = {}
+    entity_types: dict[str, str] = {}
+    for mention in mentions:
+        try:
+            if (not isinstance(mention, dict) or mention.get("kind") != "mention"
+                    or type(mention.get("schema_version")) is not int
+                    or mention.get("schema_version") != schema_module.SCHEMA_VERSION_V2
+                    or mention.get("chunk_id") != chunk_id
+                    or mention.get("doc_id") != doc_id
+                    or ids_module.rederive_v2_mention_id(mention)
+                    != mention["mention_id"]):
+                return False
+            validation_module.check_mention_evidence_v2(
+                mention=mention,
+                chunk_text=text,
+                expected_source_text_sha256=chunk_sha,
+            )
+            validation_module.check_mention_ontology(
+                mention=mention,
+                ontology=ontology,
+            )
+            mention_index[mention["mention_id"]] = mention
+            entity_types[mention["mention_id"]] = mention["entity_type"]
+        except (KeyError, TypeError, ValueError,
+                validation_module.EvidenceError,
+                validation_module.OntologyError):
+            return False
+
+    mention_spans = {
+        mention_id: (
+            mention["evidence"]["char_start"],
+            mention["evidence"]["char_end"],
+        )
+        for mention_id, mention in mention_index.items()
+    }
+    for assertion in assertions:
+        try:
+            if (not isinstance(assertion, dict)
+                    or assertion.get("kind") != "assertion"
+                    or type(assertion.get("schema_version")) is not int
+                    or assertion.get("schema_version")
+                    != schema_module.SCHEMA_VERSION_V2
+                    or assertion.get("chunk_id") != chunk_id
+                    or assertion.get("doc_id") != doc_id
+                    or ids_module.rederive_v2_assertion_id(assertion)
+                    != assertion["assertion_id"]):
+                return False
+            validation_module.check_assertion_evidence_v2(
+                assertion=assertion,
+                chunk_text=text,
+                expected_source_text_sha256=chunk_sha,
+            )
+            validation_module.check_assertion_ontology(
+                assertion=assertion,
+                ontology=ontology,
+                doc_id=doc_id,
+                same_chunk_mentions=mention_index,
+                entity_type_for_mention=entity_types,
+            )
+            span = assertion["evidence"]
+            for ref in (assertion["subject_ref"], assertion["object_ref"]):
+                if ref["kind"] == "mention":
+                    if not align_module._endpoint_span_contained(
+                        relation_start=span["char_start"],
+                        relation_end=span["char_end"],
+                        endpoint=ref,
+                        aligned_mentions_by_id=mention_spans,
+                    ):
+                        return False
+                elif ref["kind"] == "document":
+                    if ref["id"] != doc_id:
+                        return False
+                else:
+                    return False
+        except (KeyError, TypeError, ValueError,
+                validation_module.EvidenceError,
+                validation_module.OntologyError):
+            return False
+    return True
+
+
+def run_extraction_v2_canonical(
+    *,
+    provider: LLMProvider,
+    chunks_path: Path = DEFAULT_CHUNKS_PATH,
+    ontology_path: Path = DEFAULT_ONTOLOGY_PATH,
+    prompts_dir: Path = prompts_module.PROMPTS_DIR,
+    output_jsonl: Path = DEFAULT_OUTPUT_V2_JSONL,
+    output_rejects: Path = DEFAULT_OUTPUT_V2_REJECTS,
+    output_manifest: Path = DEFAULT_OUTPUT_V2_MANIFEST,
+    max_tokens: int = 2048,
+    temperature: float = 0.0,
+) -> RunResultV2Canonical:
+    """Canonical v2 entry: manifest + semantic resume (#55).
+
+    Semantics:
+
+    * Every fresh run starts with ``run_id`` derived from the
+      current preflight identity (all 11 resume-identity
+      dimensions). On a resume-compatible prior manifest, the
+      cumulative tokens/cost seed from the prior manifest and
+      ``resumed_from_run_id`` is set; on any mismatch the resume
+      silently narrows to a fresh run.
+    * Chunks whose prior ``chunk_status.extraction_complete``
+      passes the carry-forward validator are reused verbatim;
+      chunks that fail the validator are silently re-run, as are
+      chunks with no prior record.
+    * The canonical artifact set is crash-safe: prior manifest is
+      unlinked before any new disk write, then JSONL + rejects +
+      manifest are rewritten in that order. A crash before the
+      final manifest write leaves the manifest absent ⇒ next
+      invocation treats the JSONL/rejects as untrusted.
+
+    Always-rewritten artifacts (``output_jsonl``,
+    ``output_rejects``, ``output_manifest``) are pre-truncated by
+    the atomic-replace path, so a successful run always produces
+    exactly the artifact set the manifest advertises.
+    """
+    ontology, chunks, prompt_artifacts, report = _preflight_v2(
+        chunks_path=chunks_path,
+        ontology_path=ontology_path,
+        prompts_dir=prompts_dir,
+        provider=provider,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        require_pipeline_version=True,
+    )
+
+    schemas = {
+        "entity": schema_module.entity_pass_v2_schema(ontology),
+        "relation": schema_module.relation_pass_v2_schema(ontology),
+    }
+    entity_artifact = prompt_artifacts[V2_ENTITY_PROMPT_FILENAME]
+    relation_artifact = prompt_artifacts[V2_RELATION_PROMPT_FILENAME]
+
+    # Pre-compute manifest-driven state. All in-memory work happens
+    # before any disk mutation so a crash before the first write
+    # leaves the prior on-disk set untouched.
+    prev_manifest = _read_existing_v2_manifest(output_manifest)
+    # Operator-facing invariant: manifest present ⇒ every other
+    # artifact in the canonical set is consistent with it. A
+    # manifest without its sibling JSONL or rejects is unrecoverable
+    # (we cannot know which chunks had been completed), so it is a
+    # hard preflight error rather than a silent re-run.
+    if prev_manifest is not None:
+        if not output_jsonl.is_file():
+            raise PreflightErrorV2(
+                f"canonical: manifest present at {output_manifest} "
+                f"but canonical JSONL is missing at {output_jsonl}"
+            )
+        if not output_rejects.is_file():
+            raise PreflightErrorV2(
+                f"canonical: manifest present at {output_manifest} "
+                f"but canonical rejects are missing at {output_rejects}"
+            )
+    prev_mentions: list = []
+    prev_assertions: list = []
+    prev_statuses: dict = {}
+    if prev_manifest is not None:
+        prev_mentions, prev_assertions, prev_statuses = _read_existing_v2_records(output_jsonl)
+        _read_existing_v2_rejects(output_rejects)
+    identity_ok = _identity_matches_v2(
+        prev_manifest=prev_manifest, preflight=report,
+    )
+    resumed_from: str | None = None
+    cumulative_tokens = 0
+    cumulative_cost = 0.0
+    carry_mentions_by_chunk: dict = {}
+    carry_assertions_by_chunk: dict = {}
+    carry_statuses_by_chunk: dict = {}
+    if identity_ok and prev_manifest is not None:
+        resumed_from = prev_manifest.get("run_id")
+        rft = prev_manifest.get("cumulative_tokens", 0)
+        if isinstance(rft, int):
+            cumulative_tokens = rft
+        rfc = prev_manifest.get("cumulative_cost_usd", 0.0)
+        if isinstance(rfc, (int, float)):
+            cumulative_cost = float(rfc)
+        prev_mentions_by_chunk: dict = {}
+        for m in prev_mentions:
+            prev_mentions_by_chunk.setdefault(m["chunk_id"], []).append(m)
+        prev_assertions_by_chunk: dict = {}
+        for a in prev_assertions:
+            prev_assertions_by_chunk.setdefault(a["chunk_id"], []).append(a)
+        for chunk in chunks:
+            cid = chunk["chunk_id"]
+            status = prev_statuses.get(cid)
+            if status is None:
+                continue
+            ms = prev_mentions_by_chunk.get(cid, [])
+            as_ = prev_assertions_by_chunk.get(cid, [])
+            if _carry_forward_for_chunk(
+                chunk=chunk, status=status, mentions=ms, assertions=as_, ontology=ontology,
+            ):
+                carry_mentions_by_chunk[cid] = ms
+                carry_assertions_by_chunk[cid] = as_
+                carry_statuses_by_chunk[cid] = status
+
+    started_at = _utc_now_compact()
+    run_id = _make_run_id_v2(preflight=report)
+    budget_aborted = False
+    mentions_by_chunk = {k: list(v) for k, v in carry_mentions_by_chunk.items()}
+    assertions_by_chunk = {
+        k: list(v) for k, v in carry_assertions_by_chunk.items()
+    }
+    statuses_by_chunk = dict(carry_statuses_by_chunk)
+    collected_rejects: list = []
+
+    try:
+        for chunk in chunks:
+            chunk_id = chunk["chunk_id"]
+            if chunk_id in statuses_by_chunk:
+                # Resumed from prior valid chunk; skip re-run.
+                continue
+            try:
+                (
+                    entity_outcome,
+                    validated_mentions,
+                    entity_usage,
+                ) = _run_entity_phase_v2(
+                    chunk=chunk,
+                    ontology=ontology,
+                    prompt_artifact=entity_artifact,
+                    provider=provider,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    schema=schemas["entity"],
+                    preflight=report,
+                    system_prompt=report.system_prompt,
+                )
+            except BudgetExceeded:
+                budget_aborted = True
+                break
+
+            cumulative_tokens, cumulative_cost = _accumulate_usage(
+                cumulative_tokens=cumulative_tokens,
+                cumulative_cost=cumulative_cost,
+                usage=entity_usage,
+            )
+
+            mentions_by_chunk[chunk_id] = [m.to_record() for m in validated_mentions]
+
+            entity_type_lookup = {
+                m.mention_id: m.entity_type for m in validated_mentions
+            }
+
+            try:
+                (
+                    relation_outcome,
+                    validated_assertions,
+                    relation_usage,
+                ) = _run_relation_phase_v2(
+                    chunk=chunk,
+                    ontology=ontology,
+                    prompt_artifact=relation_artifact,
+                    provider=provider,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    schema=schemas["relation"],
+                    preflight=report,
+                    same_chunk_mentions=validated_mentions,
+                    entity_type_for_mention=entity_type_lookup,
+                    system_prompt=report.system_prompt,
+                )
+            except BudgetExceeded:
+                budget_aborted = True
+                break
+
+            cumulative_tokens, cumulative_cost = _accumulate_usage(
+                cumulative_tokens=cumulative_tokens,
+                cumulative_cost=cumulative_cost,
+                usage=relation_usage,
+            )
+
+            assertions_by_chunk[chunk_id] = [
+                a.to_record() for a in validated_assertions
+            ]
+            statuses_by_chunk[chunk_id] = _build_chunk_status_v2(
+                chunk_id=chunk_id,
+                doc_id=chunk["doc_id"],
+                entity_outcome=entity_outcome,
+                relation_outcome=relation_outcome,
+            )
+
+            collected_rejects.extend(
+                entity_outcome.reject_records + relation_outcome.reject_records
+            )
+
+        # Crash-safe ordering: invalidate manifest FIRST so a crash
+        # never leaves a stale manifest pointing at partial JSONL.
+        # Then atomic-replace the JSONL and the rejects. Finally
+        # write the manifest — its presence advertises consistency.
+        _invalidate_prior_manifest(output_manifest)
+
+        for cid in list(mentions_by_chunk):
+            mentions_by_chunk[cid].sort(key=lambda r: r.get("mention_id", ""))
+        for cid in list(assertions_by_chunk):
+            assertions_by_chunk[cid].sort(key=lambda r: r.get("assertion_id", ""))
+
+        _atomic_rewrite_jsonl(
+            output_jsonl,
+            _format_records_v2(
+                mentions_by_chunk=mentions_by_chunk,
+                assertions_by_chunk=assertions_by_chunk,
+                statuses_by_chunk=statuses_by_chunk,
+            ),
+        )
+        _atomic_rewrite_jsonl(
+            output_rejects,
+            (
+                json.dumps(r, ensure_ascii=False, sort_keys=True)
+                for r in _canonical_reject_records(collected_rejects)
+            ),
+        )
+
+        ended_at = _utc_now_compact()
+        total_complete = sum(
+            1 for s in statuses_by_chunk.values()
+            if isinstance(s, dict) and s.get("extraction_complete")
+        )
+        manifest = ManifestV2(
+            schema_version=report.schema_version,
+            run_id=run_id,
+            resumed_from_run_id=resumed_from,
+            chunks_sha256=report.chunks_sha256,
+            ontology_sha256=report.ontology_sha256,
+            prompt_template_sha256=(
+                report.prompt_entity_sha256,
+                report.prompt_relation_sha256,
+            ),
+            system_prompt_sha256=report.system_prompt_sha256,
+            provider_name=report.provider_name,
+            provider_model=report.provider_model,
+            max_tokens=report.max_tokens,
+            temperature=report.temperature,
+            alignment_algorithm_version=report.alignment_algorithm_version,
+            alignment_algorithm_sha256=report.alignment_algorithm_sha256,
+            ontology_version=report.ontology_version,
+            prompt_template_files=(
+                report.prompt_entity_filename,
+                report.prompt_relation_filename,
+            ),
+            chunks_path=str(report.chunks_path),
+            ontology_path=str(report.ontology_path),
+            pipeline_version=report.pipeline_version,
+            cache_format_version=report.cache_format_version,
+            wall_clock_started_at=started_at,
+            wall_clock_ended_at=ended_at,
+            cumulative_tokens=cumulative_tokens,
+            cumulative_cost_usd=cumulative_cost,
+            reject_count=len(collected_rejects),
+            chunk_count_total=len(chunks),
+            chunk_count_complete=total_complete,
+        )
+        _atomic_write_json_canonical(output_manifest, manifest.as_manifest_dict())
+
+        total_mentions = sum(len(v) for v in mentions_by_chunk.values())
+        total_assertions = sum(len(v) for v in assertions_by_chunk.values())
+
+        return RunResultV2Canonical(
+            exit_code=1 if budget_aborted else 0,
+            run_id=run_id,
+            pipeline_version=report.pipeline_version,
+            resumed_from_run_id=resumed_from,
+            records_written=total_mentions + total_assertions + len(statuses_by_chunk),
+            mention_count=total_mentions,
+            assertion_count=total_assertions,
+            complete_chunk_count=total_complete,
+            reject_count=len(collected_rejects),
+            cumulative_tokens=cumulative_tokens,
+            cumulative_cost_usd=cumulative_cost,
+            budget_aborted=budget_aborted,
+        )
+    except BudgetExceeded:
+        # Partial state still durable: write whatever we have so
+        # the next invocation can resume the remaining chunks.
+        _invalidate_prior_manifest(output_manifest)
+
+        for cid in list(mentions_by_chunk):
+            mentions_by_chunk[cid].sort(key=lambda r: r.get("mention_id", ""))
+        for cid in list(assertions_by_chunk):
+            assertions_by_chunk[cid].sort(key=lambda r: r.get("assertion_id", ""))
+
+        _atomic_rewrite_jsonl(
+            output_jsonl,
+            _format_records_v2(
+                mentions_by_chunk=mentions_by_chunk,
+                assertions_by_chunk=assertions_by_chunk,
+                statuses_by_chunk=statuses_by_chunk,
+            ),
+        )
+        _atomic_rewrite_jsonl(
+            output_rejects,
+            (
+                json.dumps(r, ensure_ascii=False, sort_keys=True)
+                for r in _canonical_reject_records(collected_rejects)
+            ),
+        )
+        ended_at = _utc_now_compact()
+        total_complete = sum(
+            1 for s in statuses_by_chunk.values()
+            if isinstance(s, dict) and s.get("extraction_complete")
+        )
+        manifest = ManifestV2(
+            schema_version=report.schema_version,
+            run_id=run_id,
+            resumed_from_run_id=resumed_from,
+            chunks_sha256=report.chunks_sha256,
+            ontology_sha256=report.ontology_sha256,
+            prompt_template_sha256=(
+                report.prompt_entity_sha256,
+                report.prompt_relation_sha256,
+            ),
+            system_prompt_sha256=report.system_prompt_sha256,
+            provider_name=report.provider_name,
+            provider_model=report.provider_model,
+            max_tokens=report.max_tokens,
+            temperature=report.temperature,
+            alignment_algorithm_version=report.alignment_algorithm_version,
+            alignment_algorithm_sha256=report.alignment_algorithm_sha256,
+            ontology_version=report.ontology_version,
+            prompt_template_files=(
+                report.prompt_entity_filename,
+                report.prompt_relation_filename,
+            ),
+            chunks_path=str(report.chunks_path),
+            ontology_path=str(report.ontology_path),
+            pipeline_version=report.pipeline_version,
+            cache_format_version=report.cache_format_version,
+            wall_clock_started_at=started_at,
+            wall_clock_ended_at=ended_at,
+            cumulative_tokens=cumulative_tokens,
+            cumulative_cost_usd=cumulative_cost,
+            reject_count=len(collected_rejects),
+            chunk_count_total=len(chunks),
+            chunk_count_complete=total_complete,
+        )
+        _atomic_write_json_canonical(output_manifest, manifest.as_manifest_dict())
+        total_mentions = sum(len(v) for v in mentions_by_chunk.values())
+        total_assertions = sum(len(v) for v in assertions_by_chunk.values())
+        return RunResultV2Canonical(
+            exit_code=1,
+            run_id=run_id,
+            pipeline_version=report.pipeline_version,
+            resumed_from_run_id=resumed_from,
+            records_written=total_mentions + total_assertions + len(statuses_by_chunk),
+            mention_count=total_mentions,
+            assertion_count=total_assertions,
+            complete_chunk_count=total_complete,
+            reject_count=len(collected_rejects),
+            cumulative_tokens=cumulative_tokens,
+            cumulative_cost_usd=cumulative_cost,
+            budget_aborted=True,
+        )
+
+
+def _accumulate_usage(
+    *,
+    cumulative_tokens: int,
+    cumulative_cost: float,
+    usage: Usage,
+) -> tuple[int, float]:
+    """Add ``usage`` (which may have ``None`` fields) to the running totals."""
+    if usage.input_tokens is not None:
+        cumulative_tokens += usage.input_tokens
+    if usage.output_tokens is not None:
+        cumulative_tokens += usage.output_tokens
+    if usage.cost_usd is not None:
+        cumulative_cost += usage.cost_usd
+    return cumulative_tokens, cumulative_cost
 
 
 

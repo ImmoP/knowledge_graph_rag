@@ -81,6 +81,16 @@ class AlignedAssertion:
     char_end: int
 
 
+#: Version stamp of the alignment algorithm itself (#55). Bumped on any
+#: change to the literal-alignment rules (occurrence enumeration,
+#: endpoint containment, occurrence-index resolution, etc.). The
+#: ``ALIGNMENT_ALGORITHM_SHA256`` recorded in the canonical manifest
+#: is the sha256 of this module's source bytes and changes whenever
+#: the source changes; this constant changes only when the algorithm
+#: semantically changes.
+ALIGNMENT_ALGORITHM_VERSION = "v2-exact-span-1"
+
+
 # ---------- enumeration helpers ----------
 
 
