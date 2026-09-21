@@ -1,0 +1,325 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T18:37:16.451747Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_2abd40653a611dc4",
+  "doc_id": "W2753329127",
+  "entities": [
+    {
+      "canonical_form": "LSTM",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 688,
+          "char_start": 684,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 688,
+        "char_start": 684
+      },
+      "surface_form": "LSTM"
+    },
+    {
+      "canonical_form": "GloVe",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 863,
+          "char_start": 858,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 863,
+        "char_start": 858
+      },
+      "surface_form": "GloVe"
+    },
+    {
+      "canonical_form": "Quasar-T",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1128,
+          "char_start": 1120,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1128,
+        "char_start": 1120
+      },
+      "surface_form": "Quasar-T"
+    },
+    {
+      "canonical_form": "SQuAD-Open",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1178,
+          "char_start": 1155,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1178,
+        "char_start": 1155
+      },
+      "surface_form": "SQuAD$_{\\textrm{OPEN}}$"
+    },
+    {
+      "canonical_form": "WikiMovies",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_05",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1215,
+          "char_start": 1205,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1215,
+        "char_start": 1205
+      },
+      "surface_form": "WikiMovies"
+    },
+    {
+      "canonical_form": "CuratedTREC",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_06",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1254,
+          "char_start": 1243,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1254,
+        "char_start": 1243
+      },
+      "surface_form": "CuratedTREC"
+    },
+    {
+      "canonical_form": "WebQuestions",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_07",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1293,
+          "char_start": 1281,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1293,
+        "char_start": 1281
+      },
+      "surface_form": "WebQuestions"
+    },
+    {
+      "canonical_form": "F1",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_08",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1323,
+          "char_start": 1321,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1363,
+          "char_start": 1361,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1403,
+          "char_start": 1401,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 1449,
+          "char_start": 1447,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 1495,
+          "char_start": 1493,
+          "occurrence_index": 4
+        }
+      ],
+      "span": {
+        "char_end": 1323,
+        "char_start": 1321
+      },
+      "surface_form": "F1"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_2abd4065_09",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1343,
+          "char_start": 1341,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1383,
+          "char_start": 1381,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1426,
+          "char_start": 1424,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 1472,
+          "char_start": 1470,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 1518,
+          "char_start": 1516,
+          "occurrence_index": 4
+        }
+      ],
+      "span": {
+        "char_end": 1343,
+        "char_start": 1341
+      },
+      "surface_form": "EM"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "LSTM layers in Eqn.(\\ref{eqn:matchlstm}) is set to 3",
+      "evidence_span": {
+        "char_end": 736,
+        "char_start": 684
+      },
+      "object_ref": {
+        "id": "ge_2abd4065_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_2abd4065_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "use fixed GloVe",
+      "evidence_span": {
+        "char_end": 863,
+        "char_start": 848
+      },
+      "object_ref": {
+        "id": "ge_2abd4065_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_2abd4065_02",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [],
+      "evidence_quote": "Quasar-T} & \\multicolumn{2}{c}{\\bf SQuAD$_{\\textrm{OPEN}}$} & \\multicolumn{2}{c}{\\bf WikiMovies}  & \\multicolumn{2}{c}{\\bf CuratedTREC} & \\multicolumn{2}{c}{\\bf WebQuestions}\\\\\n                  & \\bf F1            & \\bf EM            & \\bf F1            & \\bf EM            & \\bf F1               & \\bf EM               & \\bf F1               & \\bf EM               & \\bf F1               & \\bf EM              \\\\\n\\midrule\nGA~[[CITE:dhingra2016gated]]               & 26.4",
+      "evidence_span": {
+        "char_end": 1593,
+        "char_start": 1120
+      },
+      "object_ref": {
+        "id": "ge_2abd4065_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_2abd4065_03",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "\\bf F1            & \\bf EM            & \\bf F1            & \\bf EM            & \\bf F1               & \\bf EM               & \\bf F1               & \\bf EM               & \\bf F1               & \\bf EM              \\\\\n\\midrule\nGA~[[CITE:dhingra2016gated]]               & 26.4",
+      "evidence_span": {
+        "char_end": 1593,
+        "char_start": 1317
+      },
+      "object_ref": {
+        "id": "ge_2abd4065_08",
+        "kind": "mention"
+      },
+      "relation_id": "gr_2abd4065_04",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "\\bf F1            & \\bf EM            & \\bf F1            & \\bf EM            & \\bf F1               & \\bf EM               & \\bf F1               & \\bf EM               & \\bf F1               & \\bf EM              \\\\\n\\midrule\nGA~[[CITE:dhingra2016gated]]               & 26.4          & 26.4",
+      "evidence_span": {
+        "char_end": 1609,
+        "char_start": 1317
+      },
+      "object_ref": {
+        "id": "ge_2abd4065_09",
+        "kind": "mention"
+      },
+      "relation_id": "gr_2abd4065_05",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
