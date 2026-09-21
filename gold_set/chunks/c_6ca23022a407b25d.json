@@ -1,0 +1,203 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T21:35:45.530738Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_6ca23022a407b25d",
+  "doc_id": "W3015883388",
+  "entities": [
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_6ca23022_01",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 869,
+          "char_start": 839,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 869,
+        "char_start": 839
+      },
+      "surface_form": "Open-domain question answering"
+    },
+    {
+      "canonical_form": "Passage Retrieval",
+      "confidence": "stated",
+      "entity_id": "ge_6ca23022_02",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 907,
+          "char_start": 890,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1438,
+          "char_start": 1421,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1438,
+        "char_start": 1421
+      },
+      "surface_form": "passage retrieval"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_6ca23022_03",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1302,
+          "char_start": 1288,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1541,
+          "char_start": 1527,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1302,
+        "char_start": 1288
+      },
+      "surface_form": "open-domain QA"
+    },
+    {
+      "canonical_form": "TF-IDF",
+      "confidence": "stated",
+      "entity_id": "ge_6ca23022_04",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 998,
+          "char_start": 992,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 998,
+        "char_start": 992
+      },
+      "surface_form": "TF-IDF"
+    },
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_6ca23022_05",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1006,
+          "char_start": 1002,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1365,
+          "char_start": 1361,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1006,
+        "char_start": 1002
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_6ca23022_06",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1365,
+          "char_start": 1354,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1365,
+        "char_start": 1354
+      },
+      "surface_form": "Lucene-BM25"
+    },
+    {
+      "canonical_form": "Top-20 Passage Retrieval Accuracy",
+      "confidence": "stated",
+      "entity_id": "ge_6ca23022_07",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1447,
+          "char_start": 1414,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1447,
+        "char_start": 1414
+      },
+      "surface_form": "top-20 passage retrieval accuracy"
+    }
+  ],
+  "note": "committed to the occurrence embedded in the reported top-20 passage retrieval accuracy metric rather than the earlier abstract occurrence; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "9\\%-19\\% absolute in terms of top-20 passage retrieval accuracy",
+      "evidence_span": {
+        "char_end": 1447,
+        "char_start": 1384
+      },
+      "object_ref": {
+        "id": "ge_6ca23022_07",
+        "kind": "mention"
+      },
+      "relation_id": "gr_6ca23022_01",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 1
+        }
+      ],
+      "evidence_quote": "top-20 passage retrieval accuracy",
+      "evidence_span": {
+        "char_end": 1447,
+        "char_start": 1414
+      },
+      "object_ref": {
+        "id": "ge_6ca23022_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_6ca23022_02",
+      "relation_type": "MEASURES",
+      "subject_ref": {
+        "id": "ge_6ca23022_07",
+        "kind": "mention"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
