@@ -1,4 +1,4 @@
-"""Fail-closed human gold-record authoring CLI (#65)."""
+"""Fail-closed human gold-record authoring CLI (#65, #69)."""
 from __future__ import annotations
 
 import argparse
@@ -34,6 +34,9 @@ TOP_LEVEL = frozenset((
 ))
 ENTITY_FIELDS = frozenset(("entity_id", "entity_type", "surface_form", "canonical_form", "span", "occurrences_in_chunk", "confidence"))
 RELATION_FIELDS = frozenset(("relation_id", "relation_type", "subject_ref", "object_ref", "evidence_quote", "evidence_span", "endpoint_mentions", "confidence", "note"))
+ENTITY_ID_RE = re.compile(r"^ge_([0-9a-f]{8})_(\d+)$")
+RELATION_ID_RE = re.compile(r"^gr_([0-9a-f]{8})_(\d+)$")
+CHUNK_ID_RE = re.compile(r"^c_([0-9a-f]{16})$")
 
 
 class AuthorError(RuntimeError):
@@ -53,7 +56,16 @@ class Paths:
 
 
 def _default_paths() -> Paths:
-    return Paths(ROOT / "data/derived/chunks.jsonl", ROOT / "data/manifest.jsonl", ROOT / "data/gold_set/sample.v2.jsonl", ROOT / "data/gold_set/sample.v2.audit.json", ROOT / "eval/held_out_leakage.v1.json", ROOT / "ontology.yaml", ROOT / "gold_set/GUIDELINES.md", ROOT / "gold_set/chunks")
+    return Paths(
+        ROOT / "data/derived/chunks.jsonl",
+        ROOT / "data/manifest.jsonl",
+        ROOT / "data/gold_set/sample.v2.jsonl",
+        ROOT / "data/gold_set/sample.v2.audit.json",
+        ROOT / "eval/held_out_leakage.v1.json",
+        ROOT / "ontology.yaml",
+        ROOT / "gold_set/GUIDELINES.md",
+        ROOT / "gold_set/chunks",
+    )
 
 
 def _sha(path: Path) -> str:
@@ -213,9 +225,69 @@ def preflight(paths: Paths, chunk_id: str) -> tuple[dict[str, Any], dict[str, An
     return chunk, audit, version, relations
 
 
+def _annotated_chunk_ids(paths: Paths) -> set[str]:
+    """Read every canonical JSON file and return its chunk_id set, fail-closed."""
+    if not paths.destination_dir.exists():
+        return set()
+    annotated: set[str] = set()
+    for candidate in paths.destination_dir.iterdir():
+        if not candidate.is_file() or candidate.suffix != ".json":
+            continue
+        # Fail-closed: malformed JSON or wrong filename shape is an error.
+        record = _load_json(candidate)
+        expected_filename = f"{_string(record.get('chunk_id'), 'record.chunk_id')}.json"
+        if candidate.name != expected_filename:
+            raise AuthorError(f"canonical filename {candidate.name} does not match record chunk_id {expected_filename}")
+        annotated.add(record["chunk_id"])
+    return annotated
+
+
+def status(paths: Paths) -> dict[str, Any]:
+    # Validate frozen inputs via the authoritative preflight pipeline.
+    sample = _jsonl(paths.sample)
+    if len(sample) != SAMPLE_SIZE:
+        raise AuthorError(f"sample has {len(sample)} rows; expected {SAMPLE_SIZE}")
+    first_chunk_id = _string(sample[0].get("chunk_id"), "sample.chunk_id")
+    preflight(paths, first_chunk_id)
+    ids = [_string(row.get("chunk_id"), "sample.chunk_id") for row in sample]
+    sample_id_set = set(ids)
+    annotated = _annotated_chunk_ids(paths)
+    if annotated - sample_id_set:
+        raise AuthorError(
+            f"annotated chunk IDs not in canonical sample: {sorted(annotated - sample_id_set)}"
+        )
+    next_row: dict[str, Any] | None = None
+    for row in sample:
+        chunk_id = _string(row.get("chunk_id"), "sample.chunk_id")
+        if chunk_id not in annotated:
+            next_row = {"chunk_id": chunk_id, "doc_id": _string(row.get("doc_id"), "sample.doc_id")}
+            break
+    return {
+        "annotated": len(annotated),
+        "sample_size": SAMPLE_SIZE,
+        "remaining": SAMPLE_SIZE - len(annotated),
+        "next": next_row,
+    }
+
+
 def template(paths: Paths, chunk_id: str, annotator_id: str) -> dict[str, Any]:
     chunk, _, ontology_version, _ = preflight(paths, chunk_id)
-    return {"schema_version": SCHEMA_VERSION, "chunk_id": chunk_id, "doc_id": chunk["doc_id"], "canonical_chunks_sha256_at_authoring": _sha(paths.chunks), "ontology_version": ontology_version, "ontology_sha256": _sha(paths.ontology), "annotation_guideline_version": _guideline_version(paths.guideline), "annotation_guideline_sha256": _sha(paths.guideline), "annotator_id": _string(annotator_id, "annotator_id"), "adjudication_status": "single_pass", "adjudicated_by": None, "annotated_at": None, "entities": [], "relations": []}
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "chunk_id": chunk_id,
+        "doc_id": chunk["doc_id"],
+        "canonical_chunks_sha256_at_authoring": _sha(paths.chunks),
+        "ontology_version": ontology_version,
+        "ontology_sha256": _sha(paths.ontology),
+        "annotation_guideline_version": _guideline_version(paths.guideline),
+        "annotation_guideline_sha256": _sha(paths.guideline),
+        "annotator_id": _string(annotator_id, "annotator_id"),
+        "adjudication_status": "single_pass",
+        "adjudicated_by": None,
+        "annotated_at": None,
+        "entities": [],
+        "relations": [],
+    }
 
 
 def _validate_entities(value: Any, text: str) -> dict[str, dict[str, Any]]:
@@ -341,8 +413,287 @@ def validate_record(record: Any, paths: Paths) -> dict[str, Any]:
     if not entities and (not isinstance(record.get("note"), str) or not record["note"]):
         raise AuthorError("empty entity list requires non-empty top-level note")
     return record
+
+
 def _bytes(record: dict[str, Any]) -> bytes:
     return (json.dumps(record, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+
+
+def _chunk_token(chunk_id: str) -> str:
+    """First 8 hex chars of chunk_id after the ``c_`` prefix."""
+    match = CHUNK_ID_RE.match(chunk_id)
+    if match is None:
+        raise AuthorError(f"chunk_id: malformed: {chunk_id}")
+    return match.group(1)[:8]
+
+
+def _next_entity_id(entities: list[dict[str, Any]], chunk_id: str) -> str:
+    """Next ``ge_<token>_<seq>`` ID using max existing + 1. Mixed/malformed rejected."""
+    token = _chunk_token(chunk_id)
+    highest = 0
+    for entity in entities:
+        identifier = entity.get("entity_id")
+        match = ENTITY_ID_RE.match(identifier) if isinstance(identifier, str) else None
+        if match is None:
+            raise AuthorError(f"entity_id: unexpected format: {identifier!r}")
+        existing_token, seq_str = match.group(1), match.group(2)
+        if existing_token != token:
+            raise AuthorError(f"entity_id: chunk-token mismatch: {identifier!r}")
+        try:
+            seq = int(seq_str)
+        except ValueError as exc:
+            raise AuthorError(f"entity_id: unexpected sequence: {identifier!r}") from exc
+        if seq < 1:
+            raise AuthorError(f"entity_id: sequence must be >= 1: {identifier!r}")
+        highest = max(highest, seq)
+    return f"ge_{token}_{highest + 1:02d}"
+
+
+def _next_relation_id(relations: list[dict[str, Any]], chunk_id: str) -> str:
+    """Next ``gr_<token>_<seq>`` ID using max existing + 1. Mixed/malformed rejected."""
+    token = _chunk_token(chunk_id)
+    highest = 0
+    for relation in relations:
+        identifier = relation.get("relation_id")
+        match = RELATION_ID_RE.match(identifier) if isinstance(identifier, str) else None
+        if match is None:
+            raise AuthorError(f"relation_id: unexpected format: {identifier!r}")
+        existing_token, seq_str = match.group(1), match.group(2)
+        if existing_token != token:
+            raise AuthorError(f"relation_id: chunk-token mismatch: {identifier!r}")
+        try:
+            seq = int(seq_str)
+        except ValueError as exc:
+            raise AuthorError(f"relation_id: unexpected sequence: {identifier!r}") from exc
+        if seq < 1:
+            raise AuthorError(f"relation_id: sequence must be >= 1: {identifier!r}")
+        highest = max(highest, seq)
+    return f"gr_{token}_{highest + 1:02d}"
+
+
+def _load_draft(paths: Paths, draft_path: Path) -> tuple[dict[str, Any], str, dict[str, Any], dict[str, tuple[str, str]]]:
+    _reject_canonical_destination(paths, draft_path)
+    record = _load_json(draft_path)
+    chunk_id = _string(record.get("chunk_id"), "chunk_id")
+    chunk, _, _, signatures = preflight(paths, chunk_id)
+    if record.get("doc_id") != chunk["doc_id"]:
+        raise AuthorError("record.doc_id: does not match canonical chunk")
+    text = _string(chunk.get("text"), "chunk.text")
+    if not isinstance(record.get("entities"), list) or not isinstance(record.get("relations"), list):
+        raise AuthorError("record: entities and relations must be lists")
+    return record, text, chunk, signatures
+
+def _is_pristine_template(record: dict[str, Any]) -> bool:
+    """The legitimate pristine template state: entities and relations empty, no top-level note."""
+    if record.get("entities") != [] or record.get("relations") != []:
+        return False
+    return "note" not in record
+
+
+def _validate_baseline_draft(record: dict[str, Any], paths: Paths) -> None:
+    """Fail-closed validation of the existing draft before any semantic mutation.
+
+    A pristine template (empty entities, empty relations, no top-level note) is not
+    yet publish-valid because validate_record requires a non-empty note for empty
+    annotation. Inject a temporary non-empty note into a *copy* solely to drive
+    validation; the original record and on-disk draft are never touched.
+    """
+    probe = dict(record)
+    if _is_pristine_template(record):
+        # Pristine template is intentionally not yet publish-valid; inject a non-empty
+        # probe note into the COPY so validate_record can exercise every rule that would
+        # otherwise reject the empty/no-note state. The original record and on-disk
+        # draft are never touched.
+        probe["note"] = "_baseline_validation_probe"
+    if not isinstance(probe.get("entities"), list) or not isinstance(probe.get("relations"), list):
+        raise AuthorError("record: entities and relations must be lists")
+    validate_record(probe, paths)
+
+
+def _atomic_write_draft(path: Path, payload: bytes) -> None:
+    """Same-directory atomic replace: temp file + flush + fsync + os.replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        temp_path = Path(name)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except BaseException:
+            temp_path.unlink(missing_ok=True)
+            raise
+        os.replace(temp_path, path)
+    except OSError as exc:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+        raise AuthorError(f"failed to write draft {path}: {exc}") from exc
+
+
+def add_entity(
+    paths: Paths,
+    draft_path: Path,
+    entity_type: str,
+    surface_form: str,
+    canonical_form: str,
+    confidence: str,
+    occurrence_index: int | None,
+    note: str | None,
+) -> dict[str, Any]:
+    if entity_type not in ENTITY_TYPES:
+        raise AuthorError("--entity-type: invalid")
+    if confidence not in CONFIDENCES:
+        raise AuthorError("--confidence: invalid")
+    record, text, _, _ = _load_draft(paths, draft_path)
+    _validate_baseline_draft(record, paths)
+    if not surface_form:
+        raise AuthorError("--surface-form: expected non-empty string")
+    occurrences = _enumerate_occurrences(text, surface_form)
+    if not occurrences:
+        raise AuthorError("--surface-form: not an exact occurrence in chunk text")
+    if occurrence_index is None:
+        chosen = 0
+    else:
+        if occurrence_index < 0 or occurrence_index >= len(occurrences):
+            raise AuthorError("--occurrence-index: out of range")
+        chosen = occurrence_index
+    entities: list[dict[str, Any]] = list(record["entities"])
+    for existing in entities:
+        if existing["entity_type"] == entity_type and existing["surface_form"] == surface_form:
+            raise AuthorError("--surface-form: duplicate entity_type + surface_form already in draft")
+    if chosen != 0 and not note:
+        raise AuthorError("--note: required when --occurrence-index selects a non-default occurrence")
+    committed = occurrences[chosen]
+    candidate_entities = list(entities)
+    new_entity = {
+        "entity_id": _next_entity_id(candidate_entities, record["chunk_id"]),
+        "entity_type": entity_type,
+        "surface_form": surface_form,
+        "canonical_form": canonical_form,
+        "span": {"char_start": committed, "char_end": committed + len(surface_form)},
+        "occurrences_in_chunk": [
+            {"occurrence_index": index, "char_start": start, "char_end": start + len(surface_form)}
+            for index, start in enumerate(occurrences)
+        ],
+        "confidence": confidence,
+    }
+    candidate_entities.append(new_entity)
+    candidate = dict(record)
+    candidate["entities"] = candidate_entities
+    if note:
+        existing_note = record.get("note")
+        if isinstance(existing_note, str) and existing_note:
+            candidate["note"] = existing_note + "\n" + note
+        else:
+            candidate["note"] = note
+    # Validate the candidate end-to-end before any write.
+    validate_record(candidate, paths)
+    _atomic_write_draft(draft_path, _bytes(candidate))
+    return candidate
+
+
+def add_relation(
+    paths: Paths,
+    draft_path: Path,
+    relation_type: str,
+    subject_ref: dict[str, str],
+    object_ref: dict[str, str],
+    evidence_quote: str,
+    confidence: str,
+    evidence_occurrence_index: int | None,
+) -> dict[str, Any]:
+    if confidence not in CONFIDENCES:
+        raise AuthorError("--confidence: invalid")
+    # Existing draft must already be a valid authored record before relation mutation.
+    record, text, chunk, signatures = _load_draft(paths, draft_path)
+    validate_record(record, paths)
+    if relation_type not in signatures:
+        raise AuthorError("--relation-type: not extracted ontology relation")
+    subject_type, object_type = signatures[relation_type]
+    entities_by_id: dict[str, dict[str, Any]] = {}
+    for entity in record["entities"]:
+        entities_by_id[_string(entity.get("entity_id"), "entity_id")] = entity
+
+    def _resolve_endpoint(ref: dict[str, str], expected_type: str, role: str) -> dict[str, Any] | None:
+        if not isinstance(ref, dict) or set(ref) != {"kind", "id"}:
+            raise AuthorError(f"--{role}-ref: expected exactly kind and id")
+        kind, endpoint_id = ref.get("kind"), ref.get("id")
+        if expected_type == "document":
+            if kind != "document" or endpoint_id != chunk["doc_id"]:
+                raise AuthorError(f"--{role}-ref: must be current document endpoint")
+            return None
+        if kind != "mention" or not isinstance(endpoint_id, str) or endpoint_id not in entities_by_id:
+            raise AuthorError(f"--{role}-ref: dangling mention endpoint")
+        target = entities_by_id[endpoint_id]
+        if target["entity_type"] != expected_type:
+            raise AuthorError(f"--{role}-ref: mention endpoint type mismatch")
+        return target
+
+    subject_entity = _resolve_endpoint(subject_ref, subject_type, "subject")
+    object_entity = _resolve_endpoint(object_ref, object_type, "object")
+    if not evidence_quote:
+        raise AuthorError("--evidence-quote: expected non-empty string")
+    quote_occurrences = _enumerate_occurrences(text, evidence_quote)
+    if not quote_occurrences:
+        raise AuthorError("--evidence-quote: not an exact occurrence in chunk text")
+    if len(quote_occurrences) >= 2 and evidence_occurrence_index is None:
+        raise AuthorError("--evidence-occurrence-index: required for repeated evidence quote")
+    if evidence_occurrence_index is None:
+        chosen_quote = quote_occurrences[0]
+    else:
+        if evidence_occurrence_index < 0 or evidence_occurrence_index >= len(quote_occurrences):
+            raise AuthorError("--evidence-occurrence-index: out of range")
+        chosen_quote = quote_occurrences[evidence_occurrence_index]
+    evidence_span = (chosen_quote, chosen_quote + len(evidence_quote))
+    endpoint_mentions: list[dict[str, Any]] = []
+    for role, entity in (("subject", subject_entity), ("object", object_entity)):
+        if entity is None:
+            continue
+        start = _integer(entity["span"]["char_start"], "entity span")
+        end = _integer(entity["span"]["char_end"], "entity span")
+        if not (evidence_span[0] <= start and end <= evidence_span[1]):
+            raise AuthorError(f"--evidence-quote: {role} mention is not contained in evidence")
+        starts = _enumerate_occurrences(text, entity["surface_form"])
+        if len(starts) >= 2:
+            endpoint_mentions.append({"endpoint_role": role, "occurrence_index": starts.index(start)})
+    new_relation = {
+        "relation_id": _next_relation_id(list(record["relations"]), record["chunk_id"]),
+        "relation_type": relation_type,
+        "subject_ref": dict(subject_ref),
+        "object_ref": dict(object_ref),
+        "evidence_quote": evidence_quote,
+        "evidence_span": {"char_start": evidence_span[0], "char_end": evidence_span[1]},
+        "endpoint_mentions": endpoint_mentions,
+        "confidence": confidence,
+    }
+    candidate = dict(record)
+    candidate["relations"] = list(record["relations"]) + [new_relation]
+    # Validate the candidate end-to-end before any write.
+    validate_record(candidate, paths)
+    _atomic_write_draft(draft_path, _bytes(candidate))
+    return candidate
+
+
+def mark_empty(paths: Paths, draft_path: Path, note: str) -> dict[str, Any]:
+    if not note:
+        raise AuthorError("--note: required for mark-empty")
+    record, _, _, _ = _load_draft(paths, draft_path)
+    _validate_baseline_draft(record, paths)
+    if record["entities"] != [] or record["relations"] != []:
+        raise AuthorError("mark-empty: draft must have empty entities and relations")
+    candidate = dict(record)
+    candidate["note"] = note
+    # Validate the candidate end-to-end before any write.
+    validate_record(candidate, paths)
+    _atomic_write_draft(draft_path, _bytes(candidate))
+    return candidate
+
+
+def validate_draft(paths: Paths, draft_path: Path) -> dict[str, Any]:
+    record, _, _, _ = _load_draft(paths, draft_path)
+    return validate_record(record, paths)
 
 
 def _write_once(path: Path, payload: bytes) -> bool:
@@ -390,11 +741,13 @@ def publish(paths: Paths, input_path: Path) -> bool:
 
 
 def _write_draft(path: Path, payload: bytes) -> None:
-    if path.exists() and path.read_bytes() != payload:
-        raise AuthorError(f"draft destination exists with different bytes: {path}")
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(payload)
+    if path.exists():
+        if path.read_bytes() == payload:
+            return
+        raise AuthorError(
+            f"draft destination exists with different bytes: {path}"
+        )
+    _atomic_write_draft(path, payload)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -408,7 +761,64 @@ def _build_parser() -> argparse.ArgumentParser:
     draft.add_argument("--output", type=Path, required=True)
     publish_parser = commands.add_parser("publish")
     publish_parser.add_argument("--input", type=Path, required=True)
+    commands.add_parser("status")
+    validate_parser = commands.add_parser("validate")
+    validate_parser.add_argument("--input", type=Path, required=True)
+    add_entity_parser = commands.add_parser("add-entity")
+    add_entity_parser.add_argument("--input", type=Path, required=True)
+    add_entity_parser.add_argument("--entity-type", required=True)
+    add_entity_parser.add_argument("--surface-form", required=True)
+    add_entity_parser.add_argument("--canonical-form", required=True)
+    add_entity_parser.add_argument("--confidence", required=True)
+    add_entity_parser.add_argument("--occurrence-index", type=int, default=None)
+    add_entity_parser.add_argument("--note", default=None)
+    add_relation_parser = commands.add_parser("add-relation")
+    add_relation_parser.add_argument("--input", type=Path, required=True)
+    add_relation_parser.add_argument("--relation-type", required=True)
+    add_relation_parser.add_argument("--subject-ref", required=True)
+    add_relation_parser.add_argument("--object-ref", required=True)
+    add_relation_parser.add_argument("--evidence-quote", required=True)
+    add_relation_parser.add_argument("--confidence", required=True)
+    add_relation_parser.add_argument("--evidence-occurrence-index", type=int, default=None)
+    mark_empty_parser = commands.add_parser("mark-empty")
+    mark_empty_parser.add_argument("--input", type=Path, required=True)
+    mark_empty_parser.add_argument("--note", required=True)
     return parser
+
+
+def _resolve_endpoint_token(
+    record: dict[str, Any],
+    signatures: dict[str, tuple[str, str]],
+    relation_type: str,
+    role: str,
+    token: str,
+) -> dict[str, str]:
+    """Resolve the literal ``document`` or entity_id token to a ``{kind, id}`` dict."""
+    if relation_type not in signatures:
+        raise AuthorError(f"--relation-type: not extracted ontology relation: {relation_type}")
+    expected_type = signatures[relation_type][0 if role == "subject" else 1]
+    if token == "document":
+        if expected_type != "document":
+            raise AuthorError(f"--{role}-ref: ontology expects {expected_type}; 'document' rejected")
+        return {"kind": "document", "id": record["doc_id"]}
+    entities = record.get("entities", [])
+    entities_by_id = {entity.get("entity_id"): entity for entity in entities if isinstance(entity, dict)}
+    entity = entities_by_id.get(token)
+    if entity is None:
+        raise AuthorError(f"--{role}-ref: unknown entity_id in draft: {token}")
+    if entity.get("entity_type") != expected_type:
+        raise AuthorError(
+            f"--{role}-ref: entity_id type {entity.get('entity_type')!r} != ontology expected {expected_type!r}"
+        )
+    return {"kind": "mention", "id": token}
+
+
+def _prepare_add_relation(paths: Paths, draft_path: Path, relation_type: str, subject_token: str, object_token: str) -> tuple[dict[str, Any], dict[str, str], dict[str, str]]:
+    """Load draft and resolve endpoint tokens to ``{kind, id}`` dicts."""
+    record, _, _, signatures = _load_draft(paths, draft_path)
+    subject_ref = _resolve_endpoint_token(record, signatures, relation_type, "subject", subject_token)
+    object_ref = _resolve_endpoint_token(record, signatures, relation_type, "object", object_token)
+    return record, subject_ref, object_ref
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -421,8 +831,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "template":
             _reject_canonical_destination(paths, args.output)
             _write_draft(args.output, _bytes(template(paths, args.chunk_id, args.annotator_id)))
-        else:
+        elif args.command == "publish":
             publish(paths, args.input)
+        elif args.command == "status":
+            print(json.dumps(status(paths), ensure_ascii=False, sort_keys=True, indent=2))
+        elif args.command == "validate":
+            validate_draft(paths, args.input)
+        elif args.command == "add-entity":
+            add_entity(paths, args.input, args.entity_type, args.surface_form, args.canonical_form, args.confidence, args.occurrence_index, args.note)
+        elif args.command == "add-relation":
+            _, subject_ref, object_ref = _prepare_add_relation(paths, args.input, args.relation_type, args.subject_ref, args.object_ref)
+            add_relation(paths, args.input, args.relation_type, subject_ref, object_ref, args.evidence_quote, args.confidence, args.evidence_occurrence_index)
+        elif args.command == "mark-empty":
+            mark_empty(paths, args.input, args.note)
+        else:
+            raise AuthorError(f"unknown command: {args.command}")
     except AuthorError as exc:
         print(f"author failed: {exc}", file=sys.stderr)
         return 2
