@@ -1,0 +1,55 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T18:25:48.674357Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_234c88eb4239056b",
+  "doc_id": "W3021677691",
+  "entities": [
+    {
+      "canonical_form": "Maximum Inner Product Search (MIPS)",
+      "confidence": "stated",
+      "entity_id": "ge_234c88eb_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 458,
+          "char_start": 430,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 458,
+        "char_start": 430
+      },
+      "surface_form": "maximum inner product search"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "using an existing maximum inner product search",
+      "evidence_span": {
+        "char_end": 458,
+        "char_start": 412
+      },
+      "object_ref": {
+        "id": "ge_234c88eb_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_234c88eb_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

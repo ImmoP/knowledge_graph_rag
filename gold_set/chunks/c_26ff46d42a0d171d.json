@@ -1,0 +1,225 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T18:25:52.808300Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_26ff46d42a0d171d",
+  "doc_id": "W3039017601",
+  "entities": [
+    {
+      "canonical_form": "NarrativeQA",
+      "confidence": "stated",
+      "entity_id": "ge_26ff46d4_01",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 144,
+          "char_start": 133,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 144,
+        "char_start": 133
+      },
+      "surface_form": "NarrativeQA"
+    },
+    {
+      "canonical_form": "CoQA",
+      "confidence": "stated",
+      "entity_id": "ge_26ff46d4_02",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 183,
+          "char_start": 179,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 183,
+        "char_start": 179
+      },
+      "surface_form": "CoQA"
+    },
+    {
+      "canonical_form": "ELI5",
+      "confidence": "stated",
+      "entity_id": "ge_26ff46d4_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 214,
+          "char_start": 210,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 214,
+        "char_start": 210
+      },
+      "surface_form": "ELI5"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_26ff46d4_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 493,
+          "char_start": 488,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 493,
+        "char_start": 488
+      },
+      "surface_form": "SQuAD"
+    },
+    {
+      "canonical_form": "Generative Question Answering",
+      "confidence": "stated",
+      "entity_id": "ge_26ff46d4_05",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 40,
+          "char_start": 11,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 40,
+        "char_start": 11
+      },
+      "surface_form": "Generative question answering"
+    },
+    {
+      "canonical_form": "Reading Comprehension",
+      "confidence": "stated",
+      "entity_id": "ge_26ff46d4_06",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 473,
+          "char_start": 452,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 473,
+        "char_start": 452
+      },
+      "surface_form": "reading comprehension"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_26ff46d4_07",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 695,
+          "char_start": 665,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 857,
+          "char_start": 827,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 695,
+        "char_start": 665
+      },
+      "surface_form": "open domain question answering"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "Generative question answering} was mostly considered in previous work for datasets requiring to generate answers, such as NarrativeQA",
+      "evidence_span": {
+        "char_end": 144,
+        "char_start": 11
+      },
+      "object_ref": {
+        "id": "ge_26ff46d4_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_26ff46d4_01",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_26ff46d4_01",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "Generative question answering} was mostly considered in previous work for datasets requiring to generate answers, such as NarrativeQA~[[CITE:kovcisky2018narrativeqa]], CoQA",
+      "evidence_span": {
+        "char_end": 183,
+        "char_start": 11
+      },
+      "object_ref": {
+        "id": "ge_26ff46d4_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_26ff46d4_02",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_26ff46d4_02",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "Generative question answering} was mostly considered in previous work for datasets requiring to generate answers, such as NarrativeQA~[[CITE:kovcisky2018narrativeqa]], CoQA~[[CITE:reddy2019coqa]] or ELI5",
+      "evidence_span": {
+        "char_end": 214,
+        "char_start": 11
+      },
+      "object_ref": {
+        "id": "ge_26ff46d4_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_26ff46d4_03",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_26ff46d4_03",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "reading comprehension tasks such as SQuAD",
+      "evidence_span": {
+        "char_end": 493,
+        "char_start": 452
+      },
+      "object_ref": {
+        "id": "ge_26ff46d4_06",
+        "kind": "mention"
+      },
+      "relation_id": "gr_26ff46d4_04",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_26ff46d4_04",
+        "kind": "mention"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
