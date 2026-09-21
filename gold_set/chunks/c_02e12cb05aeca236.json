@@ -1,7 +1,7 @@
 {
   "adjudicated_by": null,
   "adjudication_status": "single_pass",
-  "annotated_at": "2026-09-21T13:45:06.877404Z",
+  "annotated_at": "2026-09-21T13:54:30.913280Z",
   "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
   "annotation_guideline_version": "1",
   "annotator_id": "ann-A",
@@ -32,8 +32,8 @@
         }
       ],
       "span": {
-        "char_end": 208,
-        "char_start": 202
+        "char_end": 1600,
+        "char_start": 1594
       },
       "surface_form": "\\squad"
     },
@@ -135,22 +135,22 @@
       "surface_form": "Exact match"
     }
   ],
-  "note": "\\squad is annotated as dataset SQuAD; distinct metric surface forms are preserved separately. Named QA comparison systems such as Match-LSTM and Co-attention are excluded because ontology v1 restricts method to named retrieval, generation, or representation methods.",
+  "note": "\\squad is annotated as dataset SQuAD; distinct metric surface forms are preserved separately. Named QA comparison systems such as Match-LSTM and Co-attention are excluded because ontology v1 restricts method to named retrieval, generation, or representation methods. ge_02e12cb0_01 commits to occurrence 2 because occurrence 0 is a leaderboard reference and occurrence 1 describes a cited baseline; occurrence 2 is the current document's results-table caption.",
   "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
   "ontology_version": 1,
   "relations": [
     {
-      "confidence": "inferred",
+      "confidence": "stated",
       "endpoint_mentions": [
         {
           "endpoint_role": "object",
-          "occurrence_index": 0
+          "occurrence_index": 2
         }
       ],
-      "evidence_quote": "Our model with recurrent span representations (\\ourmodel) is compared to all previously published systems\n\\footnote{\\label{ftnt:leaderboard}As of submission, other unpublished systems are shown on the \\squad~leaderboard",
+      "evidence_quote": "\\caption{Exact match (EM) and span F1 on \\squad.}",
       "evidence_span": {
-        "char_end": 220,
-        "char_start": 1
+        "char_end": 1602,
+        "char_start": 1553
       },
       "object_ref": {
         "id": "ge_02e12cb0_01",
