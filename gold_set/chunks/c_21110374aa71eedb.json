@@ -1,0 +1,227 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T16:46:34.627140Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_21110374aa71eedb",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "PathRetriever",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 53,
+          "char_start": 40,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 53,
+        "char_start": 40
+      },
+      "surface_form": "PathRetriever"
+    },
+    {
+      "canonical_form": "TFIDF",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 151,
+          "char_start": 146,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 151,
+        "char_start": 146
+      },
+      "surface_form": "TFIDF"
+    },
+    {
+      "canonical_form": "BERT-WWM",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_03",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 221,
+          "char_start": 213,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 221,
+        "char_start": 213
+      },
+      "surface_form": "BERT-WWM"
+    },
+    {
+      "canonical_form": "ORQA",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_04",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 431,
+          "char_start": 427,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 525,
+          "char_start": 521,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 431,
+        "char_start": 427
+      },
+      "surface_form": "ORQA"
+    },
+    {
+      "canonical_form": "BERT-base",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_05",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 608,
+          "char_start": 599,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 899,
+          "char_start": 890,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1194,
+          "char_start": 1185,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 608,
+        "char_start": 599
+      },
+      "surface_form": "BERT-base"
+    },
+    {
+      "canonical_form": "REALM",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_06",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 722,
+          "char_start": 717,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 816,
+          "char_start": 811,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 722,
+        "char_start": 717
+      },
+      "surface_form": "REALM"
+    },
+    {
+      "canonical_form": "DPR",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_07",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 999,
+          "char_start": 996,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1111,
+          "char_start": 1108,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1416,
+          "char_start": 1413,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 999,
+        "char_start": 996
+      },
+      "surface_form": "DPR"
+    },
+    {
+      "canonical_form": "RAG",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_08",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1305,
+          "char_start": 1302,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1305,
+        "char_start": 1302
+      },
+      "surface_form": "RAG"
+    },
+    {
+      "canonical_form": "BART-large",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_09",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1508,
+          "char_start": 1498,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1508,
+        "char_start": 1498
+      },
+      "surface_form": "BART-large"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_21110374_10",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 357,
+          "char_start": 351,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 357,
+        "char_start": 351
+      },
+      "surface_form": "OpenQA"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [],
+  "schema_version": "gold-record.v1"
+}
