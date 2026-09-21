@@ -1,0 +1,86 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:24:57.068817Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_41462f7fe517dfe8",
+  "doc_id": "W2556691798",
+  "entities": [
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_41462f7f_01",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 16,
+          "char_start": 10,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1033,
+          "char_start": 1027,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1800,
+          "char_start": 1794,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 1843,
+          "char_start": 1837,
+          "occurrence_index": 3
+        }
+      ],
+      "span": {
+        "char_end": 16,
+        "char_start": 10
+      },
+      "surface_form": "\\squad"
+    },
+    {
+      "canonical_form": "Extractive Question Answering",
+      "confidence": "stated",
+      "entity_id": "ge_41462f7f_02",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1158,
+          "char_start": 1129,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1158,
+        "char_start": 1129
+      },
+      "surface_form": "extractive question answering"
+    },
+    {
+      "canonical_form": "Cloze Task",
+      "confidence": "stated",
+      "entity_id": "ge_41462f7f_03",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1176,
+          "char_start": 1166,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1176,
+        "char_start": 1166
+      },
+      "surface_form": "Cloze task"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [],
+  "schema_version": "gold-record.v1"
+}

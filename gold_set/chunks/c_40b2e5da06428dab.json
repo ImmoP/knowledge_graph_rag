@@ -1,0 +1,144 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:24:55.103662Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_40b2e5da06428dab",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_40b2e5da_01",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 29,
+          "char_start": 27,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 29,
+        "char_start": 27
+      },
+      "surface_form": "NQ"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_40b2e5da_02",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 36,
+          "char_start": 31,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 590,
+          "char_start": 585,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 710,
+          "char_start": 705,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 36,
+        "char_start": 31
+      },
+      "surface_form": "SQuAD"
+    },
+    {
+      "canonical_form": "TriviaQA",
+      "confidence": "stated",
+      "entity_id": "ge_40b2e5da_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 44,
+          "char_start": 42,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 44,
+        "char_start": 42
+      },
+      "surface_form": "TQ"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "evaluate on NQ",
+      "evidence_span": {
+        "char_end": 29,
+        "char_start": 15
+      },
+      "object_ref": {
+        "id": "ge_40b2e5da_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_40b2e5da_01",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "evaluate on NQ, SQuAD",
+      "evidence_span": {
+        "char_end": 36,
+        "char_start": 15
+      },
+      "object_ref": {
+        "id": "ge_40b2e5da_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_40b2e5da_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "evaluate on NQ, SQuAD, and TQ",
+      "evidence_span": {
+        "char_end": 44,
+        "char_start": 15
+      },
+      "object_ref": {
+        "id": "ge_40b2e5da_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_40b2e5da_03",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

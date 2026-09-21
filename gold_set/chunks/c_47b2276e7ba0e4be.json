@@ -1,0 +1,77 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:24:58.708374Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_47b2276e7ba0e4be",
+  "doc_id": "W2551396370",
+  "entities": [
+    {
+      "canonical_form": "Bi-Directional Attention Flow",
+      "confidence": "stated",
+      "entity_id": "ge_47b2276e_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 301,
+          "char_start": 272,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 676,
+          "char_start": 647,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 676,
+        "char_start": 647
+      },
+      "surface_form": "Bi-Directional Attention Flow"
+    },
+    {
+      "canonical_form": "Bi-Directional Attention Flow",
+      "confidence": "stated",
+      "entity_id": "ge_47b2276e_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 343,
+          "char_start": 338,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 343,
+        "char_start": 338
+      },
+      "surface_form": "BiDAF"
+    },
+    {
+      "canonical_form": "Machine Comprehension",
+      "confidence": "stated",
+      "entity_id": "ge_47b2276e_03",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 705,
+          "char_start": 684,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 705,
+        "char_start": 684
+      },
+      "surface_form": "Machine Comprehension"
+    }
+  ],
+  "note": "committed to the document-title occurrence rather than the earlier LaTeX macro-definition occurrence; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [],
+  "schema_version": "gold-record.v1"
+}

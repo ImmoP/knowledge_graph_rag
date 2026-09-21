@@ -1,0 +1,491 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:25:07.831048Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_4d2400dcdebebf92",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_01",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 133,
+          "char_start": 127,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 133,
+        "char_start": 127
+      },
+      "surface_form": "OpenQA"
+    },
+    {
+      "canonical_form": "BERT-large",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 682,
+          "char_start": 672,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 682,
+        "char_start": 672
+      },
+      "surface_form": "BERT-large"
+    },
+    {
+      "canonical_form": "Success@k",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_03",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 158,
+          "char_start": 147,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 158,
+        "char_start": 147
+      },
+      "surface_form": "Success@$k$"
+    },
+    {
+      "canonical_form": "Success@k",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_04",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 165,
+          "char_start": 160,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 165,
+        "char_start": 160
+      },
+      "surface_form": "S@$k$"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_05",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 852,
+          "char_start": 841,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 852,
+        "char_start": 841
+      },
+      "surface_form": "exact-match"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_06",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 856,
+          "char_start": 854,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 856,
+        "char_start": 854
+      },
+      "surface_form": "EM"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_07",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1073,
+          "char_start": 1056,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1073,
+        "char_start": 1056
+      },
+      "surface_form": "Natural Questions"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_08",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1077,
+          "char_start": 1075,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1077,
+        "char_start": 1075
+      },
+      "surface_form": "NQ"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_09",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1085,
+          "char_start": 1080,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1085,
+        "char_start": 1080
+      },
+      "surface_form": "SQuAD"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_10",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1082,
+          "char_start": 1080,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1089,
+          "char_start": 1087,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1082,
+        "char_start": 1080
+      },
+      "surface_form": "SQ"
+    },
+    {
+      "canonical_form": "TriviaQA",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_11",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1104,
+          "char_start": 1096,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1104,
+        "char_start": 1096
+      },
+      "surface_form": "TriviaQA"
+    },
+    {
+      "canonical_form": "TriviaQA",
+      "confidence": "stated",
+      "entity_id": "ge_4d2400dc_12",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1108,
+          "char_start": 1106,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1108,
+        "char_start": 1106
+      },
+      "surface_form": "TQ"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "we suggest employing a BERT-large model",
+      "evidence_span": {
+        "char_end": 688,
+        "char_start": 649
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "reporting Success@$k$",
+      "evidence_span": {
+        "char_end": 158,
+        "char_start": 137
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_02",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "reporting Success@$k$ (S@$k$ for short)",
+      "evidence_span": {
+        "char_end": 176,
+        "char_start": 137
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_03",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "report the exact-match",
+      "evidence_span": {
+        "char_end": 852,
+        "char_start": 830
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_04",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "report the exact-match (EM) score",
+      "evidence_span": {
+        "char_end": 863,
+        "char_start": 830
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_06",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_05",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "retrieval quality in OpenQA by reporting Success@$k$",
+      "evidence_span": {
+        "char_end": 158,
+        "char_start": 106
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_06",
+      "relation_type": "MEASURES",
+      "subject_ref": {
+        "id": "ge_4d2400dc_03",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "retrieval quality in OpenQA by reporting Success@$k$ (S@$k$ for short)",
+      "evidence_span": {
+        "char_end": 176,
+        "char_start": 106
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_07",
+      "relation_type": "MEASURES",
+      "subject_ref": {
+        "id": "ge_4d2400dc_04",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "conduct these experiments on the open versions of the Natural Questions",
+      "evidence_span": {
+        "char_end": 1073,
+        "char_start": 1002
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_07",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_08",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "conduct these experiments on the open versions of the Natural Questions (NQ)",
+      "evidence_span": {
+        "char_end": 1078,
+        "char_start": 1002
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_08",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_09",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "conduct these experiments on the open versions of the Natural Questions (NQ), SQuAD",
+      "evidence_span": {
+        "char_end": 1085,
+        "char_start": 1002
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_09",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_10",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "conduct these experiments on the open versions of the Natural Questions (NQ), SQuAD (SQ)",
+      "evidence_span": {
+        "char_end": 1090,
+        "char_start": 1002
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_10",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_11",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "conduct these experiments on the open versions of the Natural Questions (NQ), SQuAD (SQ), and TriviaQA",
+      "evidence_span": {
+        "char_end": 1104,
+        "char_start": 1002
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_11",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_12",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "conduct these experiments on the open versions of the Natural Questions (NQ), SQuAD (SQ), and TriviaQA (TQ)",
+      "evidence_span": {
+        "char_end": 1109,
+        "char_start": 1002
+      },
+      "object_ref": {
+        "id": "ge_4d2400dc_12",
+        "kind": "mention"
+      },
+      "relation_id": "gr_4d2400dc_13",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
