@@ -1,0 +1,107 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:03:14.746594Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_3af18e4e69a46bc5",
+  "doc_id": "W3021677691",
+  "entities": [
+    {
+      "canonical_form": "ROUGE-L",
+      "confidence": "stated",
+      "entity_id": "ge_3af18e4e_01",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 610,
+          "char_start": 603,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 756,
+          "char_start": 749,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 610,
+        "char_start": 603
+      },
+      "surface_form": "ROUGE-L"
+    },
+    {
+      "canonical_form": "Question Generation",
+      "confidence": "stated",
+      "entity_id": "ge_3af18e4e_02",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 460,
+          "char_start": 441,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 460,
+        "char_start": 441
+      },
+      "surface_form": "question generation"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "achieving a ROUGE-L score of 49.6",
+      "evidence_span": {
+        "char_end": 624,
+        "char_start": 591
+      },
+      "object_ref": {
+        "id": "ge_3af18e4e_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3af18e4e_01",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "subject",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "question generation experiments suggest that while using weakly-supervised paragraphs, the question generator still generates high-quality questions, achieving a ROUGE-L score of 49.6",
+      "evidence_span": {
+        "char_end": 624,
+        "char_start": 441
+      },
+      "object_ref": {
+        "id": "ge_3af18e4e_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3af18e4e_02",
+      "relation_type": "MEASURES",
+      "subject_ref": {
+        "id": "ge_3af18e4e_01",
+        "kind": "mention"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

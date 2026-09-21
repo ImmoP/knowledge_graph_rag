@@ -1,0 +1,217 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:03:07.615394Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_327eb1e2495f044f",
+  "doc_id": "W3015883388",
+  "entities": [
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_327eb1e2_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 299,
+          "char_start": 295,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 568,
+          "char_start": 564,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 632,
+          "char_start": 628,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 696,
+          "char_start": 692,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 1012,
+          "char_start": 1008,
+          "occurrence_index": 4
+        },
+        {
+          "char_end": 1033,
+          "char_start": 1029,
+          "occurrence_index": 5
+        },
+        {
+          "char_end": 1095,
+          "char_start": 1091,
+          "occurrence_index": 6
+        },
+        {
+          "char_end": 1548,
+          "char_start": 1544,
+          "occurrence_index": 7
+        }
+      ],
+      "span": {
+        "char_end": 1548,
+        "char_start": 1544
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_327eb1e2_02",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 927,
+          "char_start": 910,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1464,
+          "char_start": 1447,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 927,
+        "char_start": 910
+      },
+      "surface_form": "Natural Questions"
+    },
+    {
+      "canonical_form": "Top-k Retrieval Accuracy",
+      "confidence": "stated",
+      "entity_id": "ge_327eb1e2_03",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 906,
+          "char_start": 880,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 906,
+        "char_start": 880
+      },
+      "surface_form": "top-$k$ retrieval accuracy"
+    },
+    {
+      "canonical_form": "Top-k Retrieval Accuracy",
+      "confidence": "stated",
+      "entity_id": "ge_327eb1e2_04",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1639,
+          "char_start": 1623,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1639,
+        "char_start": 1623
+      },
+      "surface_form": "top-$k$ accuracy"
+    }
+  ],
+  "note": "committed to the relation-bearing prose occurrence of BM25 rather than earlier table occurrences; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 7
+        }
+      ],
+      "evidence_quote": "using the highest-ranked BM25 passage that contains the answer",
+      "evidence_span": {
+        "char_end": 1581,
+        "char_start": 1519
+      },
+      "object_ref": {
+        "id": "ge_327eb1e2_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_327eb1e2_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "top-$k$ retrieval accuracy on Natural Questions (development set)",
+      "evidence_span": {
+        "char_end": 945,
+        "char_start": 880
+      },
+      "object_ref": {
+        "id": "ge_327eb1e2_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_327eb1e2_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "measured as top-$k$ retrieval accuracy on Natural Questions (development set)",
+      "evidence_span": {
+        "char_end": 945,
+        "char_start": 868
+      },
+      "object_ref": {
+        "id": "ge_327eb1e2_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_327eb1e2_03",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "1 point lower top-$k$ accuracy for retrieval",
+      "evidence_span": {
+        "char_end": 1653,
+        "char_start": 1609
+      },
+      "object_ref": {
+        "id": "ge_327eb1e2_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_327eb1e2_04",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

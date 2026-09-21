@@ -1,0 +1,214 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:03:16.281053Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_3c47438ee269da00",
+  "doc_id": "W3015883388",
+  "entities": [
+    {
+      "canonical_form": "HNSW",
+      "confidence": "stated",
+      "entity_id": "ge_3c47438e_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 239,
+          "char_start": 235,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 239,
+        "char_start": 235
+      },
+      "surface_form": "HNSW"
+    },
+    {
+      "canonical_form": "ORQA",
+      "confidence": "stated",
+      "entity_id": "ge_3c47438e_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 388,
+          "char_start": 384,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 388,
+        "char_start": 384
+      },
+      "surface_form": "ORQA"
+    },
+    {
+      "canonical_form": "BERT-base",
+      "confidence": "stated",
+      "entity_id": "ge_3c47438e_03",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1361,
+          "char_start": 1352,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1361,
+        "char_start": 1352
+      },
+      "surface_form": "BERT-base"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_3c47438e_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1310,
+          "char_start": 1308,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1574,
+          "char_start": 1572,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1574,
+        "char_start": 1572
+      },
+      "surface_form": "NQ"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_3c47438e_05",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1562,
+          "char_start": 1551,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1562,
+        "char_start": 1551
+      },
+      "surface_form": "exact match"
+    }
+  ],
+  "note": "committed to the explicit NQ dev evaluation occurrence rather than the earlier training-dataset occurrence; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "leverage the HNSW-based FAISS index",
+      "evidence_span": {
+        "char_end": 257,
+        "char_start": 222
+      },
+      "object_ref": {
+        "id": "ge_3c47438e_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3c47438e_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "loss function largely follows ORQA's approach",
+      "evidence_span": {
+        "char_end": 399,
+        "char_start": 354
+      },
+      "object_ref": {
+        "id": "ge_3c47438e_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3c47438e_02",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "reader's initial state is a BERT-base model",
+      "evidence_span": {
+        "char_end": 1367,
+        "char_start": 1324
+      },
+      "object_ref": {
+        "id": "ge_3c47438e_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3c47438e_03",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 1
+        }
+      ],
+      "evidence_quote": "same 39.8 exact match score on NQ dev",
+      "evidence_span": {
+        "char_end": 1578,
+        "char_start": 1541
+      },
+      "object_ref": {
+        "id": "ge_3c47438e_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3c47438e_04",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "39.8 exact match score on NQ dev",
+      "evidence_span": {
+        "char_end": 1578,
+        "char_start": 1546
+      },
+      "object_ref": {
+        "id": "ge_3c47438e_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3c47438e_05",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3015883388",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

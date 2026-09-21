@@ -1,0 +1,102 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:03:20.501229Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_3e26b2fa83cf5cfa",
+  "doc_id": "W3021677691",
+  "entities": [
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_3e26b2fa_01",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 150,
+          "char_start": 134,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 150,
+        "char_start": 134
+      },
+      "surface_form": "NaturalQuestions"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_3e26b2fa_02",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 605,
+          "char_start": 603,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 626,
+          "char_start": 624,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 605,
+        "char_start": 603
+      },
+      "surface_form": "EM"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "we achieve 40.6 EM",
+      "evidence_span": {
+        "char_end": 605,
+        "char_start": 587
+      },
+      "object_ref": {
+        "id": "ge_3e26b2fa_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3e26b2fa_01",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [],
+      "evidence_quote": "NaturalQuestions dataset to train a stronger dense retriever. However, they use a larger index dimension (768) while encoding paragraphs and also retrieve more paragraphs (20$\\sim$100) for answer extraction. As a larger index dimension naturally leads to better retrieval results~[[CITE:luan2020sparse]] (despite sacrificing search efficiency) and using more paragraphs increases the recall of matched answer spans\\footnote{While using more paragraphs, we achieve 40.6 EM",
+      "evidence_span": {
+        "char_end": 605,
+        "char_start": 134
+      },
+      "object_ref": {
+        "id": "ge_3e26b2fa_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_3e26b2fa_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
