@@ -1,0 +1,255 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T21:15:16.276437Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_5e6f945718c2979c",
+  "doc_id": "W3132386006",
+  "entities": [
+    {
+      "canonical_form": "Natural Questions Open",
+      "confidence": "stated",
+      "entity_id": "ge_5e6f9457_01",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 556,
+          "char_start": 549,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1234,
+          "char_start": 1227,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1328,
+          "char_start": 1321,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 556,
+        "char_start": 549
+      },
+      "surface_form": "NQ-Open"
+    },
+    {
+      "canonical_form": "Natural Questions Open",
+      "confidence": "stated",
+      "entity_id": "ge_5e6f9457_02",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 635,
+          "char_start": 614,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 635,
+        "char_start": 614
+      },
+      "surface_form": "NaturalQuestions-Open"
+    },
+    {
+      "canonical_form": "TriviaQA Open",
+      "confidence": "stated",
+      "entity_id": "ge_5e6f9457_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 887,
+          "char_start": 880,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 887,
+        "char_start": 880
+      },
+      "surface_form": "TQ-Open"
+    },
+    {
+      "canonical_form": "TriviaQA Open",
+      "confidence": "stated",
+      "entity_id": "ge_5e6f9457_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 939,
+          "char_start": 926,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 939,
+        "char_start": 926
+      },
+      "surface_form": "TriviaQA-Open"
+    },
+    {
+      "canonical_form": "EfficientQA",
+      "confidence": "stated",
+      "entity_id": "ge_5e6f9457_05",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1162,
+          "char_start": 1151,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1162,
+        "char_start": 1151
+      },
+      "surface_form": "EfficientQA"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_5e6f9457_06",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1426,
+          "char_start": 1412,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1426,
+        "char_start": 1412
+      },
+      "surface_form": "open-domain QA"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "We evaluate our models on three datasets. Their statistics are available in Table \\ref{fig:datatsets}. To train the reranker we filter out examples, which do not contain golden passage or exact match in top-$K$ retrieved passages. \nTo train the extractive reader, only examples with exact match in golden passage or top-1 retrieved passage are kept. Both filtering strategies are closely described in Appendix \\ref{app:data_preprocessing}.\n\n\n\\begin{description}[style=unboxed,leftmargin=0em,listparindent=\\parindent]\n\\setlength\\parskip{0em}\n\\item[NQ-Open",
+      "evidence_span": {
+        "char_end": 556,
+        "char_start": 2
+      },
+      "object_ref": {
+        "id": "ge_5e6f9457_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_5e6f9457_01",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3132386006",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We evaluate our models on three datasets. Their statistics are available in Table \\ref{fig:datatsets}. To train the reranker we filter out examples, which do not contain golden passage or exact match in top-$K$ retrieved passages. \nTo train the extractive reader, only examples with exact match in golden passage or top-1 retrieved passage are kept. Both filtering strategies are closely described in Appendix \\ref{app:data_preprocessing}.\n\n\n\\begin{description}[style=unboxed,leftmargin=0em,listparindent=\\parindent]\n\\setlength\\parskip{0em}\n\\item[NQ-Open] [[CITE:kwiatkowski2019natural,lee-etal-2019-latent]] or NaturalQuestions-Open",
+      "evidence_span": {
+        "char_end": 635,
+        "char_start": 2
+      },
+      "object_ref": {
+        "id": "ge_5e6f9457_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_5e6f9457_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3132386006",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We evaluate our models on three datasets. Their statistics are available in Table \\ref{fig:datatsets}. To train the reranker we filter out examples, which do not contain golden passage or exact match in top-$K$ retrieved passages. \nTo train the extractive reader, only examples with exact match in golden passage or top-1 retrieved passage are kept. Both filtering strategies are closely described in Appendix \\ref{app:data_preprocessing}.\n\n\n\\begin{description}[style=unboxed,leftmargin=0em,listparindent=\\parindent]\n\\setlength\\parskip{0em}\n\\item[NQ-Open] [[CITE:kwiatkowski2019natural,lee-etal-2019-latent]] or NaturalQuestions-Open, consists of real user queries obtained from Google search engine. The maximum length of each answer is at most 5 tokens. Each training and development sample contains 1 annotated answer, while test data contain 5-way answer annotation.\n\n\\item[TQ-Open",
+      "evidence_span": {
+        "char_end": 887,
+        "char_start": 2
+      },
+      "object_ref": {
+        "id": "ge_5e6f9457_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_5e6f9457_03",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3132386006",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We evaluate our models on three datasets. Their statistics are available in Table \\ref{fig:datatsets}. To train the reranker we filter out examples, which do not contain golden passage or exact match in top-$K$ retrieved passages. \nTo train the extractive reader, only examples with exact match in golden passage or top-1 retrieved passage are kept. Both filtering strategies are closely described in Appendix \\ref{app:data_preprocessing}.\n\n\n\\begin{description}[style=unboxed,leftmargin=0em,listparindent=\\parindent]\n\\setlength\\parskip{0em}\n\\item[NQ-Open] [[CITE:kwiatkowski2019natural,lee-etal-2019-latent]] or NaturalQuestions-Open, consists of real user queries obtained from Google search engine. The maximum length of each answer is at most 5 tokens. Each training and development sample contains 1 annotated answer, while test data contain 5-way answer annotation.\n\n\\item[TQ-Open] [[CITE:joshi-etal-2017-triviaqa]] or TriviaQA-Open",
+      "evidence_span": {
+        "char_end": 939,
+        "char_start": 2
+      },
+      "object_ref": {
+        "id": "ge_5e6f9457_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_5e6f9457_04",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3132386006",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We evaluate our models on three datasets. Their statistics are available in Table \\ref{fig:datatsets}. To train the reranker we filter out examples, which do not contain golden passage or exact match in top-$K$ retrieved passages. \nTo train the extractive reader, only examples with exact match in golden passage or top-1 retrieved passage are kept. Both filtering strategies are closely described in Appendix \\ref{app:data_preprocessing}.\n\n\n\\begin{description}[style=unboxed,leftmargin=0em,listparindent=\\parindent]\n\\setlength\\parskip{0em}\n\\item[NQ-Open] [[CITE:kwiatkowski2019natural,lee-etal-2019-latent]] or NaturalQuestions-Open, consists of real user queries obtained from Google search engine. The maximum length of each answer is at most 5 tokens. Each training and development sample contains 1 annotated answer, while test data contain 5-way answer annotation.\n\n\\item[TQ-Open] [[CITE:joshi-etal-2017-triviaqa]] or TriviaQA-Open consists of question-answer pairs from 14 different trivia quiz websites. Each question contains human annotated answer and a set of answer aliases gathered from Wikipedia. We use the unfiltered version.\n\n\\item[EfficientQA",
+      "evidence_span": {
+        "char_end": 1162,
+        "char_start": 2
+      },
+      "object_ref": {
+        "id": "ge_5e6f9457_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_5e6f9457_05",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3132386006",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "EfficientQA] [[CITE:min2021neurips]] is a dataset collected the same way as NQ-Open through 2019, and thus may contain more questions without evidence in our corpus than NQ-Open. Furthermore, it doesn't suffer from dev/test discrepancy, as it was collected for open-domain QA directly",
+      "evidence_span": {
+        "char_end": 1435,
+        "char_start": 1151
+      },
+      "object_ref": {
+        "id": "ge_5e6f9457_06",
+        "kind": "mention"
+      },
+      "relation_id": "gr_5e6f9457_06",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_5e6f9457_05",
+        "kind": "mention"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
