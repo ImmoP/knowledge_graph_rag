@@ -1,0 +1,149 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:25:00.263821Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_485b4e7f44961397",
+  "doc_id": "W3021677691",
+  "entities": [
+    {
+      "canonical_form": "BART",
+      "confidence": "stated",
+      "entity_id": "ge_485b4e7f_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 197,
+          "char_start": 193,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 197,
+        "char_start": 193
+      },
+      "surface_form": "BART"
+    },
+    {
+      "canonical_form": "ORQA",
+      "confidence": "stated",
+      "entity_id": "ge_485b4e7f_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 698,
+          "char_start": 694,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1273,
+          "char_start": 1269,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1426,
+          "char_start": 1422,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 1426,
+        "char_start": 1422
+      },
+      "surface_form": "ORQA"
+    },
+    {
+      "canonical_form": "T5",
+      "confidence": "stated",
+      "entity_id": "ge_485b4e7f_03",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 734,
+          "char_start": 732,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 734,
+        "char_start": 732
+      },
+      "surface_form": "T5"
+    },
+    {
+      "canonical_form": "REALM",
+      "confidence": "stated",
+      "entity_id": "ge_485b4e7f_04",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1107,
+          "char_start": 1102,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1484,
+          "char_start": 1479,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1107,
+        "char_start": 1102
+      },
+      "surface_form": "REALM"
+    }
+  ],
+  "note": "committed to the relation-bearing occurrence in 'improves the ORQA pretraining' rather than earlier comparison/reference occurrences; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "use a BART model",
+      "evidence_span": {
+        "char_end": 203,
+        "char_start": 187
+      },
+      "object_ref": {
+        "id": "ge_485b4e7f_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_485b4e7f_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 2
+        }
+      ],
+      "evidence_quote": "our method directly improves the ORQA pretraining",
+      "evidence_span": {
+        "char_end": 1438,
+        "char_start": 1389
+      },
+      "object_ref": {
+        "id": "ge_485b4e7f_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_485b4e7f_02",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

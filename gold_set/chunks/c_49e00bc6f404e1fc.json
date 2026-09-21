@@ -1,0 +1,159 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-21T20:25:04.273319Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_49e00bc6f404e1fc",
+  "doc_id": "W3021677691",
+  "entities": [
+    {
+      "canonical_form": "BART",
+      "confidence": "stated",
+      "entity_id": "ge_49e00bc6_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 661,
+          "char_start": 657,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 724,
+          "char_start": 720,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1076,
+          "char_start": 1072,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 1464,
+          "char_start": 1460,
+          "occurrence_index": 3
+        }
+      ],
+      "span": {
+        "char_end": 661,
+        "char_start": 657
+      },
+      "surface_form": "BART"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_49e00bc6_02",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 757,
+          "char_start": 741,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 972,
+          "char_start": 956,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 757,
+        "char_start": 741
+      },
+      "surface_form": "NaturalQuestions"
+    },
+    {
+      "canonical_form": "ROUGE-L",
+      "confidence": "stated",
+      "entity_id": "ge_49e00bc6_03",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1197,
+          "char_start": 1190,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1197,
+        "char_start": 1190
+      },
+      "surface_form": "ROGUE-L"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "using a state-of-the-art pretrained seq2seq model, \\emph{i.e.}, BART",
+      "evidence_span": {
+        "char_end": 661,
+        "char_start": 593
+      },
+      "object_ref": {
+        "id": "ge_49e00bc6_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_49e00bc6_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "NaturalQuestions dataset~[[CITE:DBLP:journals/tacl/KwiatkowskiPRCP19]] such that it learns to generate questions given the groundtruth answer string and the groundtruth paragraph (labeled as \\textit{long answer} in NaturalQuestions). \n\nWe concatenate the paragraph and the answer string with a separating token as the input to the BART model. We find this simple input scheme is effective enough to generate high-quality questions, achieving a 55.6 ROGUE-L score on the dev set",
+      "evidence_span": {
+        "char_end": 1218,
+        "char_start": 741
+      },
+      "object_ref": {
+        "id": "ge_49e00bc6_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_49e00bc6_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "achieving a 55.6 ROGUE-L score on the dev set",
+      "evidence_span": {
+        "char_end": 1218,
+        "char_start": 1173
+      },
+      "object_ref": {
+        "id": "ge_49e00bc6_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_49e00bc6_03",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
