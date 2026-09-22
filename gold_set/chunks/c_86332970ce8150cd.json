@@ -1,0 +1,178 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T08:58:37.138614Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_86332970ce8150cd",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "ORQA",
+      "confidence": "stated",
+      "entity_id": "ge_86332970_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 138,
+          "char_start": 134,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 429,
+          "char_start": 425,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 138,
+        "char_start": 134
+      },
+      "surface_form": "ORQA"
+    },
+    {
+      "canonical_form": "REALM",
+      "confidence": "stated",
+      "entity_id": "ge_86332970_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 145,
+          "char_start": 140,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 436,
+          "char_start": 431,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 647,
+          "char_start": 642,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 145,
+        "char_start": 140
+      },
+      "surface_form": "REALM"
+    },
+    {
+      "canonical_form": "RAG",
+      "confidence": "stated",
+      "entity_id": "ge_86332970_03",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 154,
+          "char_start": 151,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 445,
+          "char_start": 442,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 154,
+        "char_start": 151
+      },
+      "surface_form": "RAG"
+    },
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_86332970_04",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 927,
+          "char_start": 923,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1408,
+          "char_start": 1404,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 927,
+        "char_start": 923
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "RGS",
+      "confidence": "stated",
+      "entity_id": "ge_86332970_05",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1072,
+          "char_start": 1069,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1072,
+        "char_start": 1069
+      },
+      "surface_form": "RGS"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_86332970_06",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 538,
+          "char_start": 532,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1788,
+          "char_start": 1782,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 538,
+        "char_start": 532
+      },
+      "surface_form": "OpenQA"
+    },
+    {
+      "canonical_form": "Information Retrieval",
+      "confidence": "stated",
+      "entity_id": "ge_86332970_07",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1346,
+          "char_start": 1344,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1478,
+          "char_start": 1476,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1346,
+        "char_start": 1344
+      },
+      "surface_form": "IR"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [],
+  "schema_version": "gold-record.v1"
+}
