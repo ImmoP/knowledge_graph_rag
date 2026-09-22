@@ -1,0 +1,166 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T10:04:24.084200Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_a60413acf9f3dbe8",
+  "doc_id": "W3039017601",
+  "entities": [
+    {
+      "canonical_form": "Passage Retrieval",
+      "confidence": "stated",
+      "entity_id": "ge_a60413ac_01",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 479,
+          "char_start": 462,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 479,
+        "char_start": 462
+      },
+      "surface_form": "Passage Retrieval"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_a60413ac_02",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 540,
+          "char_start": 510,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 540,
+        "char_start": 510
+      },
+      "surface_form": "Open Domain Question Answering"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_a60413ac_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1242,
+          "char_start": 1225,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1242,
+        "char_start": 1225
+      },
+      "surface_form": "Natural Questions"
+    },
+    {
+      "canonical_form": "TriviaQA",
+      "confidence": "stated",
+      "entity_id": "ge_a60413ac_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1255,
+          "char_start": 1247,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1255,
+        "char_start": 1247
+      },
+      "surface_form": "TriviaQA"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We obtain state-of-the-art results on the Natural Questions and TriviaQA open benchmarks",
+      "evidence_span": {
+        "char_end": 1271,
+        "char_start": 1183
+      },
+      "object_ref": {
+        "id": "ge_a60413ac_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_a60413ac_01",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3039017601",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We obtain state-of-the-art results on the Natural Questions and TriviaQA open benchmarks",
+      "evidence_span": {
+        "char_end": 1271,
+        "char_start": 1183
+      },
+      "object_ref": {
+        "id": "ge_a60413ac_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_a60413ac_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3039017601",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [],
+      "evidence_quote": "Open Domain Question Answering}\n\n\\author{\n  Gautier Izacard$^{1,2,3}$ \\hspace{2em} Edouard Grave$^1$ \\\\\n  $^1$ Facebook AI Research, Paris \\\\\n  $^2$ ENS, PSL University, Paris \\\\\n  $^3$ Inria, Paris \\\\\n  \\texttt{gizacard|egrave@fb.com} \\\\\n}\n\n\\date{}\n\n\\begin{document}\n \\maketitle\n\\begin{abstract}\nGenerative models for open domain question answering have proven to be competitive, without resorting to external knowledge.\nWhile promising, this approach requires to use models with billions of parameters, which are expensive to train and query.\nIn this paper, we investigate how much these models can benefit from retrieving text passages, potentially containing evidence.\nWe obtain state-of-the-art results on the Natural Questions",
+      "evidence_span": {
+        "char_end": 1242,
+        "char_start": 510
+      },
+      "object_ref": {
+        "id": "ge_a60413ac_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_a60413ac_03",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_a60413ac_03",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [],
+      "evidence_quote": "Open Domain Question Answering}\n\n\\author{\n  Gautier Izacard$^{1,2,3}$ \\hspace{2em} Edouard Grave$^1$ \\\\\n  $^1$ Facebook AI Research, Paris \\\\\n  $^2$ ENS, PSL University, Paris \\\\\n  $^3$ Inria, Paris \\\\\n  \\texttt{gizacard|egrave@fb.com} \\\\\n}\n\n\\date{}\n\n\\begin{document}\n \\maketitle\n\\begin{abstract}\nGenerative models for open domain question answering have proven to be competitive, without resorting to external knowledge.\nWhile promising, this approach requires to use models with billions of parameters, which are expensive to train and query.\nIn this paper, we investigate how much these models can benefit from retrieving text passages, potentially containing evidence.\nWe obtain state-of-the-art results on the Natural Questions and TriviaQA",
+      "evidence_span": {
+        "char_end": 1255,
+        "char_start": 510
+      },
+      "object_ref": {
+        "id": "ge_a60413ac_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_a60413ac_04",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_a60413ac_04",
+        "kind": "mention"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

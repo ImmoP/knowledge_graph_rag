@@ -1,0 +1,246 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T10:04:34.535819Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_b5e6d6ada8090072",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_b5e6d6ad_01",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 29,
+          "char_start": 23,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 111,
+          "char_start": 105,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 168,
+          "char_start": 162,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 587,
+          "char_start": 581,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 1048,
+          "char_start": 1042,
+          "occurrence_index": 4
+        }
+      ],
+      "span": {
+        "char_end": 168,
+        "char_start": 162
+      },
+      "surface_form": "OpenQA"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_b5e6d6ad_02",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 449,
+          "char_start": 432,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 449,
+        "char_start": 432
+      },
+      "surface_form": "Natural Questions"
+    },
+    {
+      "canonical_form": "TriviaQA",
+      "confidence": "stated",
+      "entity_id": "ge_b5e6d6ad_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 658,
+          "char_start": 650,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 729,
+          "char_start": 721,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 658,
+        "char_start": 650
+      },
+      "surface_form": "TriviaQA"
+    },
+    {
+      "canonical_form": "WebQuestions",
+      "confidence": "stated",
+      "entity_id": "ge_b5e6d6ad_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 675,
+          "char_start": 663,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 675,
+        "char_start": 663
+      },
+      "surface_form": "WebQuestions"
+    },
+    {
+      "canonical_form": "DPR",
+      "confidence": "stated",
+      "entity_id": "ge_b5e6d6ad_05",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 494,
+          "char_start": 491,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 494,
+        "char_start": 491
+      },
+      "surface_form": "DPR"
+    },
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_b5e6d6ad_06",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1809,
+          "char_start": 1805,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1809,
+        "char_start": 1805
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "Information Retrieval",
+      "confidence": "stated",
+      "entity_id": "ge_b5e6d6ad_07",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 411,
+          "char_start": 409,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 411,
+        "char_start": 409
+      },
+      "surface_form": "IR"
+    }
+  ],
+  "note": "committed to the OpenQA occurrence introducing OpenQA datasets so the same task endpoint is locally supported for Natural Questions, TriviaQA, and WebQuestions relations; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 2
+        }
+      ],
+      "evidence_quote": "Some OpenQA datasets supply annotated \\textit{evidence passages} or human-curated contexts from which the gold answers can be derived. For such datasets, it is natural to rely on these labels to train the retriever, akin to typical supervision in many IR tasks. For example, Natural Questions",
+      "evidence_span": {
+        "char_end": 449,
+        "char_start": 157
+      },
+      "object_ref": {
+        "id": "ge_b5e6d6ad_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_b5e6d6ad_01",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_b5e6d6ad_02",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "subject",
+          "occurrence_index": 0
+        },
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 2
+        }
+      ],
+      "evidence_quote": "Some OpenQA datasets supply annotated \\textit{evidence passages} or human-curated contexts from which the gold answers can be derived. For such datasets, it is natural to rely on these labels to train the retriever, akin to typical supervision in many IR tasks. For example, Natural Questions contains labeled ``long answers'', which DPR uses as positive passages. \n\nHowever, using gold-evidence labels is not possible with OpenQA datasets that only supply question--answer string pairs, like TriviaQA and WebQuestions",
+      "evidence_span": {
+        "char_end": 675,
+        "char_start": 157
+      },
+      "object_ref": {
+        "id": "ge_b5e6d6ad_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_b5e6d6ad_02",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_b5e6d6ad_03",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 2
+        }
+      ],
+      "evidence_quote": "Some OpenQA datasets supply annotated \\textit{evidence passages} or human-curated contexts from which the gold answers can be derived. For such datasets, it is natural to rely on these labels to train the retriever, akin to typical supervision in many IR tasks. For example, Natural Questions contains labeled ``long answers'', which DPR uses as positive passages. \n\nHowever, using gold-evidence labels is not possible with OpenQA datasets that only supply question--answer string pairs, like TriviaQA and WebQuestions",
+      "evidence_span": {
+        "char_end": 675,
+        "char_start": 157
+      },
+      "object_ref": {
+        "id": "ge_b5e6d6ad_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_b5e6d6ad_03",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_b5e6d6ad_04",
+        "kind": "mention"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
