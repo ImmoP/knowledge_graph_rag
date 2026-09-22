@@ -111,6 +111,25 @@ _SENTENCE_BOUNDARY_RE = re.compile(
     r"[.!?][\s\u00A0]+[A-Za-z]"
 )
 
+# --- Contract status (fail-closed against authoritative freeze) -------------
+
+# Five normatively unspecified gaps in #48 Refinement 5 that the v1 minimum
+# in this file fills provisionally. Tracked by #99 (Difficulty Contract
+# Hardening). The classifier's v1 heuristics for these gaps are pinned by
+# code but NOT authoritative. Promoting ``difficulty.v*.jsonl`` to an
+# authoritative selection input requires every entry to be resolved.
+SPEC_GAPS_UNRESOLVED: frozenset[str] = frozenset({
+    "common_noun_vocabulary",                 # gap 1
+    "sentence_boundary_algorithm",           # gap 2
+    "unique_entity_surface_forms_scope",     # gap 3
+    "common_noun_method_endpoint_semantics", # gap 4
+    "easy_hard_precedence_when_co_triggering",  # gap 5
+})
+
+# Audit ``contract_status`` values.
+CONTRACT_AUTHORITATIVE = "authoritative"
+CONTRACT_NON_AUTHORITATIVE = "non_authoritative_pending_resolution"
+
 # Output paths. Both are gitignored; the script regenerates them idempotently.
 OUTPUT_JSONL = "data/gold_set/difficulty.v1.jsonl"
 OUTPUT_AUDIT = "data/gold_set/difficulty.v1.audit.json"
@@ -121,9 +140,6 @@ OUTPUT_AUDIT = "data/gold_set/difficulty.v1.audit.json"
 
 class DifficultyError(RuntimeError):
     """Raised when the classifier contract is violated."""
-
-
-# --- Data structures ---------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -622,6 +638,14 @@ def _build_audit(
             "common_noun_list_minimum_only: attention, model, score",
             "sentence_boundary_heuristic_only: terminator+whitespace+capital OR paragraph break",
         ],
+        "spec_gaps_unresolved": sorted(SPEC_GAPS_UNRESOLVED),
+        "spec_gaps_unresolved_count": len(SPEC_GAPS_UNRESOLVED),
+        "contract_status": (
+            CONTRACT_AUTHORITATIVE
+            if not SPEC_GAPS_UNRESOLVED
+            else CONTRACT_NON_AUTHORITATIVE
+        ),
+        "contract_blocker_issue": "ImmoP/knowledge_graph_rag#99",
         "versioning_pins": {
             "annotation_guideline_version": 1,
             "ontology_version_required": True,
@@ -681,6 +705,16 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Suppress the per-classification summary printed to stdout.",
     )
+    parser.add_argument(
+        "--require-authoritative",
+        action="store_true",
+        help=(
+            "Fail (exit non-zero) when audit.contract_status is not "
+            "'authoritative'. While #99 is open the audit always carries "
+            "'non_authoritative_pending_resolution', so this flag exits 2 "
+            "to prevent accidental authoritative freeze."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -712,8 +746,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"classify_difficulty: {audit['chunk_count_classified']} chunks "
             f"({summary}); output={output_jsonl}; audit={output_audit}"
         )
+    if args.require_authoritative and audit["contract_status"] != CONTRACT_AUTHORITATIVE:
+        print(
+            f"classify_difficulty: contract_status="
+            f"{audit['contract_status']!r}; refusing authoritative "
+            f"freeze (blocker={audit['contract_blocker_issue']}).",
+            file=sys.stderr,
+        )
+        return 2
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
