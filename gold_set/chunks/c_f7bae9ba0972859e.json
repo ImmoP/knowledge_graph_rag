@@ -1,0 +1,490 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T11:56:44.917441Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_f7bae9ba0972859e",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_01",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 81,
+          "char_start": 70,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 81,
+        "char_start": 70
+      },
+      "surface_form": "Exact Match"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_02",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 85,
+          "char_start": 83,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 85,
+        "char_start": 83
+      },
+      "surface_form": "EM"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 151,
+          "char_start": 149,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 151,
+        "char_start": 149
+      },
+      "surface_form": "NQ"
+    },
+    {
+      "canonical_form": "TriviaQA",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 155,
+          "char_start": 153,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 155,
+        "char_start": 153
+      },
+      "surface_form": "TQ"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_05",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 166,
+          "char_start": 161,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 166,
+        "char_start": 161
+      },
+      "surface_form": "SQuAD"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_06",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 136,
+          "char_start": 130,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 209,
+          "char_start": 203,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 338,
+          "char_start": 332,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 696,
+          "char_start": 690,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 850,
+          "char_start": 844,
+          "occurrence_index": 4
+        },
+        {
+          "char_end": 922,
+          "char_start": 916,
+          "occurrence_index": 5
+        }
+      ],
+      "span": {
+        "char_end": 136,
+        "char_start": 130
+      },
+      "surface_form": "OpenQA"
+    },
+    {
+      "canonical_form": "Extractive OpenQA",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_07",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 922,
+          "char_start": 905,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 922,
+        "char_start": 905
+      },
+      "surface_form": "extractive OpenQA"
+    },
+    {
+      "canonical_form": "IR",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_08",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 616,
+          "char_start": 614,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 616,
+        "char_start": 614
+      },
+      "surface_form": "IR"
+    },
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_09",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 371,
+          "char_start": 367,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 644,
+          "char_start": 640,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 371,
+        "char_start": 367
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "GraphRetriever",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_10",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 458,
+          "char_start": 444,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 458,
+        "char_start": 444
+      },
+      "surface_form": "GraphRetriever"
+    },
+    {
+      "canonical_form": "PathRetriever",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_11",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 502,
+          "char_start": 489,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 502,
+        "char_start": 489
+      },
+      "surface_form": "PathRetriever"
+    },
+    {
+      "canonical_form": "PathRetriever",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_12",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 727,
+          "char_start": 715,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 727,
+        "char_start": 715
+      },
+      "surface_form": "PathRetriver"
+    },
+    {
+      "canonical_form": "TF-IDF",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_13",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 655,
+          "char_start": 649,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 655,
+        "char_start": 649
+      },
+      "surface_form": "TF-IDF"
+    },
+    {
+      "canonical_form": "BERT-large",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_14",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 745,
+          "char_start": 735,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 745,
+        "char_start": 735
+      },
+      "surface_form": "BERT-large"
+    },
+    {
+      "canonical_form": "ORQA",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_15",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 877,
+          "char_start": 873,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 877,
+        "char_start": 873
+      },
+      "surface_form": "ORQA"
+    },
+    {
+      "canonical_form": "REALM",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_16",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 884,
+          "char_start": 879,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 884,
+        "char_start": 879
+      },
+      "surface_form": "REALM"
+    },
+    {
+      "canonical_form": "DPR",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_17",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 893,
+          "char_start": 890,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 893,
+        "char_start": 890
+      },
+      "surface_form": "DPR"
+    },
+    {
+      "canonical_form": "RAG",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_18",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 984,
+          "char_start": 981,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1059,
+          "char_start": 1056,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 984,
+        "char_start": 981
+      },
+      "surface_form": "RAG"
+    },
+    {
+      "canonical_form": "BART-large",
+      "confidence": "stated",
+      "entity_id": "ge_f7bae9ba_19",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1113,
+          "char_start": 1103,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1113,
+        "char_start": 1103
+      },
+      "surface_form": "BART-large"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We report Exact Match (EM) of the gold answer on the test sets of the OpenQA versions of NQ, TQ, and SQuAD.",
+      "evidence_span": {
+        "char_end": 167,
+        "char_start": 60
+      },
+      "object_ref": {
+        "id": "ge_f7bae9ba_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_f7bae9ba_01",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We report Exact Match (EM) of the gold answer on the test sets of the OpenQA versions of NQ, TQ, and SQuAD.",
+      "evidence_span": {
+        "char_end": 167,
+        "char_start": 60
+      },
+      "object_ref": {
+        "id": "ge_f7bae9ba_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_f7bae9ba_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We report Exact Match (EM) of the gold answer on the test sets of the OpenQA versions of NQ, TQ, and SQuAD.",
+      "evidence_span": {
+        "char_end": 167,
+        "char_start": 60
+      },
+      "object_ref": {
+        "id": "ge_f7bae9ba_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_f7bae9ba_03",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We report Exact Match (EM) of the gold answer on the test sets of the OpenQA versions of NQ, TQ, and SQuAD.",
+      "evidence_span": {
+        "char_end": 167,
+        "char_start": 60
+      },
+      "object_ref": {
+        "id": "ge_f7bae9ba_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_f7bae9ba_04",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We report Exact Match (EM) of the gold answer on the test sets of the OpenQA versions of NQ, TQ, and SQuAD.",
+      "evidence_span": {
+        "char_end": 167,
+        "char_start": 60
+      },
+      "object_ref": {
+        "id": "ge_f7bae9ba_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_f7bae9ba_05",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
