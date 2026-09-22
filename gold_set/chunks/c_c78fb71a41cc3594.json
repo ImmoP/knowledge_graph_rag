@@ -1,0 +1,53 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T10:38:27.269584Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_c78fb71a41cc3594",
+  "doc_id": "W2556691798",
+  "entities": [
+    {
+      "canonical_form": "Extractive QA",
+      "confidence": "stated",
+      "entity_id": "ge_c78fb71a_01",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 29,
+          "char_start": 0,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 29,
+        "char_start": 0
+      },
+      "surface_form": "Extractive question answering"
+    },
+    {
+      "canonical_form": "Extractive QA",
+      "confidence": "stated",
+      "entity_id": "ge_c78fb71a_02",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 323,
+          "char_start": 294,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 323,
+        "char_start": 294
+      },
+      "surface_form": "extractive question answering"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [],
+  "schema_version": "gold-record.v1"
+}

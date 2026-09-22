@@ -1,0 +1,241 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T10:38:29.426890Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_cd3f9ee25f60e652",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "BERT-base",
+      "confidence": "stated",
+      "entity_id": "ge_cd3f9ee2_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 128,
+          "char_start": 119,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 777,
+          "char_start": 768,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 128,
+        "char_start": 119
+      },
+      "surface_form": "BERT-base"
+    },
+    {
+      "canonical_form": "BERT-WWM",
+      "confidence": "stated",
+      "entity_id": "ge_cd3f9ee2_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 390,
+          "char_start": 382,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 390,
+        "char_start": 382
+      },
+      "surface_form": "BERT-WWM"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_cd3f9ee2_03",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 553,
+          "char_start": 547,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 553,
+        "char_start": 547
+      },
+      "surface_form": "OpenQA"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_cd3f9ee2_04",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 584,
+          "char_start": 573,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 584,
+        "char_start": 573
+      },
+      "surface_form": "exact-match"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_cd3f9ee2_05",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 588,
+          "char_start": 586,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 643,
+          "char_start": 641,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 588,
+        "char_start": 586
+      },
+      "surface_form": "EM"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_cd3f9ee2_06",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 629,
+          "char_start": 624,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 629,
+        "char_start": 624
+      },
+      "surface_form": "SQuAD"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "\\sysqa{} (base) &\n\\begin{tabular}{@{}c@{}}\\sysqa{}$_3$ \\\\ \\scalebox{.8}{(110M)}\\end{tabular} &\n\\begin{tabular}{@{}c@{}}BERT-base \\\\ \\scalebox{.8}{(110M)}\\end{tabular}\n& \\underline{42.3}  & \\underline{64.6} & \\underline{47.7} / \\underline{53.5}",
+      "evidence_span": {
+        "char_end": 243,
+        "char_start": 0
+      },
+      "object_ref": {
+        "id": "ge_cd3f9ee2_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_cd3f9ee2_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "\\sysqa{} (large) &\n\\begin{tabular}{@{}c@{}}\\sysqa{}$_3$ \\\\ \\scalebox{.8}{(110M)}\\end{tabular} &\n\\begin{tabular}{@{}c@{}}BERT-WWM \\\\ \\scalebox{.8}{(330M)}\\end{tabular} &\n\\textbf{47.8}  & \\textbf{70.1} & \\textbf{54.7} / \\textbf{58.7}",
+      "evidence_span": {
+        "char_end": 493,
+        "char_start": 262
+      },
+      "object_ref": {
+        "id": "ge_cd3f9ee2_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_cd3f9ee2_02",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "End-to-end OpenQA results, reporting exact-match (EM) on the open-domain test sets",
+      "evidence_span": {
+        "char_end": 618,
+        "char_start": 536
+      },
+      "object_ref": {
+        "id": "ge_cd3f9ee2_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_cd3f9ee2_03",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "End-to-end OpenQA results, reporting exact-match (EM) on the open-domain test sets",
+      "evidence_span": {
+        "char_end": 618,
+        "char_start": 536
+      },
+      "object_ref": {
+        "id": "ge_cd3f9ee2_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_cd3f9ee2_04",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "For SQuAD, we report EM on the main 2018 Wikipedia dump (left) and on the 2016 Wikipedia dump (right)",
+      "evidence_span": {
+        "char_end": 721,
+        "char_start": 620
+      },
+      "object_ref": {
+        "id": "ge_cd3f9ee2_06",
+        "kind": "mention"
+      },
+      "relation_id": "gr_cd3f9ee2_05",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
