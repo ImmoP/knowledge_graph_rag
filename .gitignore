@@ -25,4 +25,7 @@ tests/_entity_resolution_tmp/
 tests/_build_graph_tmp/
 
 # ann-B / ann-A-self review sidecars under gold_set/reviews/ (per gold_set/GUIDELINES.md §9).
-gold_set/reviews/
+# Difficulty classifier outputs under data/gold_set/ (#97 / #48 Refinement 5).
+# These are regenerated from canonical gold + sample inputs and are NOT committed.
+data/gold_set/difficulty.v1.jsonl
+data/gold_set/difficulty.v1.audit.json
