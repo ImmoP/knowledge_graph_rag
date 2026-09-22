@@ -1,0 +1,296 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T10:38:14.759255Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_ba9b920838f75fe3",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_01",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 33,
+          "char_start": 27,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 937,
+          "char_start": 931,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1468,
+          "char_start": 1462,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 33,
+        "char_start": 27
+      },
+      "surface_form": "OpenQA"
+    },
+    {
+      "canonical_form": "RGS",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 340,
+          "char_start": 337,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 340,
+        "char_start": 337
+      },
+      "surface_form": "RGS"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_03",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 193,
+          "char_start": 191,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 274,
+          "char_start": 272,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 421,
+          "char_start": 419,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 453,
+          "char_start": 451,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 571,
+          "char_start": 569,
+          "occurrence_index": 4
+        }
+      ],
+      "span": {
+        "char_end": 421,
+        "char_start": 419
+      },
+      "surface_form": "EM"
+    },
+    {
+      "canonical_form": "Success@k",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_04",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 538,
+          "char_start": 527,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 538,
+        "char_start": 527
+      },
+      "surface_form": "Success@$k$"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_05",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1298,
+          "char_start": 1296,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1298,
+        "char_start": 1296
+      },
+      "surface_form": "NQ"
+    },
+    {
+      "canonical_form": "TriviaQA",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_06",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1340,
+          "char_start": 1338,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1340,
+        "char_start": 1338
+      },
+      "surface_form": "TQ"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_07",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1385,
+          "char_start": 1380,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1385,
+        "char_start": 1380
+      },
+      "surface_form": "SQuAD"
+    },
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_08",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1542,
+          "char_start": 1538,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1624,
+          "char_start": 1620,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1881,
+          "char_start": 1877,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 1542,
+        "char_start": 1538
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "BERT",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_09",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1549,
+          "char_start": 1545,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1655,
+          "char_start": 1651,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1947,
+          "char_start": 1943,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 1549,
+        "char_start": 1545
+      },
+      "surface_form": "BERT"
+    },
+    {
+      "canonical_form": "BERT-base",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_10",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1660,
+          "char_start": 1651,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1952,
+          "char_start": 1943,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1660,
+        "char_start": 1651
+      },
+      "surface_form": "BERT-base"
+    },
+    {
+      "canonical_form": "GraphRetriever",
+      "confidence": "stated",
+      "entity_id": "ge_ba9b9208_11",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1784,
+          "char_start": 1770,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1784,
+        "char_start": 1770
+      },
+      "surface_form": "GraphRetriever"
+    }
+  ],
+  "note": "committed to the relation-bearing occurrence selected from local chunk evidence; earlier exact occurrences are not the intended semantic endpoint; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 2
+        }
+      ],
+      "evidence_quote": "0.7--2.4 EM points",
+      "evidence_span": {
+        "char_end": 428,
+        "char_start": 410
+      },
+      "object_ref": {
+        "id": "ge_ba9b9208_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_ba9b9208_01",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
