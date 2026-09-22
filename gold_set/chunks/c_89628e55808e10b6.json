@@ -1,0 +1,140 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T08:58:41.378263Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_89628e55808e10b6",
+  "doc_id": "W2753329127",
+  "entities": [
+    {
+      "canonical_form": "F1",
+      "confidence": "stated",
+      "entity_id": "ge_89628e55_01",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 557,
+          "char_start": 555,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 604,
+          "char_start": 602,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 971,
+          "char_start": 969,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 557,
+        "char_start": 555
+      },
+      "surface_form": "F1"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_89628e55_02",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 560,
+          "char_start": 558,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 607,
+          "char_start": 605,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 974,
+          "char_start": 972,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 560,
+        "char_start": 558
+      },
+      "surface_form": "EM"
+    },
+    {
+      "canonical_form": "Top-k Recall",
+      "confidence": "stated",
+      "entity_id": "ge_89628e55_03",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1589,
+          "char_start": 1577,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1589,
+        "char_start": 1577
+      },
+      "surface_form": "top-k recall"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "we compute the \\textbf{TOP-k} F1/EM",
+      "evidence_span": {
+        "char_end": 560,
+        "char_start": 525
+      },
+      "object_ref": {
+        "id": "ge_89628e55_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_89628e55_01",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "we compute the \\textbf{TOP-k} F1/EM",
+      "evidence_span": {
+        "char_end": 560,
+        "char_start": 525
+      },
+      "object_ref": {
+        "id": "ge_89628e55_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_89628e55_02",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

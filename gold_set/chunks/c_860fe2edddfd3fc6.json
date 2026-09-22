@@ -1,0 +1,370 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T08:58:34.924060Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_860fe2edddfd3fc6",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 121,
+          "char_start": 117,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 235,
+          "char_start": 231,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1808,
+          "char_start": 1804,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 121,
+        "char_start": 117
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "DPR",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 157,
+          "char_start": 154,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 201,
+          "char_start": 198,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1038,
+          "char_start": 1035,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 1463,
+          "char_start": 1460,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 1602,
+          "char_start": 1599,
+          "occurrence_index": 4
+        }
+      ],
+      "span": {
+        "char_end": 157,
+        "char_start": 154
+      },
+      "surface_form": "DPR"
+    },
+    {
+      "canonical_form": "Natural Questions",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 241,
+          "char_start": 239,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 795,
+          "char_start": 793,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1157,
+          "char_start": 1155,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 795,
+        "char_start": 793
+      },
+      "surface_form": "NQ"
+    },
+    {
+      "canonical_form": "TriviaQA",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 248,
+          "char_start": 246,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 799,
+          "char_start": 797,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 799,
+        "char_start": 797
+      },
+      "surface_form": "TQ"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_05",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 262,
+          "char_start": 257,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 315,
+          "char_start": 310,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 474,
+          "char_start": 469,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 262,
+        "char_start": 257
+      },
+      "surface_form": "SQuAD"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_06",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 259,
+          "char_start": 257,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 312,
+          "char_start": 310,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 471,
+          "char_start": 469,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 807,
+          "char_start": 805,
+          "occurrence_index": 3
+        }
+      ],
+      "span": {
+        "char_end": 807,
+        "char_start": 805
+      },
+      "surface_form": "SQ"
+    },
+    {
+      "canonical_form": "MS MARCO",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_07",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1442,
+          "char_start": 1434,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1442,
+        "char_start": 1434
+      },
+      "surface_form": "MS MARCO"
+    },
+    {
+      "canonical_form": "BERT",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_08",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1541,
+          "char_start": 1537,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1541,
+        "char_start": 1537
+      },
+      "surface_form": "BERT"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_09",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1022,
+          "char_start": 1016,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 2013,
+          "char_start": 2007,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1022,
+        "char_start": 1016
+      },
+      "surface_form": "OpenQA"
+    },
+    {
+      "canonical_form": "Re-ranking",
+      "confidence": "stated",
+      "entity_id": "ge_860fe2ed_10",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1802,
+          "char_start": 1792,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1906,
+          "char_start": 1896,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1802,
+        "char_start": 1792
+      },
+      "surface_form": "re-ranking"
+    }
+  ],
+  "note": "committed to the occurrence in the current-paper results sentence rather than the earlier baseline discussion; all exact occurrences remain enumerated\ncommitted to the occurrence in the current-paper results sentence rather than the earlier baseline discussion; all exact occurrences remain enumerated\ncommitted to the standalone SQ surface in the current-paper results sentence; earlier exact substring matches arise inside SQuAD-related text; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 1
+        }
+      ],
+      "evidence_quote": "The results on NQ, TQ, and SQ confirm",
+      "evidence_span": {
+        "char_end": 815,
+        "char_start": 778
+      },
+      "object_ref": {
+        "id": "ge_860fe2ed_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_860fe2ed_01",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 1
+        }
+      ],
+      "evidence_quote": "The results on NQ, TQ, and SQ confirm",
+      "evidence_span": {
+        "char_end": 815,
+        "char_start": 778
+      },
+      "object_ref": {
+        "id": "ge_860fe2ed_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_860fe2ed_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 3
+        }
+      ],
+      "evidence_quote": "The results on NQ, TQ, and SQ confirm",
+      "evidence_span": {
+        "char_end": 815,
+        "char_start": 778
+      },
+      "object_ref": {
+        "id": "ge_860fe2ed_06",
+        "kind": "mention"
+      },
+      "relation_id": "gr_860fe2ed_03",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "it uses a dot-product of a 768-dimensional vector extracted from BERT's \\texttt{[CLS]} token for each query or passage",
+      "evidence_span": {
+        "char_end": 1590,
+        "char_start": 1472
+      },
+      "object_ref": {
+        "id": "ge_860fe2ed_08",
+        "kind": "mention"
+      },
+      "relation_id": "gr_860fe2ed_04",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W3038831159",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
