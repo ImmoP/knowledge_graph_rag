@@ -795,6 +795,100 @@ def test_audit_records_script_sha_and_version(tmp_path):
     )
 
 
+def test_audit_marks_contract_non_authoritative_while_gaps_open(tmp_path):
+    """Fail-closed: while SPEC_GAPS_UNRESOLVED is non-empty the audit MUST
+    carry ``contract_status == 'non_authoritative_pending_resolution'`` and
+    the full list of gap names under ``spec_gaps_unresolved``. Promoting the
+    difficulty output to an authoritative selection input requires every
+    gap to be cleared under a bumped ``CLASSIFIER_VERSION``.
+    """
+    text = TEXT_EASY
+    chunk_id = _record_id("audit_contract")
+    entities = [
+        _make_entity(chunk_id, 1, "method", text, "DPR"),
+        _make_entity(chunk_id, 2, "dataset", text, "SQuAD"),
+    ]
+    sample_row, record = _make_record(
+        chunk_id, _doc_id(), text,
+        entities=entities, relations=[],
+        paper_tier="benchmark_central",
+    )
+    paths = _setup_paths(tmp_path, sample_rows=[sample_row], records={chunk_id: record})
+    audit = difficulty.run(
+        gold_dir=paths["gold_dir"],
+        sample_path=paths["sample"],
+        output_jsonl=paths["output_jsonl"],
+        output_audit=paths["output_audit"],
+        sample_audit_path=paths["sample_audit"],
+    )
+    assert set(audit["spec_gaps_unresolved"]) == set(difficulty.SPEC_GAPS_UNRESOLVED)
+    assert audit["spec_gaps_unresolved_count"] == len(difficulty.SPEC_GAPS_UNRESOLVED)
+    assert audit["spec_gaps_unresolved_count"] >= 5
+    assert audit["contract_status"] == difficulty.CONTRACT_NON_AUTHORITATIVE
+    assert audit["contract_blocker_issue"] == "ImmoP/knowledge_graph_rag#99"
+
+
+def test_require_authoritative_flag_exits_nonzero_while_gaps_open(tmp_path, capsys):
+    """CLI ``--require-authoritative`` MUST exit 2 while any spec gap is open.
+    Pins the fail-closed guard so the difficulty output cannot be
+    accidentally promoted to a frozen selection input.
+    """
+    text = TEXT_EASY
+    chunk_id = _record_id("audit_guard")
+    entities = [
+        _make_entity(chunk_id, 1, "method", text, "DPR"),
+        _make_entity(chunk_id, 2, "dataset", text, "SQuAD"),
+    ]
+    sample_row, record = _make_record(
+        chunk_id, _doc_id(), text,
+        entities=entities, relations=[],
+        paper_tier="benchmark_central",
+    )
+    paths = _setup_paths(tmp_path, sample_rows=[sample_row], records={chunk_id: record})
+    rc = difficulty.main([
+        "--gold-dir", str(paths["gold_dir"]),
+        "--sample", str(paths["sample"]),
+        "--sample-audit", str(paths["sample_audit"]),
+        "--output-jsonl", str(paths["output_jsonl"]),
+        "--output-audit", str(paths["output_audit"]),
+        "--quiet",
+        "--require-authoritative",
+    ])
+    assert rc == 2
+    captured = capsys.readouterr()
+    assert "non_authoritative_pending_resolution" in captured.err
+    assert "ImmoP/knowledge_graph_rag#99" in captured.err
+
+
+def test_require_authoritative_flag_passes_when_contract_authoritative(monkeypatch, tmp_path):
+    """When SPEC_GAPS_UNRESOLVED is empty the CLI guard returns 0.
+    Pins the inverse behavior so the guard is wired correctly even
+    once #99 is closed.
+    """
+    text = TEXT_EASY
+    chunk_id = _record_id("audit_guard_pass")
+    entities = [
+        _make_entity(chunk_id, 1, "method", text, "DPR"),
+        _make_entity(chunk_id, 2, "dataset", text, "SQuAD"),
+    ]
+    sample_row, record = _make_record(
+        chunk_id, _doc_id(), text,
+        entities=entities, relations=[],
+        paper_tier="benchmark_central",
+    )
+    paths = _setup_paths(tmp_path, sample_rows=[sample_row], records={chunk_id: record})
+    monkeypatch.setattr(difficulty, "SPEC_GAPS_UNRESOLVED", frozenset())
+    rc = difficulty.main([
+        "--gold-dir", str(paths["gold_dir"]),
+        "--sample", str(paths["sample"]),
+        "--sample-audit", str(paths["sample_audit"]),
+        "--output-jsonl", str(paths["output_jsonl"]),
+        "--output-audit", str(paths["output_audit"]),
+        "--quiet",
+        "--require-authoritative",
+    ])
+    assert rc == 0
+
 # ---------------------------------------------------------------------------
 # Fail-closed behavior.
 # ---------------------------------------------------------------------------
