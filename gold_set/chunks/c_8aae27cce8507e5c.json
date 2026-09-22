@@ -1,0 +1,511 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T09:28:54.129753Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_8aae27cce8507e5c",
+  "doc_id": "W2753329127",
+  "entities": [
+    {
+      "canonical_form": "Quasar-T",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_01",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 114,
+          "char_start": 106,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 114,
+        "char_start": 106
+      },
+      "surface_form": "Quasar-T"
+    },
+    {
+      "canonical_form": "SR-QA",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_02",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 138,
+          "char_start": 133,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 138,
+        "char_start": 133
+      },
+      "surface_form": "SR-QA"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 406,
+          "char_start": 401,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 568,
+          "char_start": 563,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 406,
+        "char_start": 401
+      },
+      "surface_form": "SQuAD"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 432,
+          "char_start": 413,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 432,
+        "char_start": 413
+      },
+      "surface_form": "Stanford QA dataset"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_05",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 534,
+          "char_start": 520,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 847,
+          "char_start": 833,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1009,
+          "char_start": 995,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 534,
+        "char_start": 520
+      },
+      "surface_form": "open-domain QA"
+    },
+    {
+      "canonical_form": "SQuAD Open",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_06",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 586,
+          "char_start": 563,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 586,
+        "char_start": 563
+      },
+      "surface_form": "SQuAD$_{\\textrm{OPEN}}$"
+    },
+    {
+      "canonical_form": "WikiMovies",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_07",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 608,
+          "char_start": 598,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 608,
+        "char_start": 598
+      },
+      "surface_form": "WikiMovies"
+    },
+    {
+      "canonical_form": "CuratedTREC",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_08",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 769,
+          "char_start": 758,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 769,
+        "char_start": 758
+      },
+      "surface_form": "CuratedTREC"
+    },
+    {
+      "canonical_form": "WebQuestions",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_09",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 872,
+          "char_start": 861,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 872,
+        "char_start": 861
+      },
+      "surface_form": "WebQuestion"
+    },
+    {
+      "canonical_form": "Knowledge-Base QA",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_10",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 913,
+          "char_start": 896,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 913,
+        "char_start": 896
+      },
+      "surface_form": "knowledge-base QA"
+    },
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_11",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1613,
+          "char_start": 1609,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1613,
+        "char_start": 1609
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "TF-IDF",
+      "confidence": "stated",
+      "entity_id": "ge_8aae27cc_12",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1686,
+          "char_start": 1680,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1686,
+        "char_start": 1680
+      },
+      "surface_form": "TF-IDF"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We experiment with five different datasets whose statistics are shown in Table~\\ref{datasets}.\n\n\n\\textbf{Quasar-T}",
+      "evidence_span": {
+        "char_end": 115,
+        "char_start": 1
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_01",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "We experiment with five different datasets whose statistics are shown in Table~\\ref{datasets}.\n\n\n\\textbf{Quasar-T} is a dataset for\nSR-QA, with\nquestion-answer pairs from various internet sources. \nEach question is compared to 100 sentence-level candidate passages, retrieved by their IR model from the ClueWeb09 data source, to extract the answer. \n\nThe other four datasets we consider are: \\textbf{SQuAD}",
+      "evidence_span": {
+        "char_end": 407,
+        "char_start": 1
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We experiment with five different datasets whose statistics are shown in Table~\\ref{datasets}.\n\n\n\\textbf{Quasar-T} is a dataset for\nSR-QA, with\nquestion-answer pairs from various internet sources. \nEach question is compared to 100 sentence-level candidate passages, retrieved by their IR model from the ClueWeb09 data source, to extract the answer. \n\nThe other four datasets we consider are: \\textbf{SQuAD}, the Stanford QA dataset",
+      "evidence_span": {
+        "char_end": 432,
+        "char_start": 1
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_03",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We experiment with five different datasets whose statistics are shown in Table~\\ref{datasets}.\n\n\n\\textbf{Quasar-T} is a dataset for\nSR-QA, with\nquestion-answer pairs from various internet sources. \nEach question is compared to 100 sentence-level candidate passages, retrieved by their IR model from the ClueWeb09 data source, to extract the answer. \n\nThe other four datasets we consider are: \\textbf{SQuAD}, the Stanford QA dataset, from which we take only the question-answer pairs and discard the passages to form an open-domain QA setting (denoted as \\textbf{SQuAD$_{\\textrm{OPEN}}$",
+      "evidence_span": {
+        "char_end": 586,
+        "char_start": 1
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_06",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_04",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We experiment with five different datasets whose statistics are shown in Table~\\ref{datasets}.\n\n\n\\textbf{Quasar-T} is a dataset for\nSR-QA, with\nquestion-answer pairs from various internet sources. \nEach question is compared to 100 sentence-level candidate passages, retrieved by their IR model from the ClueWeb09 data source, to extract the answer. \n\nThe other four datasets we consider are: \\textbf{SQuAD}, the Stanford QA dataset, from which we take only the question-answer pairs and discard the passages to form an open-domain QA setting (denoted as \\textbf{SQuAD$_{\\textrm{OPEN}}$});\n\\textbf{WikiMovies}",
+      "evidence_span": {
+        "char_end": 609,
+        "char_start": 1
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_07",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_05",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We experiment with five different datasets whose statistics are shown in Table~\\ref{datasets}.\n\n\n\\textbf{Quasar-T} is a dataset for\nSR-QA, with\nquestion-answer pairs from various internet sources. \nEach question is compared to 100 sentence-level candidate passages, retrieved by their IR model from the ClueWeb09 data source, to extract the answer. \n\nThe other four datasets we consider are: \\textbf{SQuAD}, the Stanford QA dataset, from which we take only the question-answer pairs and discard the passages to form an open-domain QA setting (denoted as \\textbf{SQuAD$_{\\textrm{OPEN}}$});\n\\textbf{WikiMovies} which contains movie-related questions from the OMDb and MovieLens databases and where the questions can be answered using Wikipedia pages; \\textbf{CuratedTREC}",
+      "evidence_span": {
+        "char_end": 770,
+        "char_start": 1
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_08",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_06",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We experiment with five different datasets whose statistics are shown in Table~\\ref{datasets}.\n\n\n\\textbf{Quasar-T} is a dataset for\nSR-QA, with\nquestion-answer pairs from various internet sources. \nEach question is compared to 100 sentence-level candidate passages, retrieved by their IR model from the ClueWeb09 data source, to extract the answer. \n\nThe other four datasets we consider are: \\textbf{SQuAD}, the Stanford QA dataset, from which we take only the question-answer pairs and discard the passages to form an open-domain QA setting (denoted as \\textbf{SQuAD$_{\\textrm{OPEN}}$});\n\\textbf{WikiMovies} which contains movie-related questions from the OMDb and MovieLens databases and where the questions can be answered using Wikipedia pages; \\textbf{CuratedTREC}, based on TREC~[[CITE:voorhees2000building]] and designed for open-domain QA; and \\textbf{WebQuestion}",
+      "evidence_span": {
+        "char_end": 873,
+        "char_start": 1
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_09",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_07",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "\\textbf{Quasar-T} is a dataset for\nSR-QA",
+      "evidence_span": {
+        "char_end": 138,
+        "char_start": 98
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_08",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_8aae27cc_01",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "discard the passages to form an open-domain QA setting (denoted as \\textbf{SQuAD$_{\\textrm{OPEN}}$})",
+      "evidence_span": {
+        "char_end": 588,
+        "char_start": 488
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_09",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_8aae27cc_06",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "open-domain QA setting (denoted as \\textbf{SQuAD$_{\\textrm{OPEN}}$});\n\\textbf{WikiMovies} which contains movie-related questions from the OMDb and MovieLens databases and where the questions can be answered using Wikipedia pages; \\textbf{CuratedTREC}, based on TREC~[[CITE:voorhees2000building]] and designed for open-domain QA",
+      "evidence_span": {
+        "char_end": 847,
+        "char_start": 520
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_10",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_8aae27cc_08",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "\\textbf{WebQuestion} which is designed for knowledge-base QA",
+      "evidence_span": {
+        "char_end": 913,
+        "char_start": 853
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_10",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_11",
+      "relation_type": "USED_FOR_TASK",
+      "subject_ref": {
+        "id": "ge_8aae27cc_09",
+        "kind": "mention"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "rank them with BM25",
+      "evidence_span": {
+        "char_end": 1613,
+        "char_start": 1594
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_11",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_12",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "The sentences are then ranked by TF-IDF",
+      "evidence_span": {
+        "char_end": 1686,
+        "char_start": 1647
+      },
+      "object_ref": {
+        "id": "ge_8aae27cc_12",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8aae27cc_13",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
