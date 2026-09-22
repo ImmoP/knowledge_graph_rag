@@ -23,3 +23,6 @@ tests/_entity_resolution_tmp/
 
 # Repo-relative scratch directory used by graph-ingestion tests
 tests/_build_graph_tmp/
+
+# ann-B / ann-A-self review sidecars under gold_set/reviews/ (per gold_set/GUIDELINES.md §9).
+gold_set/reviews/
