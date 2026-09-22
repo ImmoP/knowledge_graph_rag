@@ -1,0 +1,412 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T11:56:42.944462Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_eee7877de9b01cf3",
+  "doc_id": "W3021677691",
+  "entities": [
+    {
+      "canonical_form": "Natural Questions Open",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_01",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 194,
+          "char_start": 173,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 194,
+        "char_start": 173
+      },
+      "surface_form": "NaturalQuestions-Open"
+    },
+    {
+      "canonical_form": "WebQuestions",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_02",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 209,
+          "char_start": 197,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 209,
+        "char_start": 197
+      },
+      "surface_form": "WebQuestions"
+    },
+    {
+      "canonical_form": "CuratedTREC",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_03",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 223,
+          "char_start": 212,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 223,
+        "char_start": 212
+      },
+      "surface_form": "CuratedTREC"
+    },
+    {
+      "canonical_form": "DrQA",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_04",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 248,
+          "char_start": 244,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 248,
+        "char_start": 244
+      },
+      "surface_form": "DrQA"
+    },
+    {
+      "canonical_form": "R$^{3}$",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_05",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 314,
+          "char_start": 307,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 314,
+        "char_start": 307
+      },
+      "surface_form": "R$^{3}$"
+    },
+    {
+      "canonical_form": "DSQA",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_06",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 387,
+          "char_start": 383,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 387,
+        "char_start": 383
+      },
+      "surface_form": "DSQA"
+    },
+    {
+      "canonical_form": "HardEM",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_07",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 452,
+          "char_start": 446,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 452,
+        "char_start": 446
+      },
+      "surface_form": "HardEM"
+    },
+    {
+      "canonical_form": "PathRetriever",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_08",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 520,
+          "char_start": 507,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 520,
+        "char_start": 507
+      },
+      "surface_form": "PathRetriever"
+    },
+    {
+      "canonical_form": "WKLM",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_09",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 578,
+          "char_start": 574,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 578,
+        "char_start": 574
+      },
+      "surface_form": "WKLM"
+    },
+    {
+      "canonical_form": "GraphRetriever",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_10",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 658,
+          "char_start": 644,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 658,
+        "char_start": 644
+      },
+      "surface_form": "GraphRetriever"
+    },
+    {
+      "canonical_form": "ORQA",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_11",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 737,
+          "char_start": 733,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 737,
+        "char_start": 733
+      },
+      "surface_form": "ORQA"
+    },
+    {
+      "canonical_form": "ProQA",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_12",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 814,
+          "char_start": 809,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 814,
+        "char_start": 809
+      },
+      "surface_form": "ProQA"
+    },
+    {
+      "canonical_form": "Open-Domain QA",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_13",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 939,
+          "char_start": 925,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 939,
+        "char_start": 925
+      },
+      "surface_form": "Open-domain QA"
+    },
+    {
+      "canonical_form": "IR",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_14",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1067,
+          "char_start": 1065,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1067,
+        "char_start": 1065
+      },
+      "surface_form": "IR"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_15",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 978,
+          "char_start": 960,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 978,
+        "char_start": 960
+      },
+      "surface_form": "exact answer match"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_eee7877d_16",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 452,
+          "char_start": 450,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 982,
+          "char_start": 980,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 982,
+        "char_start": 980
+      },
+      "surface_form": "EM"
+    }
+  ],
+  "note": "committed to the relation-bearing occurrence selected from local chunk evidence; earlier exact occurrences are not the intended semantic endpoint; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [],
+      "evidence_quote": "NaturalQuestions-Open & WebQuestions & CuratedTREC \\\\\n    \\midrule\n    DrQA [[CITE:chen-etal-2017-reading]] & - & 20.7 & 25.7  \\\\\n    R$^{3}$ [[CITE:DBLP:journals/corr/abs-1709-00023]] & - & 17.1 & 28.4 \\\\\n    DSQA [[CITE:lin-etal-2018-denoising]] & - & 25.6 & 29.1 \\\\\n    HardEM [[CITE:min-etal-2019-discrete]] & 28.1 & - & - \\\\\n    PathRetriever [[CITE:asai-etal-2019-path]] &  32.6 & - & -  \\\\\n    WKLM [[CITE:DBLP:journals/corr/abs-1912-09637]] & - & 34.6 & - \\\\\n    GraphRetriever [[CITE:min-etal-2019-graph]] &  34.5 & 36.4 & - \\\\\n    \n    \\midrule \n    ORQA [[CITE:lee-etal-2019-latent]] & 33.3 & 36.4 & 30.1 \\\\\n    \n    \\textbf{ProQA}(Ours) & \\textbf{37.4}",
+      "evidence_span": {
+        "char_end": 837,
+        "char_start": 173
+      },
+      "object_ref": {
+        "id": "ge_eee7877d_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_eee7877d_01",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [],
+      "evidence_quote": "WebQuestions & CuratedTREC \\\\\n    \\midrule\n    DrQA [[CITE:chen-etal-2017-reading]] & - & 20.7 & 25.7  \\\\\n    R$^{3}$ [[CITE:DBLP:journals/corr/abs-1709-00023]] & - & 17.1 & 28.4 \\\\\n    DSQA [[CITE:lin-etal-2018-denoising]] & - & 25.6 & 29.1 \\\\\n    HardEM [[CITE:min-etal-2019-discrete]] & 28.1 & - & - \\\\\n    PathRetriever [[CITE:asai-etal-2019-path]] &  32.6 & - & -  \\\\\n    WKLM [[CITE:DBLP:journals/corr/abs-1912-09637]] & - & 34.6 & - \\\\\n    GraphRetriever [[CITE:min-etal-2019-graph]] &  34.5 & 36.4 & - \\\\\n    \n    \\midrule \n    ORQA [[CITE:lee-etal-2019-latent]] & 33.3 & 36.4 & 30.1 \\\\\n    \n    \\textbf{ProQA}(Ours) & \\textbf{37.4} & \\textbf{37.1}",
+      "evidence_span": {
+        "char_end": 853,
+        "char_start": 197
+      },
+      "object_ref": {
+        "id": "ge_eee7877d_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_eee7877d_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "inferred",
+      "endpoint_mentions": [],
+      "evidence_quote": "CuratedTREC \\\\\n    \\midrule\n    DrQA [[CITE:chen-etal-2017-reading]] & - & 20.7 & 25.7  \\\\\n    R$^{3}$ [[CITE:DBLP:journals/corr/abs-1709-00023]] & - & 17.1 & 28.4 \\\\\n    DSQA [[CITE:lin-etal-2018-denoising]] & - & 25.6 & 29.1 \\\\\n    HardEM [[CITE:min-etal-2019-discrete]] & 28.1 & - & - \\\\\n    PathRetriever [[CITE:asai-etal-2019-path]] &  32.6 & - & -  \\\\\n    WKLM [[CITE:DBLP:journals/corr/abs-1912-09637]] & - & 34.6 & - \\\\\n    GraphRetriever [[CITE:min-etal-2019-graph]] &  34.5 & 36.4 & - \\\\\n    \n    \\midrule \n    ORQA [[CITE:lee-etal-2019-latent]] & 33.3 & 36.4 & 30.1 \\\\\n    \n    \\textbf{ProQA}(Ours) & \\textbf{37.4} & \\textbf{37.1} & \\textbf{34.6}",
+      "evidence_span": {
+        "char_end": 869,
+        "char_start": 212
+      },
+      "object_ref": {
+        "id": "ge_eee7877d_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_eee7877d_03",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "Open-domain QA results in terms of exact answer match (EM).",
+      "evidence_span": {
+        "char_end": 984,
+        "char_start": 925
+      },
+      "object_ref": {
+        "id": "ge_eee7877d_15",
+        "kind": "mention"
+      },
+      "relation_id": "gr_eee7877d_04",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 1
+        }
+      ],
+      "evidence_quote": "Open-domain QA results in terms of exact answer match (EM).",
+      "evidence_span": {
+        "char_end": 984,
+        "char_start": 925
+      },
+      "object_ref": {
+        "id": "ge_eee7877d_16",
+        "kind": "mention"
+      },
+      "relation_id": "gr_eee7877d_05",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W3021677691",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
