@@ -1,0 +1,498 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T09:29:00.877800Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_9945a2f1e80974e3",
+  "doc_id": "W2753329127",
+  "entities": [
+    {
+      "canonical_form": "F1",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_01",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 66,
+          "char_start": 58,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 66,
+        "char_start": 58
+      },
+      "surface_form": "F1 score"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_02",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 82,
+          "char_start": 71,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 82,
+        "char_start": 71
+      },
+      "surface_form": "Exact Match"
+    },
+    {
+      "canonical_form": "Exact Match",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_03",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 86,
+          "char_start": 84,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 503,
+          "char_start": 501,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 555,
+          "char_start": 553,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 588,
+          "char_start": 586,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 1274,
+          "char_start": 1272,
+          "occurrence_index": 4
+        }
+      ],
+      "span": {
+        "char_end": 503,
+        "char_start": 501
+      },
+      "surface_form": "EM"
+    },
+    {
+      "canonical_form": "SQuAD",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_04",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 148,
+          "char_start": 143,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 398,
+          "char_start": 393,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 480,
+          "char_start": 475,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 480,
+        "char_start": 475
+      },
+      "surface_form": "SQuAD"
+    },
+    {
+      "canonical_form": "Quasar-T",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_05",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 214,
+          "char_start": 206,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 810,
+          "char_start": 802,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1660,
+          "char_start": 1652,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 214,
+        "char_start": 206
+      },
+      "surface_form": "Quasar-T"
+    },
+    {
+      "canonical_form": "DrQA",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_06",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 296,
+          "char_start": 292,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 569,
+          "char_start": 565,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 296,
+        "char_start": 292
+      },
+      "surface_form": "DrQA"
+    },
+    {
+      "canonical_form": "F1",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_07",
+      "entity_type": "metric",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 60,
+          "char_start": 58,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 494,
+          "char_start": 492,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 546,
+          "char_start": 544,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 579,
+          "char_start": 577,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 1258,
+          "char_start": 1256,
+          "occurrence_index": 4
+        }
+      ],
+      "span": {
+        "char_end": 494,
+        "char_start": 492
+      },
+      "surface_form": "F1"
+    },
+    {
+      "canonical_form": "Bi-Directional Attention Flow",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_08",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 536,
+          "char_start": 531,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 536,
+        "char_start": 531
+      },
+      "surface_form": "BiDAF"
+    },
+    {
+      "canonical_form": "WikiMovies",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_09",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 671,
+          "char_start": 662,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 821,
+          "char_start": 812,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 671,
+        "char_start": 662
+      },
+      "surface_form": "WikiMovie"
+    },
+    {
+      "canonical_form": "CuratedTREC",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_10",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 687,
+          "char_start": 676,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 839,
+          "char_start": 828,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 998,
+          "char_start": 987,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 687,
+        "char_start": 676
+      },
+      "surface_form": "CuratedTREC"
+    },
+    {
+      "canonical_form": "WikiMovies",
+      "confidence": "stated",
+      "entity_id": "ge_9945a2f1_11",
+      "entity_type": "dataset",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 822,
+          "char_start": 812,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 822,
+        "char_start": 812
+      },
+      "surface_form": "WikiMovies"
+    }
+  ],
+  "note": "committed to the relation-bearing occurrence selected from the local evidence; earlier exact substring occurrences are not the intended semantic mention; all exact occurrences remain enumerated\ncommitted to the relation-bearing occurrence selected from the local evidence; earlier exact substring occurrences are not the intended semantic mention; all exact occurrences remain enumerated\ncommitted to the relation-bearing occurrence selected from the local evidence; earlier exact substring occurrences are not the intended semantic mention; all exact occurrences remain enumerated",
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 2
+        }
+      ],
+      "evidence_quote": "our Single Reader model on the original SQuAD dev set is F1 77.0, EM 67.6",
+      "evidence_span": {
+        "char_end": 508,
+        "char_start": 435
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_01",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "on Quasar-T, the Single Reader can exceed state-of-the-art performance",
+      "evidence_span": {
+        "char_end": 273,
+        "char_start": 203
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_02",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "our Single Reader model still achieves better performance on the WikiMovie and CuratedTREC datasets",
+      "evidence_span": {
+        "char_end": 696,
+        "char_start": 597
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_09",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_03",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 0
+        }
+      ],
+      "evidence_quote": "our Single Reader model still achieves better performance on the WikiMovie and CuratedTREC datasets",
+      "evidence_span": {
+        "char_end": 696,
+        "char_start": 597
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_10",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_04",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "achieves the best performance on the Quasar-T, WikiMovies, and CuratedTREC datests",
+      "evidence_span": {
+        "char_end": 847,
+        "char_start": 765
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_11",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_05",
+      "relation_type": "EVALUATES_ON",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We use F1 score and Exact Match (EM) evaluation metrics\\footnote{Evaluation tooling is from SQuAD~[[CITE:rajpurkar2016squad]].}.  We first observe that on Quasar-T, the Single Reader can exceed state-of-the-art performance. Moreover, unlike DrQA, our models are all trained using distant supervision and, without pre-training on the original SQuAD dataset\\footnote{The performance of our Single Reader model on the original SQuAD dev set is F1 77.0, EM 67.6",
+      "evidence_span": {
+        "char_end": 508,
+        "char_start": 51
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_06",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "We use F1 score and Exact Match (EM) evaluation metrics\\footnote{Evaluation tooling is from SQuAD~[[CITE:rajpurkar2016squad]].}.  We first observe that on Quasar-T, the Single Reader can exceed state-of-the-art performance. Moreover, unlike DrQA, our models are all trained using distant supervision and, without pre-training on the original SQuAD dataset\\footnote{The performance of our Single Reader model on the original SQuAD dev set is F1 77.0, EM 67.6",
+      "evidence_span": {
+        "char_end": 508,
+        "char_start": 51
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_07",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 1
+        }
+      ],
+      "evidence_quote": "our Single Reader model on the original SQuAD dev set is F1 77.0, EM 67.6",
+      "evidence_span": {
+        "char_end": 508,
+        "char_start": 435
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_03",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_08",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [
+        {
+          "endpoint_role": "object",
+          "occurrence_index": 1
+        }
+      ],
+      "evidence_quote": "our Single Reader model on the original SQuAD dev set is F1 77.0, EM 67.6",
+      "evidence_span": {
+        "char_end": 508,
+        "char_start": 435
+      },
+      "object_ref": {
+        "id": "ge_9945a2f1_07",
+        "kind": "mention"
+      },
+      "relation_id": "gr_9945a2f1_09",
+      "relation_type": "REPORTS_METRIC",
+      "subject_ref": {
+        "id": "W2753329127",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}

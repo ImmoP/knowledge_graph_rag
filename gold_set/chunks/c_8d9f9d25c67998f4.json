@@ -1,0 +1,184 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T09:28:56.548096Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_8d9f9d25c67998f4",
+  "doc_id": "W2551396370",
+  "entities": [
+    {
+      "canonical_form": "Bi-Directional Attention Flow",
+      "confidence": "stated",
+      "entity_id": "ge_8d9f9d25_01",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 334,
+          "char_start": 305,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 334,
+        "char_start": 305
+      },
+      "surface_form": "bi-directional attention flow"
+    },
+    {
+      "canonical_form": "Memory-Less Attention",
+      "confidence": "stated",
+      "entity_id": "ge_8d9f9d25_02",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 928,
+          "char_start": 890,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 928,
+        "char_start": 890
+      },
+      "surface_form": "memory-\\emph{less} attention mechanism"
+    },
+    {
+      "canonical_form": "Dynamic Attention",
+      "confidence": "stated",
+      "entity_id": "ge_8d9f9d25_03",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1801,
+          "char_start": 1784,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1801,
+        "char_start": 1784
+      },
+      "surface_form": "dynamic attention"
+    },
+    {
+      "canonical_form": "Query-to-Context Attention",
+      "confidence": "stated",
+      "entity_id": "ge_8d9f9d25_04",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1875,
+          "char_start": 1859,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1875,
+        "char_start": 1859
+      },
+      "surface_form": "query-to-context"
+    },
+    {
+      "canonical_form": "Context-to-Query Attention",
+      "confidence": "stated",
+      "entity_id": "ge_8d9f9d25_05",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1896,
+          "char_start": 1880,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1896,
+        "char_start": 1880
+      },
+      "surface_form": "context-to-query"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "uses bi-directional attention flow",
+      "evidence_span": {
+        "char_end": 334,
+        "char_start": 300
+      },
+      "object_ref": {
+        "id": "ge_8d9f9d25_01",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8d9f9d25_01",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W2551396370",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "Second, we use a memory-\\emph{less} attention mechanism",
+      "evidence_span": {
+        "char_end": 928,
+        "char_start": 873
+      },
+      "object_ref": {
+        "id": "ge_8d9f9d25_02",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8d9f9d25_02",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W2551396370",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "we use attention mechanisms in both directions, query-to-context and context-to-query",
+      "evidence_span": {
+        "char_end": 1896,
+        "char_start": 1811
+      },
+      "object_ref": {
+        "id": "ge_8d9f9d25_04",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8d9f9d25_03",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W2551396370",
+        "kind": "document"
+      }
+    },
+    {
+      "confidence": "stated",
+      "endpoint_mentions": [],
+      "evidence_quote": "we use attention mechanisms in both directions, query-to-context and context-to-query",
+      "evidence_span": {
+        "char_end": 1896,
+        "char_start": 1811
+      },
+      "object_ref": {
+        "id": "ge_8d9f9d25_05",
+        "kind": "mention"
+      },
+      "relation_id": "gr_8d9f9d25_04",
+      "relation_type": "USES_METHOD",
+      "subject_ref": {
+        "id": "W2551396370",
+        "kind": "document"
+      }
+    }
+  ],
+  "schema_version": "gold-record.v1"
+}
