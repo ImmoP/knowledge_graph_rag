@@ -1,0 +1,237 @@
+{
+  "adjudicated_by": null,
+  "adjudication_status": "single_pass",
+  "annotated_at": "2026-09-22T11:27:33.764892Z",
+  "annotation_guideline_sha256": "faa3281ad24b03714b22cac26ac87f277c01d3fb12eb348da5d4abdef987aa21",
+  "annotation_guideline_version": "1",
+  "annotator_id": "ann-A",
+  "canonical_chunks_sha256_at_authoring": "e0fd879d10377cbe9359aab818a28ca1d6e720ef2181b11ec6f7acb4eca6e94b",
+  "chunk_id": "c_e73ee998c1875fec",
+  "doc_id": "W3038831159",
+  "entities": [
+    {
+      "canonical_form": "Inverse Cloze Task",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_01",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 53,
+          "char_start": 35,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 53,
+        "char_start": 35
+      },
+      "surface_form": "Inverse Close Task"
+    },
+    {
+      "canonical_form": "Inverse Cloze Task",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_02",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 58,
+          "char_start": 55,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 58,
+        "char_start": 55
+      },
+      "surface_form": "ICT"
+    },
+    {
+      "canonical_form": "REALM",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_03",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 427,
+          "char_start": 390,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 427,
+        "char_start": 390
+      },
+      "surface_form": "retrieval-augmented language modeling"
+    },
+    {
+      "canonical_form": "REALM",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_04",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 434,
+          "char_start": 429,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 608,
+          "char_start": 603,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 852,
+          "char_start": 847,
+          "occurrence_index": 2
+        },
+        {
+          "char_end": 938,
+          "char_start": 933,
+          "occurrence_index": 3
+        },
+        {
+          "char_end": 1714,
+          "char_start": 1709,
+          "occurrence_index": 4
+        }
+      ],
+      "span": {
+        "char_end": 434,
+        "char_start": 429
+      },
+      "surface_form": "REALM"
+    },
+    {
+      "canonical_form": "Masked Language Modeling",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_05",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 532,
+          "char_start": 508,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 532,
+        "char_start": 508
+      },
+      "surface_form": "Masked Language Modeling"
+    },
+    {
+      "canonical_form": "ORQA",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_06",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 598,
+          "char_start": 594,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 831,
+          "char_start": 827,
+          "occurrence_index": 1
+        },
+        {
+          "char_end": 1704,
+          "char_start": 1700,
+          "occurrence_index": 2
+        }
+      ],
+      "span": {
+        "char_end": 598,
+        "char_start": 594
+      },
+      "surface_form": "ORQA"
+    },
+    {
+      "canonical_form": "DPR",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_07",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1089,
+          "char_start": 1066,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1089,
+        "char_start": 1066
+      },
+      "surface_form": "dense passage retriever"
+    },
+    {
+      "canonical_form": "DPR",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_08",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1094,
+          "char_start": 1091,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1669,
+          "char_start": 1666,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1094,
+        "char_start": 1091
+      },
+      "surface_form": "DPR"
+    },
+    {
+      "canonical_form": "BM25",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_09",
+      "entity_type": "method",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1401,
+          "char_start": 1397,
+          "occurrence_index": 0
+        },
+        {
+          "char_end": 1500,
+          "char_start": 1496,
+          "occurrence_index": 1
+        }
+      ],
+      "span": {
+        "char_end": 1401,
+        "char_start": 1397
+      },
+      "surface_form": "BM25"
+    },
+    {
+      "canonical_form": "Extractive OpenQA",
+      "confidence": "stated",
+      "entity_id": "ge_e73ee998_10",
+      "entity_type": "task",
+      "occurrences_in_chunk": [
+        {
+          "char_end": 1775,
+          "char_start": 1758,
+          "occurrence_index": 0
+        }
+      ],
+      "span": {
+        "char_end": 1775,
+        "char_start": 1758
+      },
+      "surface_form": "extractive OpenQA"
+    }
+  ],
+  "ontology_sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+  "ontology_version": 1,
+  "relations": [],
+  "schema_version": "gold-record.v1"
+}
