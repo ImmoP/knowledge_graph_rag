@@ -795,12 +795,11 @@ def test_audit_records_script_sha_and_version(tmp_path):
     )
 
 
-def test_audit_marks_contract_non_authoritative_while_gaps_open(tmp_path):
-    """Fail-closed: while SPEC_GAPS_UNRESOLVED is non-empty the audit MUST
-    carry ``contract_status == 'non_authoritative_pending_resolution'`` and
-    the full list of gap names under ``spec_gaps_unresolved``. Promoting the
-    difficulty output to an authoritative selection input requires every
-    gap to be cleared under a bumped ``CLASSIFIER_VERSION``.
+def test_audit_marks_contract_authoritative_when_gaps_closed(tmp_path):
+    """Refinement 10 closes the five v1 gaps without changing the heuristic.
+
+    The classifier may run authoritatively; selection-bound freezing remains
+    gated on the 7-day wash and ann-B / ann-C adjudication.
     """
     text = TEXT_EASY
     chunk_id = _record_id("audit_contract")
@@ -821,18 +820,18 @@ def test_audit_marks_contract_non_authoritative_while_gaps_open(tmp_path):
         output_audit=paths["output_audit"],
         sample_audit_path=paths["sample_audit"],
     )
-    assert set(audit["spec_gaps_unresolved"]) == set(difficulty.SPEC_GAPS_UNRESOLVED)
-    assert audit["spec_gaps_unresolved_count"] == len(difficulty.SPEC_GAPS_UNRESOLVED)
-    assert audit["spec_gaps_unresolved_count"] >= 5
-    assert audit["contract_status"] == difficulty.CONTRACT_NON_AUTHORITATIVE
-    assert audit["contract_blocker_issue"] == "ImmoP/knowledge_graph_rag#99"
+    assert difficulty.SPEC_GAPS_UNRESOLVED == frozenset()
+    assert audit["spec_gaps_unresolved"] == []
+    assert audit["spec_gaps_unresolved_count"] == 0
+    assert audit["contract_status"] == difficulty.CONTRACT_AUTHORITATIVE
+    assert audit["contract_blocker_issue"] is None
+    assert audit["contract_authority_ref"] == (
+        "ImmoP/knowledge_graph_rag#48 (Refinement 10, issuecomment-5783801175)"
+    )
 
 
-def test_require_authoritative_flag_exits_nonzero_while_gaps_open(tmp_path, capsys):
-    """CLI ``--require-authoritative`` MUST exit 2 while any spec gap is open.
-    Pins the fail-closed guard so the difficulty output cannot be
-    accidentally promoted to a frozen selection input.
-    """
+def test_fail_closed_guard_fires_under_synthetic_gap(monkeypatch, tmp_path, capsys):
+    """A future reopened gap still makes ``--require-authoritative`` exit 2."""
     text = TEXT_EASY
     chunk_id = _record_id("audit_guard")
     entities = [
@@ -845,6 +844,7 @@ def test_require_authoritative_flag_exits_nonzero_while_gaps_open(tmp_path, caps
         paper_tier="benchmark_central",
     )
     paths = _setup_paths(tmp_path, sample_rows=[sample_row], records={chunk_id: record})
+    monkeypatch.setattr(difficulty, "SPEC_GAPS_UNRESOLVED", frozenset({"synthetic_gap"}))
     rc = difficulty.main([
         "--gold-dir", str(paths["gold_dir"]),
         "--sample", str(paths["sample"]),
@@ -860,11 +860,8 @@ def test_require_authoritative_flag_exits_nonzero_while_gaps_open(tmp_path, caps
     assert "ImmoP/knowledge_graph_rag#99" in captured.err
 
 
-def test_require_authoritative_flag_passes_when_contract_authoritative(monkeypatch, tmp_path):
-    """When SPEC_GAPS_UNRESOLVED is empty the CLI guard returns 0.
-    Pins the inverse behavior so the guard is wired correctly even
-    once #99 is closed.
-    """
+def test_require_authoritative_flag_passes_when_contract_authoritative(tmp_path, capsys):
+    """The closed v1 contract makes ``--require-authoritative`` exit 0."""
     text = TEXT_EASY
     chunk_id = _record_id("audit_guard_pass")
     entities = [
@@ -877,7 +874,6 @@ def test_require_authoritative_flag_passes_when_contract_authoritative(monkeypat
         paper_tier="benchmark_central",
     )
     paths = _setup_paths(tmp_path, sample_rows=[sample_row], records={chunk_id: record})
-    monkeypatch.setattr(difficulty, "SPEC_GAPS_UNRESOLVED", frozenset())
     rc = difficulty.main([
         "--gold-dir", str(paths["gold_dir"]),
         "--sample", str(paths["sample"]),
@@ -888,6 +884,7 @@ def test_require_authoritative_flag_passes_when_contract_authoritative(monkeypat
         "--require-authoritative",
     ])
     assert rc == 0
+    assert capsys.readouterr().err == ""
 
 # ---------------------------------------------------------------------------
 # Fail-closed behavior.

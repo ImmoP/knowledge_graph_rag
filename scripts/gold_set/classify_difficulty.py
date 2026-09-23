@@ -1,76 +1,23 @@
-"""Deterministic gold-set difficulty classifier (#48 Refinement 5).
+"""Deterministic gold-set difficulty classifier (#48 Refinements 5 and 10).
 
-This module implements the v1 difficulty classification for the 120-chunk
-extraction-contract v2 gold-set pilot. It runs AFTER ``gold_set/chunks/*.json``
-is complete (per ``gold_set/GUIDELINES.md``) and BEFORE any candidate-model
-evaluation against the 120 chunks. Difficulty is a deterministic function of
-the chunk text and the canonical gold annotations; candidate-model outputs
-never enter the classification.
+This module implements the authoritative v1 difficulty classification for
+the 120-chunk extraction-contract v2 gold-set pilot. It runs after canonical
+gold annotation and before candidate-model evaluation. Difficulty is a
+deterministic function of the sample and canonical gold annotations;
+candidate-model outputs never enter classification.
 
-The script reads:
+It writes gitignored diagnostic artifacts under ``data/gold_set/``. The
+classifier contract is authoritative under #48 Refinement 10, but the output
+MUST NOT be frozen as a selection-bound artifact until the 7-day ann-A wash
+and ann-B / ann-C adjudication complete.
 
-* ``gold_set/chunks/<chunk_id>.json`` — canonical ``gold-record.v1`` records.
-* ``data/gold_set/sample.v2.jsonl`` — v2 sample rows, carrying
-  ``strata.paper_tier``.
-* ``data/gold_set/sample.v2.audit.json`` — sample audit with the SHA256 pins
-  that must equal the inputs at run time.
+The v1 contract pins:
 
-It writes two artifacts under ``data/gold_set/`` (both gitignored):
-
-* ``difficulty.v1.jsonl`` — one JSON record per chunk with the per-chunk
-  classification and the per-trigger flags. This is **provisional / dry-run**
-  output for this slice; the pilot runner that consumes it does not exist
-  yet, and the file MUST NOT be treated as a frozen selection input until
-  the four spec gaps documented below are resolved under a bumped
-  ``classifier_version``.
-* ``difficulty.v1.audit.json`` — runtime audit with the classifier script
-  SHA256, classifier version, per-stratum counts, and observed spec gaps.
-
-The classification rule (verbatim from #48 Refinement 5):
-
-    A chunk is ``easy`` iff ALL of the following hold:
-      - It contains >= 2 unique entity surface forms.
-      - Its entities all have a single occurrence in ``chunk.text`` (no
-        ``occurrence_index`` ambiguity).
-      - It contains at least one relation of an extracted type whose both
-        endpoints are mentions.
-      - It contains no surface form that is also a common noun.
-
-    A chunk is ``hard`` iff ANY of:
-      - It contains a surface form with >= 2 occurrences where the relation's
-        evidence span must disambiguate.
-      - It contains a relation whose ``evidence_quote`` spans a sentence
-        boundary.
-      - It contains an ``inferred`` or ``hedged`` relation.
-      - It contains a relation whose endpoint mention's surface form is a
-        common noun used as a method name in the chunk.
-      - It is from a ``long_tail`` paper.
-
-    ``easy`` and ``hard`` partition the chunk; everything else is ``medium``.
-
-Partition precedence (documented): because ``hard`` is ``ANY of`` and
-``easy`` is ``ALL of``, the two can co-trigger on the same chunk. The Spec's
-"easy and hard partition the chunk" invariant forces a deterministic
-precedence: any ``hard`` trigger dominates, then all easy conditions, then
-``medium``. This precedence is the only one consistent with the Spec.
-
-Spec gaps documented (NOT silently filled):
-
-1. *Common noun list* — Refinement 5 names three examples
-   (``attention``, ``model``, ``score``). The v1 minimum is the literal set
-   ``{"attention", "model", "score"}``. Any future expansion MUST bump
-   ``CLASSIFIER_VERSION`` and is out of scope for this slice.
-2. *Sentence boundary detection* — the Spec does not define a segmentation
-   algorithm. The v1 heuristic: a boundary is detected iff the
-   ``evidence_quote`` contains a hard terminator (``.``, ``?``, ``!``)
-   followed by whitespace and another ASCII letter, OR a paragraph break
-   (``\\n\\n``). Any future refinement MUST bump ``CLASSIFIER_VERSION``.
-3. *Easy rule on "unique entity surface forms"* — applied across all four
-   ontology entity types, the only reading that keeps
-   ``easy ⊂ (entities ≥ 2)``.
-4. *Hard rule on common-noun method endpoint* — applied only to
-   ``entity_type == "method"`` endpoint mentions, matching the Spec's
-   "used as a method name in the chunk" wording.
+* ``COMMON_NOUNS == {"attention", "model", "score"}``.
+* A sentence boundary is ``[.!?][\\s\\u00A0]+[A-Za-z]`` or ``\\n\\n``.
+* Unique entity surfaces aggregate method, dataset, metric, and task.
+* A common-noun endpoint triggers hard only for a ``method`` entity.
+* Precedence is ``hard > easy > medium``.
 """
 from __future__ import annotations
 
@@ -113,18 +60,9 @@ _SENTENCE_BOUNDARY_RE = re.compile(
 
 # --- Contract status (fail-closed against authoritative freeze) -------------
 
-# Five normatively unspecified gaps in #48 Refinement 5 that the v1 minimum
-# in this file fills provisionally. Tracked by #99 (Difficulty Contract
-# Hardening). The classifier's v1 heuristics for these gaps are pinned by
-# code but NOT authoritative. Promoting ``difficulty.v*.jsonl`` to an
-# authoritative selection input requires every entry to be resolved.
-SPEC_GAPS_UNRESOLVED: frozenset[str] = frozenset({
-    "common_noun_vocabulary",                 # gap 1
-    "sentence_boundary_algorithm",           # gap 2
-    "unique_entity_surface_forms_scope",     # gap 3
-    "common_noun_method_endpoint_semantics", # gap 4
-    "easy_hard_precedence_when_co_triggering",  # gap 5
-})
+# The five formerly unspecified v1 rules were jointly pinned by #48
+# Refinement 10 (issuecomment-5783801175). #99 tracks implementation.
+SPEC_GAPS_UNRESOLVED: frozenset[str] = frozenset()
 
 # Audit ``contract_status`` values.
 CONTRACT_AUTHORITATIVE = "authoritative"
@@ -634,9 +572,10 @@ def _build_audit(
         "difficulty_counts": stratum_counts,
         "paper_tier_difficulty_counts": paper_tier_counts,
         "hard_trigger_counts": trigger_counts,
+        # These observations describe pinned v1 semantics, not unresolved gaps.
         "spec_gaps_observed": [
-            "common_noun_list_minimum_only: attention, model, score",
-            "sentence_boundary_heuristic_only: terminator+whitespace+capital OR paragraph break",
+            "common_noun_list: attention, model, score",
+            "sentence_boundary: terminator+whitespace/NBSP+ASCII letter OR paragraph break",
         ],
         "spec_gaps_unresolved": sorted(SPEC_GAPS_UNRESOLVED),
         "spec_gaps_unresolved_count": len(SPEC_GAPS_UNRESOLVED),
@@ -645,7 +584,10 @@ def _build_audit(
             if not SPEC_GAPS_UNRESOLVED
             else CONTRACT_NON_AUTHORITATIVE
         ),
-        "contract_blocker_issue": "ImmoP/knowledge_graph_rag#99",
+        "contract_blocker_issue": (
+            "ImmoP/knowledge_graph_rag#99" if SPEC_GAPS_UNRESOLVED else None
+        ),
+        "contract_authority_ref": "ImmoP/knowledge_graph_rag#48 (Refinement 10, issuecomment-5783801175)",
         "versioning_pins": {
             "annotation_guideline_version": 1,
             "ontology_version_required": True,
@@ -710,9 +652,8 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help=(
             "Fail (exit non-zero) when audit.contract_status is not "
-            "'authoritative'. While #99 is open the audit always carries "
-            "'non_authoritative_pending_resolution', so this flag exits 2 "
-            "to prevent accidental authoritative freeze."
+            "'authoritative'. #48 Refinement 10 closes the v1 gaps, so the "
+            "authoritative contract exits 0."
         ),
     )
     return parser.parse_args(argv)
