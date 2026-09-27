@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKTREE = Path("/tmp/knowledge_graph_rag_issue95")
+WORKTREE = ROOT
 REVIEW = WORKTREE / "scripts" / "gold_set" / "review.py"
 AUTHOR = WORKTREE / "scripts" / "gold_set" / "author.py"
 
