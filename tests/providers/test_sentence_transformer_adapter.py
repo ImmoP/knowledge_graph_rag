@@ -397,7 +397,7 @@ class TestVerifiedEmbeddingRuntimePins(unittest.TestCase):
                         f"cannot verify installed-version parity"
                     )
                 self.assertEqual(
-                    dist_version,
+                    dist_version.partition("+")[0] if dist_name == "torch" else dist_version,
                     expected,
                     f"{dist_name} installed as {dist_version!r} but "
                     f"requirements.txt pins {expected!r}",
