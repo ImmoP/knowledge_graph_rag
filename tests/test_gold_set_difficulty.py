@@ -1064,3 +1064,41 @@ def test_hard_common_noun_endpoint_only_for_method(tmp_path):
     assert "common_noun_method_endpoint" not in rows[0]["triggers"]["hard_triggers"]
     # No mention-mention relation either (subject is document), so easy fails.
     assert rows[0]["difficulty"] == "medium"
+
+
+def test_canonical_closed_contract_is_deterministic(tmp_path):
+    """The canonical 120-record v1 output is stable after normative closure."""
+    outputs = []
+    audits = []
+    for suffix in ("first", "second"):
+        output_jsonl = tmp_path / f"{suffix}.jsonl"
+        audits.append(difficulty.run(
+            gold_dir=Path("gold_set/chunks"),
+            sample_path=Path("data/gold_set/sample.v2.jsonl"),
+            output_jsonl=output_jsonl,
+            output_audit=tmp_path / f"{suffix}.audit.json",
+        ))
+        outputs.append(output_jsonl.read_bytes())
+
+    assert outputs[0] == outputs[1]
+    assert audits[0]["difficulty_counts"] == {
+        "easy": {"count": 0},
+        "medium": {"count": 55},
+        "hard": {"count": 65},
+    }
+    rows = [json.loads(line) for line in outputs[0].decode().splitlines()]
+    co_trigger = next(row for row in rows if row["chunk_id"] == "c_a60413acf9f3dbe8")
+    assert co_trigger["difficulty"] == "hard"
+    assert all(co_trigger["triggers"]["easy_conditions"].values())
+    assert set(co_trigger["triggers"]["hard_triggers"]) == {
+        "evidence_spans_sentence_boundary",
+        "inferred_or_hedged_relation",
+    }
+
+def test_sentence_boundary_algorithm_is_exactly_pinned():
+    """Refinement 10 pin 2 accepts only the two v1 boundary forms."""
+    assert difficulty._sentence_boundary("claim. Next") is True
+    assert difficulty._sentence_boundary("claim?\u00a0Next") is True
+    assert difficulty._sentence_boundary("claim\n\ncontinuation") is True
+    assert difficulty._sentence_boundary(r"claim \emph{formatted}") is False
+    assert difficulty._sentence_boundary("claim. 9 results") is False
