@@ -444,7 +444,18 @@ def main(argv: list[str] | None = None) -> int:
                 "transient": exc.transient,
             }
 
-        if result.budget_aborted:
+        terminal_transport = auto_adapter.last_terminal_transport_error
+        if result.budget_aborted and terminal_transport is not None:
+            terminal_error = terminal_transport
+            result.budget_aborted = False
+            result.exit_code = 4
+            notes["partial_run"] = True
+            notes["terminal_error"] = {
+                "type": "ProviderTransportError",
+                "status": terminal_transport.status,
+                "transient": terminal_transport.transient,
+            }
+        elif result.budget_aborted:
             budget_abort_reason = budget_abort_reason or (
                 f"manifest HTTP POST cap reached ({args.allow_manifest_calls})"
             )

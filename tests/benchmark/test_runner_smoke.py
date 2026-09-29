@@ -465,6 +465,8 @@ def test_manifest_auto_cli_saves_partial_report_after_exhausted_429_retries(
         "status": 429,
         "transient": True,
     }
+    assert summaries[0].with_name("extractions.jsonl").is_file()
+    assert summaries[0].with_name("extractions.rejects.jsonl").is_file()
     assert [metric["reported_model"] for metric in summary["metrics"]] == [
         "<unknown>",
         "<unknown>",

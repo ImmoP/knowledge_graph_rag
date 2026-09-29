@@ -135,6 +135,30 @@ class CallBudgetExceeded(BudgetExceeded):
         )
 
 
+class ManifestTerminalTransportError(ProviderTransportError, BudgetExceeded):
+    """Auto-mode transport failure that V2 can retry and persist.
+
+    The dual type remains retry-eligible as ``ProviderTransportError``.
+    When retry policy finally propagates it, V2 also recognizes the
+    ``BudgetExceeded`` base and atomically writes real partial artifacts.
+    """
+
+    def __init__(self, transport_error: ProviderTransportError) -> None:
+        self.transient = transport_error.transient
+        self.status = transport_error.status
+        self.cause = transport_error.cause
+        self.transport_error = transport_error
+        self.cumulative = 0.0
+        self.cap = 0.0
+        self.unit = "terminal transport error"
+        detail = f"transient={self.transient}"
+        if self.status is not None:
+            detail += f" status={self.status}"
+        Exception.__init__(self, detail)
+        if self.cause is not None:
+            self.__cause__ = self.cause
+
+
 @dataclass(frozen=True)
 class RequestedModel:
     """Captures the requested model id and the gateway-reported id so
@@ -342,6 +366,17 @@ class ManifestBenchmarkLLM(LLMProvider):
             body["response_format"] = {"type": "json_object"}
         return body
 
+    def _request(self, payload: dict) -> dict:
+        return _request_chat(
+            self._client,
+            f"{self._base_url}/chat/completions",
+            payload=payload,
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+
     # --- public protocol ----------------------------------------------------
 
     def generate(
@@ -366,21 +401,13 @@ class ManifestBenchmarkLLM(LLMProvider):
             return cached_text, Usage()
 
         self._charge_live()
-        body = _request_chat(
-            self._client,
-            f"{self._base_url}/chat/completions",
-            payload=self._chat_payload(
-                system=system,
-                user=user,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                json_mode=False,
-            ),
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
-        )
+        body = self._request(self._chat_payload(
+            system=system,
+            user=user,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            json_mode=False,
+        ))
         text, usage, reported = self._parse_response(body)
         self._record_reported_model(reported)
         if self._cache is not None:
@@ -433,21 +460,13 @@ class ManifestBenchmarkLLM(LLMProvider):
             "Output only the JSON object, no prose."
         )
         self._charge_live()
-        body = _request_chat(
-            self._client,
-            f"{self._base_url}/chat/completions",
-            payload=self._chat_payload(
-                system=system,
-                user=json_user,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                json_mode=True,
-            ),
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
-        )
+        body = self._request(self._chat_payload(
+            system=system,
+            user=json_user,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            json_mode=True,
+        ))
         text, usage, reported = self._parse_response(body)
         self._record_reported_model(reported)
 
@@ -468,21 +487,13 @@ class ManifestBenchmarkLLM(LLMProvider):
                 "Output only the JSON object, no prose."
             )
             self._charge_live()
-            retry_body = _request_chat(
-                self._client,
-                f"{self._base_url}/chat/completions",
-                payload=self._chat_payload(
-                    system=system,
-                    user=retry_user,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    json_mode=True,
-                ),
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-            )
+            retry_body = self._request(self._chat_payload(
+                system=system,
+                user=retry_user,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                json_mode=True,
+            ))
             retry_text, retry_usage, retry_reported = self._parse_response(retry_body)
             self._record_reported_model(retry_reported)
             usage = _merge_usage(usage, retry_usage)
@@ -552,6 +563,21 @@ class ManifestAutoBenchmarkLLM(ManifestBenchmarkLLM):
         # Drained by TimingProvider after each entity/relation request.
         # JSON correction can add two identities for one phase request.
         self.reported_models: list[str] = []
+        self.last_terminal_transport_error: ManifestTerminalTransportError | None = None
+
+    def _charge_live(self) -> None:
+        # Clears stale transient state before each distinct POST attempt;
+        # a cap refusal therefore cannot be misclassified as transport.
+        self.last_terminal_transport_error = None
+        super()._charge_live()
+
+    def _request(self, payload: dict) -> dict:
+        try:
+            return super()._request(payload)
+        except ProviderTransportError as exc:
+            wrapped = ManifestTerminalTransportError(exc)
+            self.last_terminal_transport_error = wrapped
+            raise wrapped from exc
 
     def _parse_response(self, body: Mapping[str, Any]) -> tuple[str, Usage, str]:
         # Deliberately no Terra/fixed-model equality check: Manifest owns
