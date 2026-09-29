@@ -1,0 +1,42 @@
+{
+  "chunk_id": "c_0001921855a8156b",
+  "doc_id": "W3137305332",
+  "review_label": "rev_manifest_auto_e2b8e170",
+  "unblinded_provider_label": "manifest-auto",
+  "labelset_version": "manual-review/v1",
+  "mention_labels": [
+    {
+      "mention_id": "m_f5c494bc2061072b",
+      "label": "supported",
+      "rationale": "DC-BERT named verbatim in caption ('shows the architecture of DC-BERT'). Canonical form matches; method type is in scope per ontology."
+    },
+    {
+      "mention_id": "m_aa78a6887e35d45a",
+      "label": "supported",
+      "rationale": "ColBERT named verbatim in caption; ontology lists ColBERT as a verified method example."
+    }
+  ],
+  "assertion_labels": [],
+  "possible_false_negatives": [
+    {
+      "kind": "assertion",
+      "missing": {
+        "relation_type": "USES_METHOD",
+        "subject_doc_id": "W3137305332",
+        "object_kind": "mention",
+        "object_id": "m_f5c494bc2061072b"
+      },
+      "rationale": "Borderline. The figure caption groups DC-BERT and ColBERT under 'Term-level representation learning methods' and shows their architectures. A review paper that illustrates an architecture is *describing* it; only a future gold pass can decide whether the figure alone is enough to ground a USES_METHOD edge. The in-chunk text contains no 'we use DC-BERT' or 'our retrieval pipeline is built on ColBERT' sentence."
+    },
+    {
+      "kind": "assertion",
+      "missing": {
+        "relation_type": "USES_METHOD",
+        "subject_doc_id": "W3137305332",
+        "object_kind": "mention",
+        "object_id": "m_aa78a6887e35d45a"
+      },
+      "rationale": "Borderline. Same reasoning as the DC-BERT entry above."
+    }
+  ]
+}

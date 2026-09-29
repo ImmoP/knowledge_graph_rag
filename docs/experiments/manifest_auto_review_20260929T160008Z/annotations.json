@@ -1,0 +1,73 @@
+{
+  "chunk_id": "c_001452fd142ce075",
+  "doc_id": "W3038572442",
+  "review_label": "rev_manifest_auto_54dfd813",
+  "unblinded_provider_label": "manifest-auto",
+  "labelset_version": "manual-review/v1",
+  "mention_labels": [
+    {
+      "mention_id": "m_9e85ca5fde092683",
+      "label": "supported",
+      "rationale": "Natural Questions named verbatim in caption; canonical form matches ontology example."
+    },
+    {
+      "mention_id": "m_0045e51965d8059f",
+      "label": "supported",
+      "rationale": "Chunk says 'Trivial QA (TQA)' (source typo in Tables/joint.tex); canonical form 'Trivia QA' matches the dataset's identity (Joshi et al. 2017) and matches the spelling in the rest of the same paper (Experiment.tex: 'TriviaQA (TQA)~\\citep{joshi2017triviaqa}')."
+    },
+    {
+      "mention_id": "m_da34cbe93057b973",
+      "label": "supported",
+      "rationale": "Chunk uses 'DR' as the abbreviation for the production model class. Canonical form 'Dense Retrieval' is correct; full chunk context ('production DR model to ANCE') disambiguates."
+    },
+    {
+      "mention_id": "m_b0dfffc9fd61a4d2",
+      "label": "supported",
+      "rationale": "ANCE named verbatim in caption; canonical form matches."
+    }
+  ],
+  "assertion_labels": [
+    {
+      "assertion_id": "a_c690e0b1f2dfec3a",
+      "label": "supported",
+      "rationale": "EVALUATES_ON(W3038572442 -> Natural Questions). Caption says 'Retrieval results ... on Natural Questions (NQ)'; endpoint types match ontology (document -> dataset); evidence span contains both the metric name and the dataset."
+    },
+    {
+      "assertion_id": "a_4fd1879b3d8f18b7",
+      "label": "supported",
+      "rationale": "EVALUATES_ON(W3038572442 -> Trivia QA). Same caption as the NQ assertion; surface 'Trivial QA' is a source typo, canonical 'Trivia QA' is the correct dataset identity. Endpoint types match."
+    },
+    {
+      "assertion_id": "a_186ebfe9b1cd3758",
+      "label": "unsupported",
+      "rationale": "USES_METHOD(W3038572442 -> Dense Retrieval). Ontology defines USES_METHOD as 'applies or builds on a method without originating it'. The chunk says 'a production DR model' where DR is the pre-change production model class the paper studies a swap away from. The ANCE paper does not 'use' generic Dense Retrieval; it studies what happens when a DR-based production system is retrained. The chosen ontology edge does not fit the science."
+    },
+    {
+      "assertion_id": "a_48f1cfb9f80bca7b",
+      "label": "unsupported",
+      "rationale": "USES_METHOD(W3038572442 -> ANCE). The ANCE paper *originates* ANCE; the ontology explicitly excludes the originating paper from USES_METHOD ('applies or builds on a method without originating it'). The correct edge would be PROPOSES (corpus-context true, in-chunk only weakly supported) or no edge at all. False-positive relation type."
+    }
+  ],
+  "possible_false_negatives": [
+    {
+      "kind": "mention",
+      "missing": {
+        "canonical_form": "Answer Coverage",
+        "entity_type": "metric",
+        "surface_form_in_chunk": "Answer Coverage"
+      },
+      "rationale": "Token 'Answer Coverage' is literally present in the chunk text inside the evidence span of both EVALUATES_ON assertions: '\\caption{Retrieval results (Answer Coverage at Top-20/100) on ...}'. The ontology allows a 'metric' entity type (line 85 of ontology.yaml). The pipeline missed this mention, which in turn blocked the REPORTS_METRIC relation below."
+    },
+    {
+      "kind": "assertion",
+      "missing": {
+        "relation_type": "REPORTS_METRIC",
+        "subject_doc_id": "W3038572442",
+        "object_kind": "metric",
+        "object_id": "Answer Coverage",
+        "evidence_quote_in_chunk": "\\caption{Retrieval results (Answer Coverage at Top-20/100) on \\n         Natural Questions (NQ) and Trivial QA (TQA) in the setting from ~"
+      },
+      "rationale": "Same caption span as the two EVALUATES_ON assertions. With 'Answer Coverage' as a missing mention (see above), this REPORTS_METRIC edge is the natural counterpart. Outside-the-chunk Experiment.tex confirms the metric identity ('The metrics are Coverage@20/100, which evaluate whether the Top-20/100 retrieved passages include the answer.')."
+    }
+  ]
+}
