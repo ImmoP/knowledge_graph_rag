@@ -468,3 +468,166 @@ def test_script_refuses_missing_input(tmp_path) -> None:
     )
     assert result.returncode == 2
     assert "annotations file not found" in result.stderr
+
+
+# ---------- three-scenario recall math -----------------------------
+
+
+def test_unknown_fn_lower_bound_is_zero_when_at_least_one_fn_confirmed(
+    scorer,
+) -> None:
+    """Scenario 3 (unknown-completeness FN list): as soon as the
+    reviewer flags at least one false negative, additional unflagged
+    FNs cannot be ruled out, so the only defensible *unconditional*
+    recall interval collapses to ``[0.0, 1.0]``.
+
+    This is independent of the strict interval: even when
+    ``recall_lower_bound_strict`` is non-None, the
+    ``recall_with_unknown_fn_*`` values are the only ones safe to
+    publish as a generic recall bound.
+    """
+    annotation = {
+        "review_label": "rev_x",
+        "chunk_id": "c_x",
+        "doc_id": "W_x",
+        "mention_labels": [],
+        "assertion_labels": [
+            {"assertion_id": "a1", "label": "supported"},
+            {"assertion_id": "a2", "label": "supported"},
+        ],
+        "possible_false_negatives": [
+            {"kind": "assertion", "missing": {"x": 1}},
+        ],
+    }
+    out = scorer.score(annotation)
+    summary = out["summary"]
+    assert summary["recall_with_unknown_fn_lower_bound"] == 0.0
+    assert summary["recall_with_unknown_fn_upper_bound"] == 1.0
+    assert summary["recall_lower_bound_is_conditional_on_complete_fn_list"] is True
+    assert summary["fn_list_completeness"] == "unknown"
+    assert summary["recall_point_estimate_published"] is False
+
+
+def test_unknown_fn_lower_bound_is_zero_even_with_zero_flagged_fns(
+    scorer,
+) -> None:
+    """The unknown-FN interval is ``[0.0, 1.0]`` even when the
+    reviewer flagged *zero* false negatives. A zero-FN list never
+    proves completeness; it only proves the reviewer did not see
+    one. Therefore the unknown-FN lower bound must remain 0.0 --
+    publishing a tighter value would imply certainty we do not
+    have.
+    """
+    annotation = {
+        "review_label": "rev_x",
+        "chunk_id": "c_x",
+        "doc_id": "W_x",
+        "mention_labels": [],
+        "assertion_labels": [
+            {"assertion_id": "a1", "label": "supported"},
+        ],
+        "possible_false_negatives": [],
+    }
+    out = scorer.score(annotation)
+    summary = out["summary"]
+    assert summary["recall_with_unknown_fn_lower_bound"] == 0.0
+    assert summary["recall_with_unknown_fn_upper_bound"] == 1.0
+    assert summary["fn_list_completeness"] == "unknown"
+
+
+def test_unknown_fn_interval_does_not_overwrite_legacy_fields(
+    scorer,
+) -> None:
+    """The strict bounds and the unknown-FN interval coexist. The
+    legacy alias ``recall_estimate_upper_bound`` stays at ``1.0``
+    (its pre-existing value); the new fields report a parallel
+    interval that does not overwrite the legacy ones.
+    """
+    annotation = {
+        "review_label": "rev_x",
+        "chunk_id": "c_x",
+        "doc_id": "W_x",
+        "mention_labels": [],
+        "assertion_labels": [
+            {"assertion_id": "a1", "label": "supported"},
+            {"assertion_id": "a2", "label": "supported"},
+        ],
+        "possible_false_negatives": [
+            {"kind": "assertion", "missing": {"x": 1}},
+        ],
+    }
+    out = scorer.score(annotation)
+    summary = out["summary"]
+    # Strict / legacy unchanged.
+    assert summary["recall_lower_bound_strict"] == round(2 / 3, 4)
+    assert summary["recall_upper_bound_strict"] == round(2 / 3, 4)
+    assert summary["recall_estimate_lower_bound"] == round(2 / 3, 4)
+    assert summary["recall_estimate_upper_bound"] == 1.0
+    # New interval is independent of the strict values.
+    assert summary["recall_with_unknown_fn_lower_bound"] == 0.0
+    assert summary["recall_with_unknown_fn_upper_bound"] == 1.0
+    assert (
+        summary["recall_lower_bound_strict"]
+        > summary["recall_with_unknown_fn_lower_bound"]
+    )
+
+
+def test_scenario_1_strict_interval_unchanged_by_new_fields(scorer) -> None:
+    """Sanity: the corrected recall-interval math (scenario 1) is
+    unaffected by the scenario-3 additions. ``recall_interval_includes_unclear``
+    still depends only on the presence of ``unclear`` items.
+    """
+    annotation = {
+        "review_label": "rev_x",
+        "chunk_id": "c_x",
+        "doc_id": "W_x",
+        "mention_labels": [],
+        "assertion_labels": [
+            {"assertion_id": "a1", "label": "supported"},
+            {"assertion_id": "a2", "label": "unclear"},
+        ],
+        "possible_false_negatives": [],
+    }
+    out = scorer.score(annotation)
+    summary = out["summary"]
+    # No flagged FNs -> strict interval undefined (denominator zero).
+    assert summary["recall_lower_bound_strict"] is None
+    assert summary["recall_upper_bound_strict"] is None
+    # But the unknown-FN interval is still published.
+    assert summary["recall_with_unknown_fn_lower_bound"] == 0.0
+    assert summary["recall_with_unknown_fn_upper_bound"] == 1.0
+    assert summary["recall_interval_includes_unclear"] is False
+
+
+def test_chunk2_unknown_fn_interval_collapses_to_zero_one(scorer) -> None:
+    """The shipped chunk-2 annotation has exactly one flagged FN
+    assertion (``REPORTS_METRIC``). The strict interval reports
+    ``2 / 3`` under the completeness assumption; the unknown-FN
+    interval reports ``[0.0, 1.0]`` -- the only defensible values
+    without a complete reference annotation.
+    """
+    data = json.loads(ANNOTATIONS_CHUNK2.read_text(encoding="utf-8"))
+    out = scorer.score(data)
+    summary = out["summary"]
+    assert summary["possible_false_negative_assertions"] == 1
+    assert summary["recall_lower_bound_strict"] == round(2 / 3, 4)
+    assert summary["recall_with_unknown_fn_lower_bound"] == 0.0
+    assert summary["recall_with_unknown_fn_upper_bound"] == 1.0
+    assert summary["recall_lower_bound_is_conditional_on_complete_fn_list"] is True
+    assert summary["recall_point_estimate_published"] is False
+
+
+def test_chunk1_unknown_fn_interval_collapses_to_zero_one(scorer) -> None:
+    """Chunk 1 has zero accepted assertions but two flagged FN
+    assertions (USES_METHOD on DC-BERT and ColBERT). The strict
+    interval is undefined (no supported TP), but the unknown-FN
+    interval is still published.
+    """
+    data = json.loads(ANNOTATIONS_CHUNK1.read_text(encoding="utf-8"))
+    out = scorer.score(data)
+    summary = out["summary"]
+    assert summary["assertions_supported"] == 0
+    assert summary["possible_false_negative_assertions"] == 2
+    assert summary["recall_with_unknown_fn_lower_bound"] == 0.0
+    assert summary["recall_with_unknown_fn_upper_bound"] == 1.0
+    assert summary["fn_list_completeness"] == "unknown"

@@ -103,6 +103,41 @@ point estimate -- the script reports both bounds and refuses to
 publish a single number. F1 is reported the same way, as
 ``f1_lower_bound_strict`` / ``f1_upper_bound_strict`` using the
 two recall bounds.
+
+The script distinguishes **three recall scenarios** explicitly,
+because the prior output schema conflated them under the label
+``recall_lower_bound``:
+
+1. **Conditional recall (FN-list completeness assumed).** Both
+   ``recall_lower_bound_strict`` and ``recall_upper_bound_strict``
+   hold only if *every* false-negative assertion in the chunk has
+   been flagged in ``possible_false_negatives``. They differ only
+   in how they treat ``unclear`` items -- the lower bound assumes
+   they are FP, the upper bound assumes they are TP.
+
+2. **Independent-review-confirmed metrics.** ``mention_precision``
+   and ``assertion_precision`` are computed only from labelled
+   records and are therefore point estimates, not bounds. The
+   strict F1 interval ``[f1_lower_bound_strict, f1_upper_bound_strict]``
+   is conditional on the same FN-list completeness as scenario 1
+   and therefore inherits the same caveat.
+
+3. **Recall with an unknown-completeness FN list.** As soon as the
+   reviewer flags at least one false negative, additional unflagged
+   FNs cannot be ruled out. The script therefore publishes a
+   second interval ``[recall_with_unknown_fn_lower_bound,
+   recall_with_unknown_fn_upper_bound]`` whose **only** assumptions
+   are non-negativity of counts and the trivial recall upper bound
+   ``1.0``. The lower bound collapses to ``0.0`` and the upper bound
+   stays at ``1.0`` -- both are the only values defensible without
+   a complete reference annotation.
+
+A boolean ``recall_lower_bound_is_conditional_on_complete_fn_list``
+is published alongside the legacy fields so consumers can detect
+when ``recall_lower_bound_strict`` is unsafe to interpret as a
+generic lower bound. The new fields never overwrite the legacy
+ones; existing dashboards continue to work unchanged.
+
 """
 
 from __future__ import annotations
@@ -250,6 +285,25 @@ def score(annotation: dict[str, Any]) -> dict[str, Any]:
             round(f1_upper, 4) if f1_upper is not None else None
         ),
     }
+
+    # ---- scenario 3: unknown-completeness FN list ---------------------
+    # The strict bounds above assume the reviewer's FN list is
+    # exhaustive. The instant at least one FN is flagged, additional
+    # unflagged FNs cannot be ruled out, so the only defensible
+    # *unconditional* recall interval collapses to [0.0, 1.0]. The
+    # numeric values below are derived from the same counts as the
+    # strict interval; they are *not* legacy aliases and are
+    # published alongside the strict fields so downstream code can
+    # decide which scenario to display.
+    summary["recall_with_unknown_fn_lower_bound"] = 0.0
+    summary["recall_with_unknown_fn_upper_bound"] = 1.0
+    summary["recall_lower_bound_is_conditional_on_complete_fn_list"] = True
+    # The FN list is *never* provably complete from a single annotation
+    # pass; if no FN is flagged, that only means the reviewer did not
+    # see one, not that none exist. We therefore always report
+    # ``"unknown"`` -- the value is a sentinel, not a state change.
+    summary["fn_list_completeness"] = "unknown"
+    summary["recall_point_estimate_published"] = False
 
     # Sanity: lower bound cannot exceed upper bound, and the strict
     # interval must be within the absolute [0, 1] ceiling.
