@@ -311,3 +311,8 @@ def test_unique_whitespace_repair_passes_unchanged_v2_gates(tmp_path):
     assert assertion["evidence_quote"] == "DPR\n evaluates NQ"
     assert assertion["evidence"]["char_start"] == 0
     assert assertion["evidence"]["char_end"] == len("DPR\n evaluates NQ")
+    assert decision["candidate_identity"] == {
+        "relation_type": assertion["relation_type"],
+        "subject_ref": assertion["subject_ref"],
+        "object_ref": assertion["object_ref"],
+    }

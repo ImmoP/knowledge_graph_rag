@@ -199,6 +199,11 @@ class ReadOnlyReplayProvider:
                 "candidate_index": index,
                 "status": result.status,
                 "original_quote": quote,
+                "candidate_identity": {
+                    "relation_type": candidate.get("relation_type"),
+                    "subject_ref": copy.deepcopy(candidate.get("subject_ref")),
+                    "object_ref": copy.deepcopy(candidate.get("object_ref")),
+                },
                 "replacement_quote": result.quote if result.status == "repaired" else None,
                 "char_start": result.char_start,
                 "char_end": result.char_end,
