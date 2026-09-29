@@ -139,6 +139,19 @@ def extraction_cache_scope(**dims: str) -> Iterator[None]:
         _active_extraction_scope.reset(token)
 
 
+def current_extraction_cache_scope() -> dict[str, str] | None:
+    """Return a copy of the active extraction cache scope, if any.
+
+    Observability wrappers use this to tag provider attempts with the
+    chunk id and prompt phase already established by the extraction
+    pipeline. Returning a copy prevents callers from mutating the
+    context-local cache identity. This does not change cache keys or
+    any extraction validator.
+    """
+    scope = _active_extraction_scope.get()
+    return dict(scope) if scope is not None else None
+
+
 def _canonical(value: Any) -> str:
     """Return the canonical-JSON string used in cache-key hashing.
 

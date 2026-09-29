@@ -37,6 +37,8 @@ from src.providers.adapters.manifest_openai import (  # noqa: E402
     PROVIDER_KEY,
     NAME,
     CallBudgetExceeded,
+    MANIFEST_AUTO_MODEL,
+    ManifestAutoBenchmarkLLM,
     ManifestBenchmarkLLM,
     ManifestConfigError,
     ModelMismatchError,
@@ -245,6 +247,31 @@ def test_generate_json_schema_failure_after_one_retry(adapter_env):
     assert usage.input_tokens is not None and usage.input_tokens > 0
 
 
+def test_generate_json_schema_invalid_object_retries_once(adapter_env):
+    schema = {
+        "type": "object",
+        "required": ["answer"],
+        "properties": {"answer": {"type": "integer"}},
+    }
+    invalid = _chat_body(json.dumps({"answer": "wrong-type"}))
+    good = _chat_body(json.dumps({"answer": 7}))
+    client = _FakeClient([invalid, good])
+    adapter = ManifestBenchmarkLLM(
+        model=MODEL,
+        api_key="k",
+        client=client,
+        cache=adapter_env["cache"],
+        call_counter=adapter_env["counter"],
+        max_live_calls=adapter_env["max_live_calls"],
+    )
+
+    parsed, _ = adapter.generate_json("x", "y", schema)
+
+    assert parsed == {"answer": 7}
+    assert len(client.requests) == 2
+    assert adapter.live_call_count == 2
+
+
 def test_generate_json_two_failures_raise_validation_error(adapter_env):
     schema = {"type": "object", "required": ["answer"], "properties": {"answer": {"type": "integer"}}}
     bad1 = _chat_body("not json 1")
@@ -419,3 +446,120 @@ def test_api_key_is_never_logged(adapter_env, caplog: pytest.LogCaptureFixture):
     combined = caplog.text or ""
     assert "topsecret" not in combined
     assert client.requests[0]["headers"]["Authorization"].endswith("topsecret")
+
+# ---------------------------------------------------------------------------
+# Manifest auto-routing benchmark adapter (offline mocks only)
+# ---------------------------------------------------------------------------
+
+
+def _auto_chat_body(content: str, *, reported_model: str | None) -> dict:
+    body = {
+        "choices": [
+            {"index": 0, "message": {"role": "assistant", "content": content}}
+        ],
+        "usage": {
+            "prompt_tokens": 11,
+            "completion_tokens": 5,
+            "total_tokens": 16,
+        },
+    }
+    if reported_model is not None:
+        body["model"] = reported_model
+    return body
+
+
+def _auto_adapter(client: _FakeClient, *, max_live_calls: int = 4) -> ManifestAutoBenchmarkLLM:
+    return ManifestAutoBenchmarkLLM(
+        model=MANIFEST_AUTO_MODEL,
+        api_key="test-secret",
+        client=client,
+        cache=None,
+        max_live_calls=max_live_calls,
+        call_counter=[0],
+    )
+
+
+def test_auto_mode_accepts_changing_reported_models_and_sends_auto():
+    schema = {
+        "type": "object",
+        "required": ["x"],
+        "properties": {"x": {"type": "string"}},
+    }
+    client = _FakeClient([
+        _auto_chat_body(json.dumps({"x": "first"}), reported_model="provider-a/model-1"),
+        _auto_chat_body(json.dumps({"x": "second"}), reported_model="provider-b/model-2"),
+    ])
+    adapter = _auto_adapter(client)
+
+    first, _ = adapter.generate_json("sys", "user-1", schema)
+    second, _ = adapter.generate_json("sys", "user-2", schema)
+
+    assert first == {"x": "first"}
+    assert second == {"x": "second"}
+    assert adapter.reported_models == ["provider-a/model-1", "provider-b/model-2"]
+    assert [req["json"]["model"] for req in client.requests] == ["auto", "auto"]
+    assert adapter.live_call_count == 2
+
+
+def test_auto_mode_marks_missing_reported_model_unknown():
+    client = _FakeClient([
+        _auto_chat_body("plain response", reported_model=None),
+    ])
+    adapter = _auto_adapter(client)
+
+    text, _ = adapter.generate("sys", "user")
+
+    assert text == "plain response"
+    assert adapter.reported_models == ["<unknown>"]
+    assert client.requests[0]["json"]["model"] == "auto"
+
+
+def test_auto_mode_429_is_transient_and_counts_actual_post():
+    client = _FakeClient([_FakeResponse(status_code=429)])
+    adapter = _auto_adapter(client)
+
+    with pytest.raises(ProviderTransportError) as excinfo:
+        adapter.generate("sys", "user")
+
+    assert excinfo.value.transient is True
+    assert excinfo.value.status == 429
+    assert adapter.live_call_count == 1
+    assert len(client.requests) == 1
+    # No response body means no verifiable model identifier.
+    assert adapter.reported_models == []
+
+
+def test_auto_mode_call_cap_allows_at_most_four_http_posts():
+    client = _FakeClient([
+        _auto_chat_body("ok", reported_model=f"provider/model-{idx}")
+        for idx in range(4)
+    ])
+    adapter = _auto_adapter(client, max_live_calls=4)
+
+    for _ in range(4):
+        adapter.generate("sys", "user")
+
+    with pytest.raises(CallBudgetExceeded):
+        adapter.generate("sys", "fifth-attempt")
+
+    assert adapter.live_call_count == 4
+    assert len(client.requests) == 4
+
+
+def test_auto_mode_rejects_cache_to_prevent_cross_model_contamination(tmp_path: Path):
+    cache = ProviderCache(CachePaths.from_root(tmp_path / "cache"))
+    with pytest.raises(ManifestConfigError, match="does not allow a ProviderCache"):
+        ManifestAutoBenchmarkLLM(
+            model="auto",
+            api_key="test-secret",
+            cache=cache,
+        )
+
+
+def test_auto_mode_rejects_non_auto_model():
+    with pytest.raises(ManifestConfigError, match="requires model='auto'"):
+        ManifestAutoBenchmarkLLM(
+            model=MODEL,
+            api_key="test-secret",
+            cache=None,
+        )

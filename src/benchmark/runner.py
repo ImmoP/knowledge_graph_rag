@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from src.extract.pipeline_v2 import RunResultV2, run_extraction_v2
+from src.providers.cache import current_extraction_cache_scope
 
 
 @dataclass
@@ -139,6 +140,27 @@ class TimingProvider:
             )
         return cached is not None
 
+    def _reported_for_sink(self) -> tuple[str | None, dict[str, Any]]:
+        """Return the final and per-attempt reported models for one phase.
+
+        ``ManifestAutoBenchmarkLLM`` appends one value per actual HTTP
+        POST. A single entity/relation ``generate_json`` call may make
+        two POSTs when JSON correction is needed. Drain all values so
+        the phase record captures every verifiable attempt; use the
+        last value as ``reported_model`` because that response produced
+        the returned payload. Fixed-model adapters fall back to their
+        configured model and have no extra attempt list.
+        """
+        reported_list = getattr(self._inner, "reported_models", None)
+        if isinstance(reported_list, list) and reported_list:
+            attempts = list(reported_list)
+            reported_list.clear()
+            return attempts[-1], {
+                "attempt_reported_models": attempts,
+                "model_changed_during_request": len(set(attempts)) > 1,
+            }
+        return getattr(self._inner, "model", None), {}
+
     def generate(
         self,
         system: str,
@@ -157,11 +179,12 @@ class TimingProvider:
         )
         duration = time.perf_counter() - start
         live_idx = getattr(self._inner, "live_call_count", 0)
+        reported_model, reported_extra = self._reported_for_sink()
         self._sink.append(PhaseCall(
             chunk_id="(unknown)",
             phase="entity_or_relation",
             requested_model=self._inner.model,
-            reported_model=self._inner.model,
+            reported_model=reported_model,
             duration_seconds=duration,
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
@@ -169,6 +192,7 @@ class TimingProvider:
             cache_hit=cache_hit,
             live_call_index=live_idx,
             status="ok",
+            extra=reported_extra,
         ))
         return text, usage
 
@@ -186,17 +210,59 @@ class TimingProvider:
             "max_tokens": max_tokens, "temperature": temperature,
             "schema": schema,
         })
+        scope = current_extraction_cache_scope() or {}
+        chunk_id = scope.get("chunk_id", "(unknown)")
+        properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
+        if isinstance(properties, dict) and "mentions" in properties:
+            phase = "entity"
+        elif isinstance(properties, dict) and "assertions" in properties:
+            phase = "relation"
+        else:
+            phase = "entity_or_relation"
+
         start = time.perf_counter()
-        parsed, usage = self._inner.generate_json(
-            system, user, schema, max_tokens=max_tokens, temperature=temperature
-        )
+        try:
+            parsed, usage = self._inner.generate_json(
+                system, user, schema, max_tokens=max_tokens, temperature=temperature
+            )
+        except Exception as exc:
+            duration = time.perf_counter() - start
+            live_idx = getattr(self._inner, "live_call_count", 0)
+            reported_model, reported_extra = self._reported_for_sink()
+            # Auto routing without a response-level model field remains
+            # explicitly unknown. Fixed-model adapters retain their
+            # configured model label.
+            if getattr(self._inner, "model", None) == "auto" and not reported_extra:
+                reported_model = "<unknown>"
+            reported_extra = {
+                **reported_extra,
+                "exception_type": type(exc).__name__,
+            }
+            self._sink.append(PhaseCall(
+                chunk_id=chunk_id,
+                phase=phase,
+                requested_model=self._inner.model,
+                reported_model=reported_model,
+                duration_seconds=duration,
+                input_tokens=None,
+                output_tokens=None,
+                cost_usd=None,
+                cache_hit=cache_hit,
+                live_call_index=live_idx,
+                status="error",
+                reject_reason=str(exc),
+                extra=reported_extra,
+            ))
+            raise
+
         duration = time.perf_counter() - start
         live_idx = getattr(self._inner, "live_call_count", 0)
+        reported_model, reported_extra = self._reported_for_sink()
         self._sink.append(PhaseCall(
-            chunk_id="(unknown)",
-            phase="entity_or_relation",
+            chunk_id=chunk_id,
+            phase=phase,
             requested_model=self._inner.model,
-            reported_model=self._inner.model,
+            reported_model=reported_model,
             duration_seconds=duration,
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
@@ -204,8 +270,10 @@ class TimingProvider:
             cache_hit=cache_hit,
             live_call_index=live_idx,
             status="ok",
+            extra=reported_extra,
         ))
         return parsed, usage
+
 
 
 def _attach_chunk_id(call: PhaseCall, chunk_id: str, phase: str, status: str, reject_reason: str | None = None) -> None:
@@ -238,27 +306,33 @@ def run_provider_on_chunks(
             for c in chunks:
                 fh.write(json.dumps(c, sort_keys=True, ensure_ascii=False))
                 fh.write("\n")
-        sink: list[PhaseCall] = []
         if isinstance(provider, TimingProvider):
             timed = provider
+            sink = provider._sink
         else:
+            sink: list[PhaseCall] = []
             timed = TimingProvider(
                 provider,
                 sink=sink,
                 model_label=getattr(provider, "name", "?"),
             )
-        result = run_extraction_v2(
-            provider=timed,
-            output_jsonl=paths.output_jsonl,
-            output_rejects=paths.output_rejects,
-            chunks_path=Path(tmp_chunks),
-            ontology_path=ontology_path,
-            prompts_dir=prompts_dir,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-        _decorate_sink_with_chunk_metadata(sink, paths, chunks)
-        _write_metrics(paths.metrics_path, sink)
+        try:
+            result = run_extraction_v2(
+                provider=timed,
+                output_jsonl=paths.output_jsonl,
+                output_rejects=paths.output_rejects,
+                chunks_path=Path(tmp_chunks),
+                ontology_path=ontology_path,
+                prompts_dir=prompts_dir,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+        finally:
+            # Persist whatever was observed even when the provider raises
+            # (e.g. CallBudgetExceeded on the fifth HTTP POST attempt).
+            # The caller can then write a controlled partial summary.
+            _decorate_sink_with_chunk_metadata(sink, paths, chunks)
+            _write_metrics(paths.metrics_path, sink)
         return result, sink
     finally:
         try:
@@ -273,14 +347,13 @@ def _decorate_sink_with_chunk_metadata(
     paths: RunPaths,
     chunks: list[dict],
 ) -> None:
-    """Backfill chunk_id, phase, status, reject_reason on the sink.
+    """Backfill status metadata without losing retry attribution.
 
-    The V2 pipeline reports ``chunk_status`` records with
-    ``extraction_complete`` and ``attempt_count`` per chunk. The
-    rejects jsonl carries the gate reason. We map each sink entry
-    (in arrival order) to the chunk whose phase it served; the
-    sink order is determined by the V2 runner (entity then relation
-    per chunk, chunks iterated in input order).
+    New timing records capture ``chunk_id`` and ``phase`` directly
+    from the extraction cache scope, so V2 retries remain attached to
+    the correct phase. Legacy/stub providers lack that scope; those
+    records retain the original entity-then-relation fallback mapping.
+    Error records are never rewritten as validated/rejected.
     """
     statuses_by_chunk: dict[str, dict] = {}
     rejects_by_chunk: dict[str, list[dict]] = {}
@@ -298,28 +371,42 @@ def _decorate_sink_with_chunk_metadata(
             rec = json.loads(line)
             rejects_by_chunk.setdefault(rec["chunk_id"], []).append(rec)
 
-    # The V2 runner iterates chunks in input order; for each chunk
-    # it makes one entity call and then one relation call. Sink
-    # entries arrive in the same order.
-    chunk_ids = [c["chunk_id"] for c in chunks]
-    pos = 0
-    for cid in chunk_ids:
-        for phase in ("entity", "relation"):
-            if pos >= len(sink):
-                return
-            call = sink[pos]
-            pos += 1
-            call.chunk_id = cid
-            call.phase = phase
-            status_rec = statuses_by_chunk.get(cid, {})
-            call.status = (
-                "validated"
-                if status_rec.get("extraction_complete") is True
-                else "rejected"
-            )
-            phase_rejects = [r for r in rejects_by_chunk.get(cid, []) if r.get("phase") == phase]
-            if phase_rejects:
-                call.reject_reason = phase_rejects[0].get("reason")
+    # Fallback slots for providers/tests that ran without an active
+    # extraction cache scope. Scoped records consume no fallback slot,
+    # so retries cannot shift later calls onto the wrong phase.
+    fallback_slots = [
+        (chunk["chunk_id"], phase)
+        for chunk in chunks
+        for phase in ("entity", "relation")
+    ]
+    fallback_pos = 0
+
+    for call in sink:
+        if call.chunk_id == "(unknown)" or call.phase == "entity_or_relation":
+            if fallback_pos >= len(fallback_slots):
+                continue
+            call.chunk_id, call.phase = fallback_slots[fallback_pos]
+            fallback_pos += 1
+
+        if call.status == "error":
+            # Preserve the transport/budget exception and unknown model
+            # marker. A failed attempt has no V2 phase result to promote.
+            continue
+
+        status_rec = statuses_by_chunk.get(call.chunk_id, {})
+        call.status = (
+            "validated"
+            if status_rec.get("extraction_complete") is True
+            else "rejected"
+        )
+        phase_rejects = [
+            reject
+            for reject in rejects_by_chunk.get(call.chunk_id, [])
+            if reject.get("phase") == call.phase
+        ]
+        if phase_rejects:
+            call.reject_reason = phase_rejects[0].get("reason")
+
 
 
 def _write_metrics(path: Path, sink: list[PhaseCall]) -> None:
@@ -350,6 +437,7 @@ def write_run_summary(
     result: RunResultV2,
     sink: list[PhaseCall],
     notes: dict[str, Any] | None = None,
+    auto_routing: bool = False,
 ) -> Path:
     """Write a deterministic, content-free run summary as JSON."""
     payload = {
@@ -357,7 +445,10 @@ def write_run_summary(
             "name": provider_name,
             "requested_model": requested_model,
             "reported_model": reported_model,
-            "model_identity_verified": requested_model == reported_model,
+            "model_identity_verified": (
+                False if auto_routing else requested_model == reported_model
+            ),
+            "auto_routing": auto_routing,
         },
         "dataset_sha256": dataset_sha256,
         "ontology_sha256": ontology_sha256,

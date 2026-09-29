@@ -214,3 +214,259 @@ def test_smoke_script_dry_run_emits_summary(tmp_path: Path):
     payload = json.loads(summaries[0].read_text(encoding="utf-8"))
     assert payload["chunks"] == list(SMOKE_CHUNK_IDS)
     assert payload["notes"]["local_baseline_cache"]["comparable"] is False
+
+class _AutoFakeResponse:
+    def __init__(self, body: dict) -> None:
+        self._body = body
+        self.status_code = 200
+
+    def json(self) -> dict:
+        return self._body
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+class _AutoFakeClient:
+    def __init__(self, bodies: list[dict]) -> None:
+        self._bodies = list(bodies)
+        self.requests: list[dict] = []
+        self.timeout = 60.0
+
+    def post(self, url: str, json: dict | None = None, headers: dict | None = None):
+        idx = len(self.requests)
+        self.requests.append({"url": url, "json": json, "headers": headers or {}})
+        return _AutoFakeResponse(self._bodies[idx])
+
+
+def _auto_body(content: str, reported_model: str | None) -> dict:
+    body = {
+        "choices": [
+            {"index": 0, "message": {"role": "assistant", "content": content}}
+        ],
+        "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
+    }
+    if reported_model is not None:
+        body["model"] = reported_model
+    return body
+
+
+def test_timing_provider_records_auto_reported_model_per_phase():
+    class _AutoStub(_StubProvider):
+        def __init__(self) -> None:
+            super().__init__()
+            self.model = "auto"
+            self.reported_models: list[str] = []
+            self._reports = iter(["provider/model-a", "provider/model-b"])
+
+        def generate_json(self, system, user, schema, *, max_tokens=1024, temperature=0.0):
+            self.reported_models.append(next(self._reports))
+            return super().generate_json(
+                system, user, schema, max_tokens=max_tokens, temperature=temperature
+            )
+
+    inner = _AutoStub()
+    sink: list = []
+    timed = TimingProvider(inner, sink=sink, model_label="manifest-auto")
+    entity_schema = {"type": "object", "properties": {"mentions": {"type": "array"}}}
+    relation_schema = {"type": "object", "properties": {"assertions": {"type": "array"}}}
+
+    timed.generate_json("sys", "entity", entity_schema)
+    timed.generate_json("sys", "relation", relation_schema)
+
+    assert [call.requested_model for call in sink] == ["auto", "auto"]
+    assert [call.reported_model for call in sink] == [
+        "provider/model-a",
+        "provider/model-b",
+    ]
+    assert inner.reported_models == []
+
+
+def test_manifest_auto_cli_saves_partial_report_at_four_post_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Offline end-to-end test: one JSON repair consumes an extra POST.
+
+    The fifth phase attempt is refused before HTTP. The CLI returns 3,
+    saves a partial summary, attributes each successful phase to only
+    gateway-reported model ids, and marks the refused attempt unknown.
+    """
+    script = Path(__file__).resolve().parents[2] / "scripts" / "benchmark" / "run_smoke.py"
+    spec = importlib.util.spec_from_file_location("run_smoke_auto_limit", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    from src.providers.adapters.manifest_openai import ManifestAutoBenchmarkLLM
+
+    # POST 1 invalid JSON; POST 2 repair succeeds. Then relation and
+    # second-chunk entity consume POSTs 3 and 4. Second-chunk relation
+    # is refused before POST 5.
+    client = _AutoFakeClient([
+        _auto_body("not-json", "provider/model-a"),
+        _auto_body(json.dumps({"mentions": []}), "provider/model-b"),
+        _auto_body(json.dumps({"assertions": []}), "provider/model-c"),
+        _auto_body(json.dumps({"mentions": []}), "provider/model-d"),
+    ])
+
+    def build_auto(*, max_live_calls: int, call_counter: list[int]):
+        return ManifestAutoBenchmarkLLM(
+            model="auto",
+            api_key="offline-test-key",
+            client=client,
+            cache=None,
+            max_live_calls=max_live_calls,
+            call_counter=call_counter,
+        )
+
+    monkeypatch.setattr(module, "_build_manifest_auto_adapter", build_auto)
+    monkeypatch.setattr(
+        module,
+        "_build_qwen_adapter",
+        lambda: (_ for _ in ()).throw(AssertionError("Ollama must not be invoked")),
+    )
+    monkeypatch.setattr(
+        module,
+        "_detect_local_baseline_cache_comparable",
+        lambda: (_ for _ in ()).throw(AssertionError("Ollama cache must not be inspected")),
+    )
+
+    exit_code = module.main([
+        "--manifest-auto",
+        "--allow-manifest-calls",
+        "4",
+        "--output-dir",
+        str(tmp_path),
+    ])
+
+    assert exit_code == 3
+    assert len(client.requests) == 4
+    assert {request["json"]["model"] for request in client.requests} == {"auto"}
+
+    summaries = list(tmp_path.glob("*/run_summary.json"))
+    assert len(summaries) == 1
+    summary = json.loads(summaries[0].read_text(encoding="utf-8"))
+    assert summary["provider"] == {
+        "name": "manifest_auto_benchmark",
+        "requested_model": "auto",
+        "reported_model": None,
+        "model_identity_verified": False,
+        "auto_routing": True,
+    }
+    assert summary["result"]["budget_aborted"] is True
+    assert summary["result"]["exit_code"] == 3
+    assert summary["result"]["n_extraction_complete"] == 1
+    assert summary["notes"]["http_post_attempts"] == 4
+    extraction_rows = [
+        json.loads(line)
+        for line in summaries[0].with_name("extractions.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    assert any(
+        row.get("kind") == "chunk_status" and row.get("extraction_complete") is True
+        for row in extraction_rows
+    )
+    assert summary["notes"]["response_cache"]["enabled"] is False
+
+    metrics = summary["metrics"]
+    assert [metric["requested_model"] for metric in metrics] == ["auto"] * 4
+    assert [metric["reported_model"] for metric in metrics] == [
+        "provider/model-b",
+        "provider/model-c",
+        "provider/model-d",
+        "<unknown>",
+    ]
+    assert metrics[0]["extra"]["attempt_reported_models"] == [
+        "provider/model-a",
+        "provider/model-b",
+    ]
+    assert metrics[0]["extra"]["model_changed_during_request"] is True
+    assert metrics[-1]["status"] == "error"
+    assert metrics[-1]["extra"]["exception_type"] == "CallBudgetExceeded"
+
+
+def test_manifest_auto_cli_saves_partial_report_after_exhausted_429_retries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import httpx
+    import src.extract.pipeline_v2 as pipeline_v2
+    from src.providers.adapters.manifest_openai import ManifestAutoBenchmarkLLM
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "benchmark" / "run_smoke.py"
+    spec = importlib.util.spec_from_file_location("run_smoke_auto_429", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    class RateLimitedResponse:
+        status_code = 429
+
+        def json(self):
+            return {}
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError(
+                "HTTP 429",
+                request=httpx.Request("POST", "http://manifest.test/v1/chat/completions"),
+                response=httpx.Response(429),
+            )
+
+    class RateLimitedClient:
+        timeout = 60.0
+
+        def __init__(self):
+            self.requests: list[dict] = []
+
+        def post(self, url: str, json: dict | None = None, headers: dict | None = None):
+            self.requests.append({"url": url, "json": json, "headers": headers or {}})
+            return RateLimitedResponse()
+
+    client = RateLimitedClient()
+
+    def build_auto(*, max_live_calls: int, call_counter: list[int]):
+        return ManifestAutoBenchmarkLLM(
+            model="auto",
+            api_key="offline-test-key",
+            client=client,
+            cache=None,
+            max_live_calls=max_live_calls,
+            call_counter=call_counter,
+        )
+
+    monkeypatch.setattr(module, "_build_manifest_auto_adapter", build_auto)
+    monkeypatch.setattr(pipeline_v2.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        module,
+        "_detect_local_baseline_cache_comparable",
+        lambda: (_ for _ in ()).throw(AssertionError("Ollama cache must not be inspected")),
+    )
+
+    exit_code = module.main([
+        "--manifest-auto",
+        "--allow-manifest-calls",
+        "4",
+        "--output-dir",
+        str(tmp_path),
+    ])
+
+    assert exit_code == 4
+    assert len(client.requests) == 3
+    summaries = list(tmp_path.glob("*/run_summary.json"))
+    assert len(summaries) == 1
+    summary = json.loads(summaries[0].read_text(encoding="utf-8"))
+    assert summary["notes"]["partial_run"] is True
+    assert summary["notes"]["http_post_attempts"] == 3
+    assert summary["notes"]["terminal_error"] == {
+        "type": "ProviderTransportError",
+        "status": 429,
+        "transient": True,
+    }
+    assert [metric["reported_model"] for metric in summary["metrics"]] == [
+        "<unknown>",
+        "<unknown>",
+        "<unknown>",
+    ]
