@@ -180,3 +180,46 @@ Für diese Aussagen sind ein gelabeltes Gold Set und eine verblindete fachliche 
 3. Precision und Recovery Rate getrennt berichten: keine Akzeptanz eines falschen Spans versus Rückgewinnung technisch gültiger Spans.
 4. Erst nach positiver fachlicher Bewertung eine explizit opt-in Integration entwerfen; V2-Vertrag und Standardverhalten unverändert lassen.
 5. Einen neuen, konsistent manifestierten Offline-Pilotlauf erzeugen, sobald dies ohne neue Modellaufrufe aus vorhandenen Antworten möglich ist.
+
+## Versionierte Provenienz
+
+Ein versionsübergreifendes Provenienzmanifest bündelt alle für den vollständigen Zwei-Chunk-Vergleich verwendeten Artefakte (Chunks, Prompts, Cache-Einträge, Baseline, Rekonstruktions-Audit, experimentelle Records, Implementierung):
+
+- Manifest: `docs/experiments/quote-repair-v1-review/provenance/manifest.v1.json`
+- Geteilte Originalquelle: `data/raw/latex/2007.00808.tar.gz` (SHA-256 `46288f02699612de50ae6f7530080bced7e1edc5e3ffb2225b80e5d6742b58f0`).
+- Caption-Ursprung in der Quelle: `Tables/joint.tex` im Tarball (Caption-Bytes im bereinigten Volltext an Position `[37099, 37321)`; Evidenzspan `[37108, 37264)`).
+- Reproduzierte Cache-Schlüssel sind byte-genau die in den gespeicherten Cache-Dateinamen verwendeten Hashes.
+
+Das Manifest deklariert explizit fehlende oder außerhalb dieses Pakets liegende Artefakte (Gold-Annotation, entpackter Quellbaum, gemeinsames Multichunk-Manifest). Es vergibt keine wissenschaftlichen Review-Labels.
+
+## Wissenschaftlicher Quellenkontext
+
+Ein gemeinsamer Bericht für die drei Review-Einträge dokumentiert:
+
+- pro Relation (`EVALUATES_ON`, `REPORTS_METRIC`) die exakten Anforderungen aus `ontology.yaml:169-218` und `docs/specs/extraction-contract.md:319-353`;
+- welche Evidenz pro Reaktion **vorhanden** ist (Verbatim-Caption aus `Tables/joint.tex`);
+- welche Evidenz **fehlt** (kein Systemname, keine Ergebniswerte im Chunk, keine assertion-spezifische Trennung; der angrenzende Tabellenkörper `Tables/prod.tex` enthält andere Spalten; die numerischen Top-20/100-Werte für NQ/TQA in `Tables/openqa.tex` enden vor dem Chunkstart; der einzige System-bindende Satz in `Evaluation.tex:19` liegt außerhalb des Chunk-Spans);
+- die ausdrückliche Trennung zwischen struktureller Validierung (Ontologiekonformität, Endpoint-Containment, Evidenzintegrität) und wissenschaftlicher Substanzierung.
+
+Bericht: `docs/experiments/quote-repair-v1-review/context-report.md`.
+
+### Automatisierte Tests
+
+Die folgenden fokussierten Tests sichern Manifestintegrität, Assertion-Zuordnung und Quellenbeleg-Konsistenz:
+
+```bash
+python -m pytest -q \
+  tests/test_experimental_quote_repair.py \
+  tests/test_quote_repair_comparison.py \
+  tests/test_quote_repair_provenance.py
+```
+
+`tests/test_quote_repair_provenance.py` prüft insbesondere: (a) die im Manifest deklarierten SHA-256-Werte der versionierten In-Repo-Artefakte, (b) die Übereinstimmung der drei Assertion-IDs zwischen Manifest, Review-Dateien und Datensatz-Inhalt, (c) die Endpunkt-/Mention-Charakteristika jeder Assertion, (d) den gemeinsamen Caption-Span `[34,190)`, (e) den Verbatim-Caption-String in `Tables/joint.tex` und im Chunk-Text, (f) dass die reproduzierten Cache-Schlüssel den gespeicherten Cache-Dateinamen entsprechen, und (g) dass das Manifest keine Review-Labels vergibt.
+
+### Verbleibende Grenzen der wissenschaftlichen Bewertung
+
+- Die drei Assertions teilen denselben Caption-Span; der lokale Chunk enthält weder Systemnamen noch Ergebniswerte und keine assertion-spezifische Trennung. Eine fachliche Entscheidung `supported` / `unsupported` / `unclear` ist ohne externe Evidenz oder ein Gold Set nicht möglich.
+- Die numerischen Ergebnisse für `Answer Coverage at Top-20/100` auf NQ und TQA liegen in `Tables/openqa.tex`, das im bereinigten Volltext bei Offset `37059` endet, also **vor** dem Chunkstart `37074`. Eine Zuordnung von Caption zu *ihrem* Tabellenkörper gelingt nur über den ausgeschnittenen Quellkontext.
+- Der einzige Satz, der Caption-Datensätze an ein System bindet (`Evaluation.tex:19`), liegt außerhalb des Chunk-Spans und ist damit kein gültiges `evidence_quote` im V2-Vertrag.
+- Der Vergleich umfasst weiterhin nur zwei Chunks und fünf Relationskandidaten. Precision/Recall, Generalisierung und Retrieval-/Antwortqualität bleiben unbewiesen.
+- Der `confidence: "stated"`-Wert in den gespeicherten Records ist eine Modellaussage, kein menschliches Review-Label.

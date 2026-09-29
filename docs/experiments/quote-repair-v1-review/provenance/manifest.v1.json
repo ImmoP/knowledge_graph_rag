@@ -1,0 +1,407 @@
+{
+  "manifest_version": "1.0",
+  "experiment": "quote-repair-v1",
+  "description": "End-to-end provenance manifest for the quote-repair-v1 two-chunk A/B replay. Captures every locally available input, cache entry, prompt, baseline artefact, experimental result, and implementation that the replay consumes, plus the absolute evidence positions traced back into the original LaTeX source. All paths are relative to the experiment worktree root unless noted.",
+  "scope": {
+    "chunk_ids": [
+      "c_001452fd142ce075",
+      "c_0001921855a8156b"
+    ],
+    "offline_only": true,
+    "third_chunk_analyzed": {
+      "chunk_id": "c_012d2ff7efe77f40",
+      "in_comparison": false,
+      "reason": "no valid entity/relation cache record; offline failure analysis only"
+    }
+  },
+  "implementation": {
+    "repair_module": {
+      "relative_path": "src/extract/experimental_quote_repair.py",
+      "sha256": "5b67660ec9b2627c34c2574fcf90e141a12ed9254458daae090fb65063b9c661",
+      "repair_version": "experimental-whitespace-v1",
+      "statuses": [
+        "invalid",
+        "exact",
+        "paragraph_boundary",
+        "not_found",
+        "ambiguous",
+        "repaired"
+      ]
+    },
+    "runner": {
+      "relative_path": "scripts/experiments/compare_quote_repair_v1.py",
+      "sha256": "01770f850cd4c0bd9bcfb835cacc73c25bc0dbeba5540a05715540cbf9e023f5",
+      "offline_only": true,
+      "uses_provider_fallback": false,
+      "uses_make_llm": false,
+      "uses_OllamaLLM": false
+    },
+    "tests": [
+      {
+        "relative_path": "tests/test_experimental_quote_repair.py",
+        "purpose": "Unit tests for repair statuses and repair_version pin"
+      },
+      {
+        "relative_path": "tests/test_quote_repair_comparison.py",
+        "purpose": "Focused A/B replay tests using the unmodified V2 pipeline"
+      }
+    ]
+  },
+  "inputs": {
+    "ontology": {
+      "relative_path": "ontology.yaml",
+      "sha256": "f9a3e203d4c640b91966e077b02f09a547d49b51595cf33e040a3e278cd2325e",
+      "version": 1,
+      "frozen_in_tests": "tests/test_ontology_validate.py"
+    },
+    "prompts": {
+      "entity_prompt": {
+        "relative_path": "../v2-pilot-03/prompts/extract_entities_v2.txt",
+        "sha256": "1cbbc0576f5768fb661c6608709f3cc6903cac82a69b6fac81305b2bb9f5e381",
+        "filename": "extract_entities_v2.txt"
+      },
+      "relation_prompt": {
+        "relative_path": "../v2-pilot-03/prompts/extract_relations_v2.txt",
+        "sha256": "cb41416971e35c07a6fbf13ed09d9147e7713662e90787e30996d5aed0c10afd",
+        "filename": "extract_relations_v2.txt"
+      }
+    },
+    "chunks_jsonl": {
+      "relative_path": "../v2-multichunk-01/three_chunks.jsonl",
+      "sha256": "b15a5571acd61ed998e19bb2463e87315db4c4321c400ca4317e7a7b890bbf55"
+    },
+    "baseline_v2_records": {
+      "relative_path": "../v2-multichunk-01/baseline.v2.jsonl",
+      "sha256": "c4a8336a2a03cd23a88e0ad612ae18354b90e7b08865b1261d309aa0627ad590"
+    },
+    "baseline_v2_rejects": {
+      "relative_path": "../v2-multichunk-01/baseline.v2.rejects.jsonl",
+      "sha256": "9a579b2656f2a42b0205b5fe059e71efef2c8faf5dd35516c98f3a741f7bb06f"
+    },
+    "chunk_text_alignment": [
+      {
+        "chunk_id": "c_001452fd142ce075",
+        "section_path": [
+          "Experimental Methodologies"
+        ],
+        "chunk_index": 23,
+        "char_start": 37074,
+        "char_end": 37909,
+        "token_estimate": 208,
+        "source_text_sha256": "4a2900139582bcea20c1200f509398ddb91b1d791b098505ca459724f081d335",
+        "document_origin": {
+          "openalex_id": "W3038572442",
+          "arxiv_id": "2007.00808",
+          "title": "Approximate Nearest Neighbor Negative Contrastive Learning for Dense Text Retrieval",
+          "manifest_row": "data/manifest.jsonl:108",
+          "fulltext_row": "data/fulltext_manifest.jsonl:42",
+          "tarball_relative_path": "data/raw/latex/2007.00808.tar.gz",
+          "tarball_sha256": "46288f02699612de50ae6f7530080bced7e1edc5e3ffb2225b80e5d6742b58f0"
+        },
+        "cleaned_full_text_sha256": "0a3abfe8af16684fbdaf5d87daf7c4af88b2522921d9ac175ae4071b1d6fb812",
+        "cleaned_full_text_location": "/tmp/w3038572442-source-cleaned.txt (regenerated)",
+        "cleaned_full_text_chunk_start": 37074,
+        "cleaned_full_text_chunk_end": 37909,
+        "source_caption_origin": {
+          "file": "data/raw/latex/2007.00808.tar.gz:Tables/joint.tex",
+          "caption_text_position_in_cleaned_text": [
+            37099,
+            37321
+          ],
+          "caption_text_excerpt": "\\caption{Retrieval results (Answer Coverage at Top-20/100) on \\n         Natural Questions (NQ) and Trivial QA (TQA) in the setting from ~[[CITE:karpukhin2020dense]]. \\vspace{-0.35cm}\\n        \\n          \\label{tab:openqa}}}"
+        }
+      },
+      {
+        "chunk_id": "c_0001921855a8156b",
+        "section_path": [
+          "Neural methods for semantic retrieval",
+          "Dense Retrieval Methods"
+        ],
+        "chunk_index": 58,
+        "source_text_sha256": "7aa63d7f13bc82abdfd1ea20a7c15a3ad65430943ec30856fe089dab6f87937d",
+        "document_origin": {
+          "openalex_id": "W3137305332",
+          "note": "different document; included in the A/B replay only to verify that exact evidence quotes pass the V2 gates unchanged."
+        }
+      }
+    ]
+  },
+  "cache_records": {
+    "cache_root_relative_path": "../v2-pilot-03/cache/llm",
+    "cache_format_version": "1",
+    "provider_name": "ollama",
+    "provider_model": "qwen3:8b",
+    "max_tokens": 2048,
+    "temperature": 0.0,
+    "entries": [
+      {
+        "chunk_id": "c_001452fd142ce075",
+        "phase": "entity",
+        "reproduced_cache_key": "ccebfd17a77681c2b863cb5beca3010ae066f1b157274519217c91ede9818ced",
+        "stored_filename": "ccebfd17a77681c2b863cb5beca3010ae066f1b157274519217c91ede9818ced.json",
+        "stored_sha256": "MISSING-PENDING-VERIFY",
+        "stored_relative_path": "../v2-pilot-03/cache/llm/ccebfd17a77681c2b863cb5beca3010ae066f1b157274519217c91ede9818ced.json",
+        "payload_summary": "3 mentions: Natural Questions (NQ), Trivial QA (TQA), Answer Coverage at Top-20/100"
+      },
+      {
+        "chunk_id": "c_001452fd142ce075",
+        "phase": "relation",
+        "reproduced_cache_key": "5d692f6660892c61240fcbd6f208ce8af706a450b65c0140281de208df4c65cb",
+        "stored_filename": "5d692f6660892c61240fcbd6f208ce8af706a450b65c0140281de208df4c65cb.json",
+        "stored_sha256": "7b1d391e685940b21ded91a6cf0fb0c448937f26b629245e645562ce4d4b0d97",
+        "stored_relative_path": "../v2-pilot-03/cache/llm/5d692f6660892c61240fcbd6f208ce8af706a450b65c0140281de208df4c65cb.json",
+        "payload_summary": "3 assertions: REPORTS_METRIC -> m_beb3b4ae863a80bd; EVALUATES_ON -> m_9e85ca5fde092683; EVALUATES_ON -> m_0045e51965d8059f"
+      },
+      {
+        "chunk_id": "c_0001921855a8156b",
+        "phase": "entity",
+        "reproduced_cache_key": "9aa7e052a5011904f30883e2f43d136c3da960ba8f6f3241fa1a06eda84e99f4",
+        "stored_filename": "9aa7e052a5011904f30883e2f43d136c3da960ba8f6f3241fa1a06eda84e99f4.json",
+        "stored_sha256": "MISSING-PENDING-VERIFY",
+        "stored_relative_path": "../v2-pilot-03/cache/llm/9aa7e052a5011904f30883e2f43d136c3da960ba8f6f3241fa1a06eda84e99f4.json",
+        "payload_summary": "2 mentions: DC-BERT, ColBERT"
+      },
+      {
+        "chunk_id": "c_0001921855a8156b",
+        "phase": "relation",
+        "reproduced_cache_key": "8a92b01362b7f27c1170eb29c8e62ee3b39b650a0f7625cfa522ab8890bbf1ad",
+        "stored_filename": "8a92b01362b7f27c1170eb29c8e62ee3b39b650a0f7625cfa522ab8890bbf1ad.json",
+        "stored_sha256": "MISSING-PENDING-VERIFY",
+        "stored_relative_path": "../v2-pilot-03/cache/llm/8a92b01362b7f27c1170eb29c8e62ee3b39b650a0f7625cfa522ab8890bbf1ad.json",
+        "payload_summary": "2 assertions: USES_METHOD -> DC-BERT, USES_METHOD -> ColBERT (already exact, no repair)"
+      }
+    ]
+  },
+  "experimental_outputs": [
+    {
+      "kind": "audit",
+      "relative_path": "../v2-pilot-04/repair.audit.json",
+      "sha256": "7d6ca3cabcf1b061edbb20219e1e30844dddd3d7d77d3c6580cebb4abdff6fa1"
+    },
+    {
+      "kind": "experimental_records",
+      "relative_path": "../v2-pilot-04/experimental.jsonl",
+      "sha256": "34fda936f0a4e894e10210205a53855b05ac3740fc43dc969e5b2ea472734b77"
+    },
+    {
+      "kind": "experimental_rejects",
+      "relative_path": "../v2-pilot-04/experimental.rejects.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "note": "empty file (canonical SHA256 of zero-byte file)"
+    }
+  ],
+  "ancillary_pilot_artifacts": [
+    {
+      "kind": "pilot_extraction_manifest",
+      "relative_path": "../v2-pilot-03/extractions.v2.manifest.json",
+      "sha256": "86a6ef569cadd16c053e78e1acbe2781d4ba154d1df775e45cb8f7228f663625",
+      "note": "Describes the one-chunk pilot that produced the v2-pilot-03 cache and baseline. Does NOT cover the full A/B comparison; cache keys reproduced above are the authoritative link."
+    },
+    {
+      "kind": "pilot_extractions",
+      "relative_path": "../v2-pilot-03/extractions.v2.jsonl",
+      "sha256": "3bc3623152093d48f3eb2a031f845499548b348203fa2c911bd1d9c58cf48e7e"
+    },
+    {
+      "kind": "pilot_extraction_rejects",
+      "relative_path": "../v2-pilot-03/extractions.v2.rejects.jsonl",
+      "sha256": "dd2342e2b650338daacc1911f818d7cf2c7f2ed752a447db4b7bf8041efaf902"
+    }
+  ],
+  "local_original_source": {
+    "tarball_relative_path": "data/raw/latex/2007.00808.tar.gz",
+    "tarball_sha256": "46288f02699612de50ae6f7530080bced7e1edc5e3ffb2225b80e5d6742b58f0",
+    "extracted_root": "/tmp/w3038572442-source (regenerated for this experiment; not committed)",
+    "cleaned_text_sha256": "0a3abfe8af16684fbdaf5d87daf7c4af88b2522921d9ac175ae4071b1d6fb812",
+    "cleaned_text_path": "/tmp/w3038572442-source-cleaned.txt (regenerated; not committed)",
+    "main_tex": "ms.tex",
+    "files_of_interest": [
+      {
+        "relative_path": "Tables/joint.tex",
+        "sha256": "3ac38b93f8e7b7c4af81d5c291d0571854b7ea5b762941d2b036fc6107bf72ba",
+        "role": "Hosts the first caption \\\\caption{Retrieval results ...} which is the source of evidence_quote span [34,190)."
+      },
+      {
+        "relative_path": "Tables/openqa.tex",
+        "sha256": "a2edd45b566197cf8b3bceac8ad6f1ecba552364b8bfb06b1d86bb8daefe26f5",
+        "role": "Table body referenced by the first caption; the included four-column tabular reports BM25/DPR/BM25+DPR/ANCE Top-20/100 values for NQ and TQA."
+      },
+      {
+        "relative_path": "Tables/prod.tex",
+        "sha256": "c5348eca2d491c555185c082c67b4f616fd4f6fb382a9bf775dde7f8e8ce555f",
+        "role": "Table body referenced by the SECOND caption (Relative gains in commercial search). Different columns and different caption: NOT a numerical result table for the metrics/datasets named in evidence span [34,190)."
+      },
+      {
+        "relative_path": "Tables/openqa_retrieval_full.tex",
+        "sha256": "254c284f0101654d5b96f9079c9408efa288bff76ab2bd6a8b0220426a52e3b4",
+        "role": "Original five-row Top-K retrieval table; commented out in the published build (\\input commented out in Evaluation.tex). Provides the canonical numerical evidence in the wider paper but is NOT inside the chunk."
+      },
+      {
+        "relative_path": "Evaluation.tex",
+        "sha256": "0ab34024e3b92ebb8df85e15663399910f82c8c33ff86a585cfc5e60697e5d82",
+        "role": "Surrounding prose. The only sentence connecting the evidence caption to a concrete system is on line 19: 'It also outperforms DPR in passage retrieval in OpenQA (Table~\\ref{tab:openqa}).' This sentence lives in Evaluation.tex but is OUTSIDE the chunk boundaries."
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "assertion_id": "a_44999b3871c3f58f",
+      "review_path": "docs/experiments/quote-repair-v1-review/review-a_44999b3871c3f58f.md",
+      "relation_type": "REPORTS_METRIC",
+      "subject": {
+        "kind": "document",
+        "id": "W3038572442"
+      },
+      "object": {
+        "kind": "mention",
+        "id": "m_beb3b4ae863a80bd",
+        "surface_form": "Answer Coverage at Top-20/100",
+        "canonical_form": "Answer Coverage at Top-20/100",
+        "entity_type": "metric",
+        "char_start": 53,
+        "char_end": 82
+      },
+      "evidence_quote": "Retrieval results (Answer Coverage at Top-20/100) on \\n         Natural Questions (NQ) and Trivial QA (TQA) in the setting from ~[[CITE:karpukhin2020dense]].",
+      "char_start_in_chunk": 34,
+      "char_end_in_chunk": 190,
+      "char_start_in_cleaned_text": 37108,
+      "char_end_in_cleaned_text": 37264,
+      "model_confidence": "stated",
+      "human_review_label": "NOT ASSIGNED",
+      "baseline_status": "ZERO_OCCURRENCES reject",
+      "post_repair_status": "accepted after whitespace reconstruction",
+      "scientific_support_evidence_locally_available": [
+        "Evidence span is a verbatim substring of Tables/joint.tex inside the arXiv source bundle (verified above)."
+      ],
+      "scientific_support_evidence_locally_missing": [
+        "No Answer Coverage @ Top-20/100 numeric value for NQ or TQA inside the chunk (table body inside the chunk is the commercial-search gain table Tables/prod.tex; the canonical NQ/TQA Top-20/100 numbers live in Tables/openqa.tex, which is included by \\input inside Tables/joint.tex but the body of Tables/openqa.tex is OUTSIDE the chunk boundaries — it ends at cleaned-text offset 37059 while the chunk starts at 37074).",
+        "No system name or evaluated method named inside the evidence span (DPR/ANCE/BM25 appear only in table bodies).",
+        "No assertion-specific separation from the sibling EVALUATES_ON assertions sharing the same span."
+      ]
+    },
+    {
+      "assertion_id": "a_0a775699fcc8a5ce",
+      "review_path": "docs/experiments/quote-repair-v1-review/review-a_0a775699fcc8a5ce.md",
+      "relation_type": "EVALUATES_ON",
+      "subject": {
+        "kind": "document",
+        "id": "W3038572442"
+      },
+      "object": {
+        "kind": "mention",
+        "id": "m_9e85ca5fde092683",
+        "surface_form": "Natural Questions (NQ)",
+        "canonical_form": "Natural Questions",
+        "entity_type": "dataset",
+        "char_start": 97,
+        "char_end": 119
+      },
+      "evidence_quote": "Retrieval results (Answer Coverage at Top-20/100) on \\n         Natural Questions (NQ) and Trivial QA (TQA) in the setting from ~[[CITE:karpukhin2020dense]].",
+      "char_start_in_chunk": 34,
+      "char_end_in_chunk": 190,
+      "char_start_in_cleaned_text": 37108,
+      "char_end_in_cleaned_text": 37264,
+      "model_confidence": "stated",
+      "human_review_label": "NOT ASSIGNED",
+      "baseline_status": "ZERO_OCCURRENCES reject",
+      "post_repair_status": "accepted after whitespace reconstruction",
+      "scientific_support_evidence_locally_available": [
+        "Evidence span is a verbatim substring of Tables/joint.tex."
+      ],
+      "scientific_support_evidence_locally_missing": [
+        "No Natural Questions-specific evaluation result inside the chunk.",
+        "No Natural Questions-specific separation from Trivial QA or from the metric assertion.",
+        "The prose sentence that most clearly anchors the dataset to a system ('It also outperforms DPR in passage retrieval in OpenQA (Table~\\ref{tab:openqa}).', Evaluation.tex:19) lives OUTSIDE the chunk."
+      ]
+    },
+    {
+      "assertion_id": "a_2814c002a3ebd912",
+      "review_path": "docs/experiments/quote-repair-v1-review/review-a_2814c002a3ebd912.md",
+      "relation_type": "EVALUATES_ON",
+      "subject": {
+        "kind": "document",
+        "id": "W3038572442"
+      },
+      "object": {
+        "kind": "mention",
+        "id": "m_0045e51965d8059f",
+        "surface_form": "Trivial QA (TQA)",
+        "canonical_form": "Trivial QA",
+        "entity_type": "dataset",
+        "char_start": 124,
+        "char_end": 140
+      },
+      "evidence_quote": "Retrieval results (Answer Coverage at Top-20/100) on \\n         Natural Questions (NQ) and Trivial QA (TQA) in the setting from ~[[CITE:karpukhin2020dense]].",
+      "char_start_in_chunk": 34,
+      "char_end_in_chunk": 190,
+      "char_start_in_cleaned_text": 37108,
+      "char_end_in_cleaned_text": 37264,
+      "model_confidence": "stated",
+      "human_review_label": "NOT ASSIGNED",
+      "baseline_status": "ZERO_OCCURRENCES reject",
+      "post_repair_status": "accepted after whitespace reconstruction",
+      "scientific_support_evidence_locally_available": [
+        "Evidence span is a verbatim substring of Tables/joint.tex."
+      ],
+      "scientific_support_evidence_locally_missing": [
+        "No Trivial QA-specific evaluation result inside the chunk.",
+        "No Trivial QA-specific separation from Natural Questions or from the metric assertion.",
+        "The prose sentence that anchors the dataset to a system (Evaluation.tex:19) is OUTSIDE the chunk."
+      ]
+    }
+  ],
+  "review_packet": {
+    "readme": {
+      "relative_path": "docs/experiments/quote-repair-v1-review/README.md",
+      "sha256": "76fb04ae5bd4ea5e31bf21fca226cca4bf9f1b056744c4b9f3994f18139addf0"
+    },
+    "experiment_documentation": {
+      "relative_path": "docs/experiments/quote-repair-v1.md",
+      "sha256": "61430bfd912ed7923039d566ed6bf8e3f19bc2ff3c43751cdcc181529fb098ad"
+    },
+    "review_entries": [
+      {
+        "assertion_id": "a_44999b3871c3f58f",
+        "relative_path": "docs/experiments/quote-repair-v1-review/review-a_44999b3871c3f58f.md",
+        "sha256": "b3ad769849c667b96ddbd0655b4fb6b13fdb0a0ec1f0934c4d2a0f26bddd77ce"
+      },
+      {
+        "assertion_id": "a_0a775699fcc8a5ce",
+        "relative_path": "docs/experiments/quote-repair-v1-review/review-a_0a775699fcc8a5ce.md",
+        "sha256": "d3b3de1468c127dd9a2a48e02b5ceb07c53fc98d3c94a5d7110c1f2a262e5fd9"
+      },
+      {
+        "assertion_id": "a_2814c002a3ebd912",
+        "relative_path": "docs/experiments/quote-repair-v1-review/review-a_2814c002a3ebd912.md",
+        "sha256": "5809d897bffd1cf010911199bcd35f8de7315c18f6122cccdb0cb10bd0ab4bca"
+      }
+    ]
+  },
+  "missing_or_incomplete_artifacts": [
+    {
+      "artifact": "Manifest bundle authenticating the full two-chunk A/B replay",
+      "reason": "v2-pilot-03/extractions.v2.manifest.json describes a one-chunk pilot, not the multichunk replay. The replay relies on cache-key reproduction plus exact stored-baseline matching; this manifest is the first cross-artifact versioned bundle.",
+      "status": "INTRODUCED-BY-THIS-MANIFEST"
+    },
+    {
+      "artifact": "SHA-256 of entity cache records for c_001452fd142ce075 and c_0001921855a8156b",
+      "reason": "Recorded as 'MISSING-PENDING-VERIFY' until the stored-cache file SHA is verified against the reproduced key.",
+      "status": "PENDING-VERIFY"
+    },
+    {
+      "artifact": "Extracted source root under version control",
+      "reason": "Source tarball lives at data/raw/latex/2007.00808.tar.gz (gitignored raw data). Cleaning and extraction are reproducible but the unpacked tree is regenerated into /tmp.",
+      "status": "INTENTIONALLY-REGENERATED"
+    },
+    {
+      "artifact": "Gold-set / ann-B human annotation for any of the three review entries",
+      "reason": "Out of scope for this experiment.",
+      "status": "NOT-PRODUCED"
+    }
+  ],
+  "scientific_substantiation_limits": {
+    "structural_only": "Each accepted assertion passes Gate 1 (schema), Gate 2 (ontology conformity) and Gate 3 (evidence integrity) of docs/specs/extraction-contract.md §8 against the canonical chunk text.",
+    "scientific_open": "EVALUATES_ON requires 'Document reports experimental results on a dataset' (ontology.yaml lines 169-183). REPORTS_METRIC requires 'Document reports a metric in its results' (ontology.yaml lines 197-207). Both definitions are verified by the SAT example entries only; the quote-repair-v1 chunk shows the dataset/metric mentions and the words 'Retrieval results on' but no system-name, no numeric value, and no per-assertion prose separation. The remainder of the paper (Tables/openqa.tex and Evaluation.tex:19) supplies the per-dataset numerical evidence and the system binding, but is OUTSIDE the chunk and therefore NOT part of the V2 evidence-span contract.",
+    "confidence_label_not_review": "The 'stated' confidence value comes from the model output, not from a human review (docs/specs/extraction-contract.md §8 + gold_set/GUIDELINES.md §6)."
+  }
+}

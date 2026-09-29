@@ -103,3 +103,10 @@ Beobachtete Laufzeitumgebung: Python 3.12.3, `jsonschema` 4.25.1, PyYAML 6.0.3; 
 4. Gehört der im Chunk folgende Tabellenkörper zur ersten Caption? Die sichtbaren Spalten und die zweite Caption sprechen gegen eine eindeutige lokale Zuordnung; die Originalstruktur vor Chunkgrenze fehlt.
 5. Das Pilotmanifest unter `../v2-pilot-03/` beschreibt einen Ein-Chunk-Lauf und authentifiziert nicht den vollständigen Zwei-Chunk-A/B-Vergleich. Der Runner kompensiert dies technisch durch Cache-Key-/Hashnachweise und exakten Baseline-Abgleich, aber nicht durch ein gemeinsames unveränderliches Provenienzmanifest.
 6. Der lokale Artefaktsatz ist selektiv: Nur zwei Chunks besitzen je eine gültige Entity- und Relationsantwort. Aussagen zu Generalisierung, Precision/Recall oder Retrievalqualität bleiben unbelegt.
+
+
+## Ergänzende Provenienz und Quellenkontext
+
+- Provenienzmanifest (Chunks, Prompts, Cache, Baseline, Audit, experimentelle Records, Implementierung, lokale Originalquelle, fehlende Artefakte): `docs/experiments/quote-repair-v1-review/provenance/manifest.v1.json`.
+- Gemeinsamer Quellenkontextbericht für die drei Review-Einträge (Ontologieanforderungen, vorhandene und fehlende Evidenz, lokal nachvollziehbare Caption-zu-Tabellen-Beziehungen, Bewertungsgrenzen): `docs/experiments/quote-repair-v1-review/context-report.md`.
+- Automatisierte Tests für Manifestintegrität, Assertion-Zuordnung und Quellenbeleg-Konsistenz: `tests/test_quote_repair_provenance.py`.
