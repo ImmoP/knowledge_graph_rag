@@ -139,7 +139,7 @@
         "phase": "entity",
         "reproduced_cache_key": "ccebfd17a77681c2b863cb5beca3010ae066f1b157274519217c91ede9818ced",
         "stored_filename": "ccebfd17a77681c2b863cb5beca3010ae066f1b157274519217c91ede9818ced.json",
-        "stored_sha256": "MISSING-PENDING-VERIFY",
+        "stored_sha256": "d9d2eec16de0049918be158ebd38926359374e5f98a70be85ac521d2b1ab01d8",
         "stored_relative_path": "../v2-pilot-03/cache/llm/ccebfd17a77681c2b863cb5beca3010ae066f1b157274519217c91ede9818ced.json",
         "payload_summary": "3 mentions: Natural Questions (NQ), Trivial QA (TQA), Answer Coverage at Top-20/100"
       },
@@ -157,7 +157,7 @@
         "phase": "entity",
         "reproduced_cache_key": "9aa7e052a5011904f30883e2f43d136c3da960ba8f6f3241fa1a06eda84e99f4",
         "stored_filename": "9aa7e052a5011904f30883e2f43d136c3da960ba8f6f3241fa1a06eda84e99f4.json",
-        "stored_sha256": "MISSING-PENDING-VERIFY",
+        "stored_sha256": "03c03c2ffff9b53f1a2f4fe5f2b902c457e0027d03fa6c59b108c8c8da502877",
         "stored_relative_path": "../v2-pilot-03/cache/llm/9aa7e052a5011904f30883e2f43d136c3da960ba8f6f3241fa1a06eda84e99f4.json",
         "payload_summary": "2 mentions: DC-BERT, ColBERT"
       },
@@ -166,7 +166,7 @@
         "phase": "relation",
         "reproduced_cache_key": "8a92b01362b7f27c1170eb29c8e62ee3b39b650a0f7625cfa522ab8890bbf1ad",
         "stored_filename": "8a92b01362b7f27c1170eb29c8e62ee3b39b650a0f7625cfa522ab8890bbf1ad.json",
-        "stored_sha256": "MISSING-PENDING-VERIFY",
+        "stored_sha256": "a5fd2eea93583683e09ed0337fdbac05d887f3870db27a6b7d809eac9ea852f1",
         "stored_relative_path": "../v2-pilot-03/cache/llm/8a92b01362b7f27c1170eb29c8e62ee3b39b650a0f7625cfa522ab8890bbf1ad.json",
         "payload_summary": "2 assertions: USES_METHOD -> DC-BERT, USES_METHOD -> ColBERT (already exact, no repair)"
       }
@@ -384,9 +384,15 @@
       "status": "INTRODUCED-BY-THIS-MANIFEST"
     },
     {
-      "artifact": "SHA-256 of entity cache records for c_001452fd142ce075 and c_0001921855a8156b",
-      "reason": "Recorded as 'MISSING-PENDING-VERIFY' until the stored-cache file SHA is verified against the reproduced key.",
-      "status": "PENDING-VERIFY"
+      "artifact": "SHA-256 of entity and relation cache records for c_001452fd142ce075 and c_0001921855a8156b",
+      "reason": "All four cache files were located under ../v2-pilot-03/cache/llm/, their stored SHA-256 was computed from disk, the filename matches the reproduced_cache_key exactly, and the values were backfilled into cache_records.entries[].stored_sha256. Status moved from PENDING-VERIFY to VERIFIED.",
+      "status": "VERIFIED",
+      "verified_hashes": {
+        "c_001452fd142ce075.entity": "d9d2eec16de0049918be158ebd38926359374e5f98a70be85ac521d2b1ab01d8",
+        "c_001452fd142ce075.relation": "7b1d391e685940b21ded91a6cf0fb0c448937f26b629245e645562ce4d4b0d97",
+        "c_0001921855a8156b.entity": "03c03c2ffff9b53f1a2f4fe5f2b902c457e0027d03fa6c59b108c8c8da502877",
+        "c_0001921855a8156b.relation": "a5fd2eea93583683e09ed0337fdbac05d887f3870db27a6b7d809eac9ea852f1"
+      }
     },
     {
       "artifact": "Extracted source root under version control",
