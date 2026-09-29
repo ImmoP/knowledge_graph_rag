@@ -284,19 +284,23 @@ def write_blinded_review_package(
             label = "rev_" + _sanitize_label(provider_label) + "_" + hashlib.sha256(
                 (provider_label + "|" + chunk_id + "|" + str(seed)).encode("utf-8")
             ).hexdigest()[:8]
+            chunk_records = records_by_chunk.get(chunk_id, [])
+            mentions_list = [r for r in chunk_records if r.get("kind") == "mention"]
+            assertions_list = [r for r in chunk_records if r.get("kind") == "assertion"]
+            rejects_list = rejects_by_chunk.get(chunk_id, [])
+            chunk_status = chunk_status_by_chunk.get(chunk_id, {})
+            processed = bool(mentions_list or assertions_list or rejects_list or chunk_status)
             record = {
                 "review_label": label,
                 "chunk_id": chunk_id,
                 "doc_id": chunk.get("doc_id"),
                 "text": chunk.get("text"),
                 "provider_label": provider_label,
-                "mentions": records_by_chunk.get(chunk_id, []),
-                "assertions": [
-                    a for a in records_by_chunk.get(chunk_id, [])
-                    if a.get("kind") == "assertion"
-                ],
-                "rejects": rejects_by_chunk.get(chunk_id, []),
-                "chunk_status": chunk_status_by_chunk.get(chunk_id, {}),
+                "processed": processed,
+                "mentions": mentions_list,
+                "assertions": assertions_list,
+                "rejects": rejects_list,
+                "chunk_status": chunk_status,
                 "prompts": {
                     "entity": entity_prompt,
                     "relation": relation_prompt,
@@ -310,7 +314,9 @@ def write_blinded_review_package(
                     "'supported', 'unsupported', 'unclear', or "
                     "'schema_error'. The provider identity is hidden "
                     "behind the review_label; reveal it only after "
-                    "all labels are recorded."
+                    "all labels are recorded. Chunks with "
+                    "'processed': false were not part of this run and "
+                    "must not be labelled."
                 ),
             }
             review_records.append(record)

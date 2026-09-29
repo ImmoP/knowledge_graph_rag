@@ -286,6 +286,85 @@ def test_write_blinded_review_package_hides_model_identity(tmp_path: Path):
         assert len(labels_for_chunk) == 2
         assert {e["provider_label"] for e in labels_for_chunk} == {"qwen", "manifest"}
 
+def test_write_blinded_review_package_separates_mentions_and_assertions(tmp_path: Path):
+    """mentions must contain only kind=mention; assertions only kind=assertion.
+
+    Regression for the bug observed on manifest-auto run
+    20260929T160008Z-9dbc3c where 4 assertions were duplicated into the
+    ``mentions`` field because the writer did not filter by kind.
+    """
+    chunks_path = _tiny_chunks(tmp_path)
+    prompts_dir = REPO_ROOT / "prompts"
+    run = _write_run(
+        tmp_path / "run", "run",
+        mentions=[
+            _sample_mention("c_a", "m_a1"),
+            _sample_mention("c_a", "m_a2"),
+        ],
+        asserts=[_sample_assertion("c_a", "a_a1")],
+        chunk_statuses=[_sample_status("c_a")],
+    )
+    out = tmp_path / "review"
+    rec_path, _ = write_blinded_review_package(
+        runs=[("qwen", run / "extractions.jsonl", run / "extractions.rejects.jsonl",
+               "extract_entities_v2.txt", "extract_relations_v2.txt")],
+        chunks_path=chunks_path,
+        prompts_dir=prompts_dir,
+        output_dir=out,
+    )
+    payload = [json.loads(line) for line in rec_path.read_text().splitlines() if line.strip()]
+    rec_a = next(r for r in payload if r["chunk_id"] == "c_a")
+    rec_b = next(r for r in payload if r["chunk_id"] == "c_b")
+
+    # Every record in mentions must be kind=mention; never an assertion.
+    assert rec_a["mentions"], "processed chunk must carry mentions"
+    assert all(m.get("kind") == "mention" for m in rec_a["mentions"]), \
+        "mentions field must only contain kind=mention records"
+    # The same applies to the assertions field.
+    assert rec_a["assertions"], "processed chunk must carry assertions"
+    assert all(a.get("kind") == "assertion" for a in rec_a["assertions"]), \
+        "assertions field must only contain kind=assertion records"
+    # No overlap between the two lists.
+    mention_ids = {m.get("mention_id") for m in rec_a["mentions"]}
+    assertion_ids = {a.get("assertion_id") for a in rec_a["assertions"]}
+    assert mention_ids.isdisjoint(assertion_ids), \
+        "mention_id and assertion_id sets must not overlap"
+    # Counts match the input.
+    assert len(rec_a["mentions"]) == 2
+    assert len(rec_a["assertions"]) == 1
+
+    # Unprocessed chunk (no records at all) is still present but flagged.
+    assert rec_b["mentions"] == []
+    assert rec_b["assertions"] == []
+    assert rec_b["rejects"] == []
+    assert rec_b["processed"] is False
+
+
+def test_write_blinded_review_package_marks_processed_chunks(tmp_path: Path):
+    """processed=true iff the run produced at least one record for the chunk."""
+    chunks_path = _tiny_chunks(tmp_path)
+    prompts_dir = REPO_ROOT / "prompts"
+    run = _write_run(
+        tmp_path / "run", "run",
+        mentions=[_sample_mention("c_a", "m_a1")],
+        asserts=[],
+        chunk_statuses=[_sample_status("c_a")],
+    )
+    out = tmp_path / "review"
+    rec_path, _ = write_blinded_review_package(
+        runs=[("manifest", run / "extractions.jsonl", run / "extractions.rejects.jsonl",
+               "extract_entities_v2.txt", "extract_relations_v2.txt")],
+        chunks_path=chunks_path,
+        prompts_dir=prompts_dir,
+        output_dir=out,
+    )
+    payload = [json.loads(line) for line in rec_path.read_text().splitlines() if line.strip()]
+    by_chunk = {r["chunk_id"]: r for r in payload}
+    assert by_chunk["c_a"]["processed"] is True
+    assert by_chunk["c_b"]["processed"] is False
+    # Reviewer prompt must instruct the reviewer not to label unprocessed chunks.
+    assert "processed" in by_chunk["c_b"]["reviewer_prompt"].lower()
+
 
 def test_write_blinded_review_package_does_not_emit_gold_labels(tmp_path: Path):
     chunks_path = _tiny_chunks(tmp_path)
