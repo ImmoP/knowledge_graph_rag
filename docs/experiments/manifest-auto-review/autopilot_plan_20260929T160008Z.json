@@ -1,0 +1,206 @@
+{
+  "algorithm_version": "manifest-auto-autopilot-selector/v1",
+  "seed": 4277009102,
+  "excluded_chunk_ids": [
+    "c_0001921855a8156b",
+    "c_001452fd142ce075"
+  ],
+  "selection_criteria": [
+    "exclude_chunks_in_smoke_run",
+    "length_tercile_balance={'short': 4, 'medium': 3, 'long': 3}",
+    "per_doc_cap=2",
+    "tag_minimums={'prose_min': 1, 'table_min': 1}",
+    "deterministic_order_by_doc_rank_then_chunk_index"
+  ],
+  "length_tercile_bounds_chars": [
+    445,
+    843
+  ],
+  "tag_targets": {
+    "prose_min": 1,
+    "table_min": 1
+  },
+  "per_doc_cap": 2,
+  "tercile_target": {
+    "short": 4,
+    "medium": 3,
+    "long": 3
+  },
+  "plan": [
+    {
+      "chunk_id": "c_7fdad3ec8f3e783b",
+      "doc_id": "W3120014137",
+      "section_path": [
+        "Method",
+        "Passage Reranking"
+      ],
+      "char_len": 1448,
+      "token_estimate": 362,
+      "length_bucket": "long",
+      "tags": {
+        "prose": false,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 1
+    },
+    {
+      "chunk_id": "c_6914ed3f4c5362fb",
+      "doc_id": "W2949615363",
+      "section_path": [
+        "Models",
+        "Neural Network Models"
+      ],
+      "char_len": 1460,
+      "token_estimate": 365,
+      "length_bucket": "long",
+      "tags": {
+        "prose": false,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 2
+    },
+    {
+      "chunk_id": "c_ca129edd34052284",
+      "doc_id": "W2949615363",
+      "section_path": [
+        "Empirical Evaluation"
+      ],
+      "char_len": 1283,
+      "token_estimate": 320,
+      "length_bucket": "long",
+      "tags": {
+        "prose": false,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 3
+    },
+    {
+      "chunk_id": "c_2a9f84f5fe0ce2ce",
+      "doc_id": "W2955868579",
+      "section_path": [
+        "Deep-Learning-Based Methods",
+        "Typical Deep-Learning Methods"
+      ],
+      "char_len": 653,
+      "token_estimate": 163,
+      "length_bucket": "medium",
+      "tags": {
+        "prose": false,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 4
+    },
+    {
+      "chunk_id": "c_9c4a6e0f2cab05e3",
+      "doc_id": "W3214049768",
+      "section_path": [
+        "Conclusion"
+      ],
+      "char_len": 571,
+      "token_estimate": 142,
+      "length_bucket": "medium",
+      "tags": {
+        "prose": false,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 5
+    },
+    {
+      "chunk_id": "c_8a84177f479aea1f",
+      "doc_id": "W3120014137",
+      "section_path": [
+        "Experiment Results",
+        "Runtime Efficiency"
+      ],
+      "char_len": 585,
+      "token_estimate": 146,
+      "length_bucket": "medium",
+      "tags": {
+        "prose": true,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 6
+    },
+    {
+      "chunk_id": "c_c0de5074475c9c0f",
+      "doc_id": "W3119866685",
+      "section_path": [
+        "Designing Models with Data, Model, and Expert-Parallelism",
+        "Data Parallelism"
+      ],
+      "char_len": 411,
+      "token_estimate": 102,
+      "length_bucket": "short",
+      "tags": {
+        "prose": true,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 7
+    },
+    {
+      "chunk_id": "c_61090bb37bc1e7a9",
+      "doc_id": "W3119866685",
+      "section_path": [
+        "Pseudo Code for Switch Transformers"
+      ],
+      "char_len": 162,
+      "token_estimate": 40,
+      "length_bucket": "short",
+      "tags": {
+        "prose": false,
+        "latex": true,
+        "table": true
+      },
+      "selection_rank": 8
+    },
+    {
+      "chunk_id": "c_abdfc58c76ee1139",
+      "doc_id": "W2955868579",
+      "section_path": [
+        "New Trends",
+        "Multi-Passage Machine Reading Comprehension"
+      ],
+      "char_len": 413,
+      "token_estimate": 103,
+      "length_bucket": "short",
+      "tags": {
+        "prose": true,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 9
+    },
+    {
+      "chunk_id": "c_d285f0a62ff9479b",
+      "doc_id": "W3022373106",
+      "section_path": [
+        "Proposed Method",
+        "Residual-based Learning"
+      ],
+      "char_len": 206,
+      "token_estimate": 51,
+      "length_bucket": "short",
+      "tags": {
+        "prose": true,
+        "latex": true,
+        "table": false
+      },
+      "selection_rank": 10
+    }
+  ],
+  "totals": {
+    "short": 4,
+    "medium": 3,
+    "long": 3,
+    "prose_chunks": 4,
+    "table_chunks": 1,
+    "unique_docs": 6
+  }
+}

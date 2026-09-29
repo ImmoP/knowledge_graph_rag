@@ -60,17 +60,49 @@ Output schema (JSON object)::
         "recall_estimate_supported": <bool>,
         "recall_estimate_lower_bound": <float or null>,
         "recall_estimate_upper_bound": <float>,
-        "assertion_F1_lower_bound": <float or null>
+        "assertion_F1_lower_bound": <float or null>,
+        # NEW (correction of the recall-interval math, see below):
+        "recall_lower_bound_strict": <float or null>,
+        "recall_upper_bound_strict": <float or null>,
+        "recall_interval_includes_unclear": <bool>,
+        "f1_lower_bound_strict": <float or null>,
+        "f1_upper_bound_strict": <float or null>
       },
       "possible_false_negatives": [...],
       "labelset_version": "manual-review/v1"
     }
 
-Recall is intrinsically unobservable from a single annotated run:
-we can lower-bound it (assuming every flagged false negative is a
-true miss and the list is complete) and upper-bound it (assuming
-the flagged list is pure but possibly incomplete). The script
-reports both bounds and refuses to publish a point estimate.
+Recall is intrinsically unobservable from a single annotated run.
+Given the labelled sets and the reviewer's flagged FN list, the true
+recall value lies in the *interval*
+
+    [recall_lower_bound_strict, recall_upper_bound_strict]
+
+where both bounds assume the FN list is complete and ``unsupported``
+/ ``schema_error`` items are definitively outside the universe of
+true assertions. The bounds differ only in how they treat
+``unclear`` items, which the reviewer could not fully verify:
+
+* ``recall_lower_bound_strict = supported / (supported + flagged_FNs)``
+  -- assumes every ``unclear`` item is a false positive (not in the
+  true universe of assertions). This is the smallest the recall can
+  be under the completeness assumption.
+* ``recall_upper_bound_strict = (supported + unclear) /
+  (supported + unclear + flagged_FNs)`` -- assumes every ``unclear``
+  item is a true positive (in the universe). This is the largest the
+  recall can be under the completeness assumption.
+* ``recall_estimate_lower_bound`` and ``recall_estimate_upper_bound``
+  are the legacy fields. ``recall_estimate_lower_bound`` is kept as
+  an alias for ``recall_lower_bound_strict`` for downstream
+  consumers that read the original output schema; ``recall_estimate_upper_bound``
+  is kept at ``1.0`` because the FN list may itself be incomplete,
+  so the absolute ceiling is the trivial bound.
+
+Without an independently-labelled gold set, neither bound is a
+point estimate -- the script reports both bounds and refuses to
+publish a single number. F1 is reported the same way, as
+``f1_lower_bound_strict`` / ``f1_upper_bound_strict`` using the
+two recall bounds.
 """
 
 from __future__ import annotations
@@ -98,6 +130,42 @@ def _label_counts(records: list[dict[str, Any]], key: str) -> dict[str, int]:
     return counts
 
 
+def _recall_bounds(
+    *,
+    supported: int,
+    unclear: int,
+    fn_assertions: int,
+) -> tuple[float | None, float | None, bool]:
+    """Return the strict recall interval given a labelling.
+
+    The true recall lies in
+    ``[supported/(supported + fn), (supported+unclear)/(supported+unclear+fn)]``
+    under the assumption that the FN list is complete and that
+    ``unsupported`` / ``schema_error`` items are definitively outside
+    the universe of true assertions. The two bounds differ only in
+    how they treat ``unclear`` items -- the lower bound assumes they
+    are FP, the upper bound assumes they are TP.
+
+    Returns ``(lower, upper, well_defined)``: ``well_defined`` is True
+    iff the FN list is non-empty and at least one TP (``supported``)
+    is present. When ``well_defined`` is False, both bounds are
+    ``None`` -- the denominator collapses or the numerator is zero.
+    """
+    if fn_assertions <= 0 or supported <= 0:
+        return None, None, False
+    lower = supported / (supported + fn_assertions)
+    upper_denom = supported + unclear + fn_assertions
+    upper = (supported + unclear) / upper_denom if upper_denom > 0 else None
+    includes_unclear = unclear > 0
+    return lower, upper, includes_unclear
+
+
+def _f1(precision: float, recall: float | None) -> float | None:
+    if recall is None or precision <= 0:
+        return None
+    return 2 * precision * recall / (precision + recall)
+
+
 def score(annotation: dict[str, Any]) -> dict[str, Any]:
     """Score a single annotation file."""
     mention_labels = annotation.get("mention_labels", [])
@@ -117,34 +185,27 @@ def score(annotation: dict[str, Any]) -> dict[str, Any]:
     )
 
     supported_assertions = ac["supported"]
+    unclear_assertions = ac["unclear"]
     fn_assertions = sum(1 for fn in fns if fn.get("kind") == "assertion")
     fn_mentions = sum(1 for fn in fns if fn.get("kind") == "mention")
 
-    # Recall is only lower-bounded when *both* the run produced some
-    # supported assertions *and* the reviewer flagged some possible
-    # false negatives. If either is missing, the denominator is zero
-    # or the ratio is vacuous, and the script reports
-    # ``recall_estimate_supported = False`` to make that explicit.
-    if fn_assertions > 0 and supported_assertions > 0:
-        recall_lower = supported_assertions / (
-            supported_assertions + fn_assertions
+    recall_lower, recall_upper, recall_interval_includes_unclear = (
+        _recall_bounds(
+            supported=supported_assertions,
+            unclear=unclear_assertions,
+            fn_assertions=fn_assertions,
         )
-        recall_supported = True
-    else:
-        recall_lower = None
-        recall_supported = False
+    )
+    recall_supported = recall_lower is not None
 
-    if (
-        recall_lower is not None
-        and supported_assertions > 0
-        and assertion_precision > 0
-    ):
-        f1 = (
-            2 * assertion_precision * recall_lower
-            / (assertion_precision + recall_lower)
-        )
-    else:
-        f1 = None
+    # Legacy alias kept for downstream consumers that read the original
+    # output schema: ``recall_estimate_lower_bound`` is identical to
+    # ``recall_lower_bound_strict`` (the worst-case bound assuming all
+    # ``unclear`` are FP). ``recall_estimate_upper_bound`` stays at
+    # ``1.0`` because the FN list may be incomplete -- see the module
+    # docstring for the full interpretation.
+    f1_lower = _f1(assertion_precision, recall_lower)
+    f1_upper = _f1(assertion_precision, recall_upper)
 
     summary = {
         "mentions_supported": mc["supported"],
@@ -168,17 +229,53 @@ def score(annotation: dict[str, Any]) -> dict[str, Any]:
         ),
         "recall_estimate_upper_bound": 1.0,
         "assertion_F1_lower_bound": (
-            round(f1, 4) if f1 is not None else None
+            round(f1_lower, 4) if f1_lower is not None else None
+        ),
+        # Corrected recall-interval math: the true recall is bracketed
+        # by these two strict bounds (see module docstring). The lower
+        # bound is the legacy formula, the upper bound is the missing
+        # twin. ``recall_interval_includes_unclear`` is True when the
+        # labelling has any ``unclear`` items (so the bounds differ).
+        "recall_lower_bound_strict": (
+            round(recall_lower, 4) if recall_lower is not None else None
+        ),
+        "recall_upper_bound_strict": (
+            round(recall_upper, 4) if recall_upper is not None else None
+        ),
+        "recall_interval_includes_unclear": recall_interval_includes_unclear,
+        "f1_lower_bound_strict": (
+            round(f1_lower, 4) if f1_lower is not None else None
+        ),
+        "f1_upper_bound_strict": (
+            round(f1_upper, 4) if f1_upper is not None else None
         ),
     }
 
-    # Sanity: lower bound cannot exceed upper bound.
+    # Sanity: lower bound cannot exceed upper bound, and the strict
+    # interval must be within the absolute [0, 1] ceiling.
     if (
-        summary["recall_estimate_lower_bound"] is not None
-        and summary["recall_estimate_lower_bound"] > 1.0
+        summary["recall_lower_bound_strict"] is not None
+        and summary["recall_lower_bound_strict"] > 1.0
     ):
         raise ValueError(
             "recall lower bound > 1.0; check annotation counts"
+        )
+    if (
+        summary["recall_upper_bound_strict"] is not None
+        and summary["recall_upper_bound_strict"] > 1.0
+    ):
+        raise ValueError(
+            "recall upper bound > 1.0; check annotation counts"
+        )
+    if (
+        summary["recall_lower_bound_strict"] is not None
+        and summary["recall_upper_bound_strict"] is not None
+        and summary["recall_lower_bound_strict"]
+        > summary["recall_upper_bound_strict"] + 1e-9
+    ):
+        raise ValueError(
+            "recall lower bound exceeds strict upper bound; check "
+            "annotation counts"
         )
 
     return {

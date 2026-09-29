@@ -55,56 +55,85 @@ review of `c_001452fd142ce075`.
 
 The run produces a finite accepted set; recall is the share of the
 *true* mentions/assertions that landed in that set. Without a held-out
-gold set, **recall is not directly observable.** Two bounded
-estimates *can* be derived from the reviewer's flagged
-`possible_false_negatives`:
+gold set, **recall is not directly observable.** A bounded interval
+*can* be derived from the reviewer's labelled set and the flagged
+`possible_false_negatives`, under two assumptions:
+
+1. The flagged FN list is **complete** (the reviewer caught every
+   miss).
+2. `unsupported` and `schema_error` items are **definitively outside**
+   the universe of true assertions — they are not in the recall
+   denominator.
+
+Under these assumptions, the only remaining uncertainty is how to
+treat `unclear` items: each `unclear` may be a true positive (in the
+universe) or a false positive (out of the universe). The two
+extremes bracket the true recall:
 
 ```
-# Lower bound (assumes every flagged FN is real and the list is complete):
-recall_lower   = supported_in_run / (supported_in_run + |flagged_FNs|)
+# Worst case (every unclear is a false positive; out of the universe):
+recall_lower_bound_strict = supported / (supported + |flagged_FNs|)
 
-# Upper bound (assumes every flagged FN is a false alarm):
-recall_upper   = 1.0
+# Best case (every unclear is a true positive; in the universe):
+recall_upper_bound_strict = (supported + |unclear|) / (supported + |unclear| + |flagged_FNs|)
 ```
 
-The lower bound is a *plausibility* number: it says "if the reviewer
-caught every miss and every catch is real, recall is at least this
-much". The upper bound is trivial: recall cannot exceed 1. The actual
-recall lies in `[recall_lower, 1.0]` and is **not** point-estimable
-from one run and one human pass.
+If the FN list itself may be incomplete (the reviewer may have
+missed some FNs), the absolute ceiling on recall is the trivial
+`recall_estimate_upper_bound = 1.0`. The true recall therefore lies
+in the intersection of the strict interval and `[0, 1]`. **No
+point estimate is published**; downstream consumers must read the
+interval and decide how to handle `unclear` items in their own
+context.
 
-For this run's `c_001452fd142ce075` chunk:
+For this run's `c_001452fd142ce075` chunk there are no `unclear`
+items in the labelled set, so the strict interval collapses to a
+single point:
 
 ```
-supported_assertions = 2
-possible_FN_assertions = 1   (REPORTS_METRIC(W3038572442 -> Answer Coverage))
-recall_lower_bound = 2 / (2 + 1) = 0.6667
+supported_assertions      = 2
+unclear_assertions        = 0
+possible_FN_assertions    = 1   (REPORTS_METRIC(W3038572442 -> Answer Coverage))
+
+recall_lower_bound_strict = 2 / (2 + 0 + 1) = 0.6667
+recall_upper_bound_strict = 2 / (2 + 0 + 1) = 0.6667   (collapses; no unclear items)
+recall_estimate_supported = True
+recall_interval_includes_unclear = False
+recall_estimate_upper_bound      = 1.0   (FN list may be incomplete)
 ```
 
-For `c_0001921855a8156b` there are no labelled claims in the run (the
-accepted assertions list is empty), so the recall denominator is
-undefined. The scorer reports
-`recall_estimate_supported: false` and leaves the lower bound as
-`null`. The flagged `possible_false_negatives` are *still recorded* in
-the JSON output so the reviewer can later revisit the borderline
-`USES_METHOD` edges against a future gold set; they do not contribute
-to a numeric recall estimate here.
+F1 is reported the same way, as `f1_lower_bound_strict` and
+`f1_upper_bound_strict`, using the lower / upper recall bounds with
+the assertion precision.
 
-### Why a recall *point estimate* is not justified
+For `c_0001921855a8156b` there are no labelled claims in the run
+(the accepted assertions list is empty), so `supported == 0` and the
+recall interval is undefined: there are no true positives to anchor
+the lower bound, and the helper cannot publish a paired upper
+bound. The scorer reports `recall_estimate_supported: false` and
+leaves both strict bounds as `null`. The flagged
+`possible_false_negatives` are *still recorded* in the JSON output
+so the reviewer can later revisit the borderline `USES_METHOD`
+edges against a future gold set; they do not contribute to a
+numeric recall estimate here.
+
+### Why a recall *point estimate* is still not justified
 
 * The reviewer may have *missed* a false negative. The FN list is
-  not guaranteed complete.
-* The reviewer may have *hallucinated* a false negative. The FN list
-  is not guaranteed pure.
+  not guaranteed complete. This is why
+  `recall_estimate_upper_bound` stays at `1.0` even when the
+  strict interval is narrower.
+* The reviewer may have *hallucinated* a false negative. The FN
+  list is not guaranteed pure. This is why the strict lower bound
+  assumes only `supported` items are TP.
+* The reviewer may have over- or under-classified an item as
+  `unclear`. The strict interval's width encodes this uncertainty.
 * Without an independently-labelled gold set, there is no way to
-  distinguish "missed" from "hallucinated" entries in the FN list.
-
-The scoring helper therefore reports *both* bounds and refuses to
-publish a point estimate. F1 is reported only as a lower bound
-(`assertion_F1_lower_bound`) under the same "every flagged FN is
-real" assumption.
+  distinguish "missed" from "hallucinated" entries in the FN list
+  or to pin down the true recall within the strict interval.
 
 ## 4. Other metrics computable from the manual annotation
+
 
 * **Per-relation-type precision**: break the `assertion_precision`
   computation down by `relation_type`. For this run:

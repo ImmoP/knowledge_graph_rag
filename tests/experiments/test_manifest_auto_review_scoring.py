@@ -174,7 +174,170 @@ def test_scorer_counts_unclear_and_schema_error(scorer) -> None:
     assert out["summary"]["assertion_precision"] == 0.5
 
 
+
+# ---------- corrected recall-interval math ---------------------------
+
+
+def test_scorer_recall_interval_with_unclear_collapses_when_empty(
+    scorer,
+) -> None:
+    """When ``unclear`` is zero, the strict interval collapses to the
+    legacy lower bound and the helper reports
+    ``recall_interval_includes_unclear = False``. This is the
+    shipped chunk-2 scenario.
+    """
+    annotation = {
+        "review_label": "rev_x",
+        "chunk_id": "c_x",
+        "doc_id": "W_x",
+        "mention_labels": [],
+        "assertion_labels": [
+            {"assertion_id": "a1", "label": "supported"},
+            {"assertion_id": "a2", "label": "supported"},
+            {"assertion_id": "a3", "label": "unsupported"},
+        ],
+        "possible_false_negatives": [
+            {"kind": "assertion", "missing": {"x": 1}},
+        ],
+    }
+    out = scorer.score(annotation)
+    summary = out["summary"]
+    # No ``unclear`` items -> strict interval collapses to a point.
+    assert summary["recall_interval_includes_unclear"] is False
+    assert summary["recall_lower_bound_strict"] == round(2 / 3, 4)
+    assert summary["recall_upper_bound_strict"] == round(2 / 3, 4)
+    # Legacy alias still equals the strict lower bound.
+    assert summary["recall_estimate_lower_bound"] == round(2 / 3, 4)
+    assert summary["recall_estimate_upper_bound"] == 1.0
+    # F1 lower == F1 upper when the interval collapses.
+    assert summary["f1_lower_bound_strict"] == summary["f1_upper_bound_strict"]
+
+
+def test_scorer_recall_interval_brackets_when_unclear_present(
+    scorer,
+) -> None:
+    """When ``unclear`` items exist, the strict recall interval widens
+    and the upper bound is strictly greater than the lower bound.
+    This is the *corrected* interpretation: items the reviewer could
+    not verify sit inside the universe of true assertions and shift
+    the upper bound upward.
+    """
+    annotation = {
+        "review_label": "rev_x",
+        "chunk_id": "c_x",
+        "doc_id": "W_x",
+        "mention_labels": [],
+        "assertion_labels": [
+            {"assertion_id": "a1", "label": "supported"},
+            {"assertion_id": "a2", "label": "supported"},
+            {"assertion_id": "a3", "label": "unclear"},
+        ],
+        "possible_false_negatives": [
+            {"kind": "assertion", "missing": {"x": 1}},
+        ],
+    }
+    out = scorer.score(annotation)
+    summary = out["summary"]
+    # Lower bound (assume all unclear are FP): 2/(2+1) = 2/3.
+    assert summary["recall_lower_bound_strict"] == round(2 / 3, 4)
+    # Upper bound (assume all unclear are TP): 3/(3+1) = 3/4.
+    assert summary["recall_upper_bound_strict"] == round(3 / 4, 4)
+    # Flag is set so consumers know the interval is wider than a point.
+    assert summary["recall_interval_includes_unclear"] is True
+    # F1 lower uses the lower recall, F1 upper uses the upper recall.
+    precision = 2 / 3  # 2 supported / 3 labelled
+    expected_f1_lower = 2 * precision * (2 / 3) / (precision + (2 / 3))
+    expected_f1_upper = 2 * precision * (3 / 4) / (precision + (3 / 4))
+    assert summary["f1_lower_bound_strict"] == round(expected_f1_lower, 4)
+    assert summary["f1_upper_bound_strict"] == round(expected_f1_upper, 4)
+    # Sanity: lower <= upper on both recall and F1.
+    assert (
+        summary["recall_lower_bound_strict"]
+        <= summary["recall_upper_bound_strict"]
+    )
+    assert (
+        summary["f1_lower_bound_strict"]
+        <= summary["f1_upper_bound_strict"]
+    )
+
+
+def test_scorer_recall_interval_undefined_when_no_supported(
+    scorer,
+) -> None:
+    """If ``supported`` is zero (only ``unsupported`` / ``unclear`` /
+    ``schema_error`` items in the accepted set), the recall interval
+    is undefined -- there are no true positives to measure.
+    """
+    annotation = {
+        "review_label": "rev_x",
+        "chunk_id": "c_x",
+        "doc_id": "W_x",
+        "mention_labels": [],
+        "assertion_labels": [
+            {"assertion_id": "a1", "label": "unsupported"},
+            {"assertion_id": "a2", "label": "unclear"},
+        ],
+        "possible_false_negatives": [
+            {"kind": "assertion", "missing": {"x": 1}},
+        ],
+    }
+    out = scorer.score(annotation)
+    summary = out["summary"]
+    assert summary["recall_estimate_supported"] is False
+    assert summary["recall_lower_bound_strict"] is None
+    assert summary["recall_upper_bound_strict"] is None
+    assert summary["f1_lower_bound_strict"] is None
+    assert summary["f1_upper_bound_strict"] is None
+
+
+def test_scorer_recall_interval_all_unclear_does_not_inflate(
+    scorer,
+) -> None:
+    """When ``unclear`` items dominate and ``supported`` is zero,
+    the strict interval is reported as ``None`` for both bounds --
+    there are no ``supported`` items to anchor the lower bound, and
+    the upper bound is not published alone because it would be
+    meaningless without a paired lower bound.
+    """
+    annotation = {
+        "review_label": "rev_x",
+        "chunk_id": "c_x",
+        "doc_id": "W_x",
+        "mention_labels": [],
+        "assertion_labels": [
+            {"assertion_id": "a1", "label": "unclear"},
+            {"assertion_id": "a2", "label": "unclear"},
+        ],
+        "possible_false_negatives": [
+            {"kind": "assertion", "missing": {"x": 1}},
+        ],
+    }
+    out = scorer.score(annotation)
+    summary = out["summary"]
+    assert summary["recall_estimate_supported"] is False
+    assert summary["recall_lower_bound_strict"] is None
+    assert summary["recall_upper_bound_strict"] is None
+
+
+def test_scorer_chunk2_interval_collapses_to_point(scorer) -> None:
+    """The shipped chunk-2 annotation has zero ``unclear`` items, so
+    the corrected interval collapses to the legacy lower bound
+    (``supported / (supported + FN)`` = ``2 / 3``).
+    """
+    data = json.loads(ANNOTATIONS_CHUNK2.read_text(encoding="utf-8"))
+    out = scorer.score(data)
+    summary = out["summary"]
+    assert summary["assertions_unclear"] == 0
+    assert summary["recall_interval_includes_unclear"] is False
+    assert summary["recall_lower_bound_strict"] == round(2 / 3, 4)
+    assert summary["recall_upper_bound_strict"] == round(2 / 3, 4)
+    # Legacy alias unchanged.
+    assert summary["recall_estimate_lower_bound"] == round(2 / 3, 4)
+    assert summary["recall_estimate_upper_bound"] == 1.0
+
+
 # ---------- shipped annotations match the review --------------------
+
 
 
 def test_chunk2_annotations_match_review_markdown() -> None:
