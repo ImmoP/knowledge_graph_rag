@@ -105,6 +105,7 @@ def compare_whitespace(*, recording_dir: Path, output_dir: Path) -> dict:
         "repair_version": REPAIR_VERSION,
         "scope": "relation evidence_quote only; entities and occurrence indices unchanged",
         "recording_manifest_sha256": manifest["_manifest_sha256"],
+        "source_recording": {"status": manifest["status"], "complete": manifest["status"] == "complete"},
         "identical_http_attempt_stream": True,
         "attempt_count": client.attempt_count,
         "budget_aborted": result.budget_aborted,

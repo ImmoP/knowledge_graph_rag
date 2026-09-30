@@ -33,6 +33,7 @@ from src.extract import prompts as prompts_module
 from src.extract import schema as schema_module
 from src.extract.pipeline_v2 import RunResultV2, run_extraction_v2
 from src.providers.adapters.manifest_openai import ManifestAutoBenchmarkLLM
+from src.benchmark.two_chunk_experiment import validate_selection
 
 
 RECORDING_FORMAT = "manifest-auto-recording-v1"
@@ -42,6 +43,12 @@ REJECTS_FILENAME = "extractions.rejects.jsonl"
 REPLAY_REPORT_FILENAME = "replay_report.json"
 EMPTY_REVIEW_FILENAME = "empty_chunk_review.json"
 _MAX_RECORDING_CHUNKS = 2
+_RECORDING_POLICY = {
+    "max_total_post_attempts": None,
+    "http_transport_retries": 0,
+    "stop_on_http_429": True,
+    "stop_on_invalid_output": True,
+}
 
 _INPUT_FILES = {
     "chunks": "inputs/chunks.jsonl",
@@ -57,6 +64,7 @@ _IMPLEMENTATION_PATHS = (
     "src/benchmark/manifest_comparison.py",
     "src/benchmark/manifest_recording.py",
     "src/benchmark/manifest_replay.py",
+    "src/benchmark/two_chunk_experiment.py",
     "src/extract/align.py",
     "src/extract/experimental_quote_repair.py",
     "src/extract/ids.py",
@@ -305,6 +313,7 @@ def record_run(
     temperature: float = 0.0,
     api_key: str | None = None,
     client: Any = None,
+    selection: dict | None = None,
 ) -> dict:
     """Perform a bounded live run while durably recording every HTTP attempt."""
     if type(max_live_calls) is not int or not 1 <= max_live_calls <= 4:
@@ -316,6 +325,12 @@ def record_run(
     key = api_key if api_key is not None else os.environ.get("MANIFEST_API_KEY", "")
     if not key:
         raise RecordingManifestError("Manifest API key is required")
+    if selection is not None:
+        try:
+            validate_selection(chunks, selection)
+        except ValueError as exc:
+            raise RecordingManifestError("invalid recording selection") from exc
+        assert_safe_bytes(_json_bytes(selection), secrets=(key.encode("utf-8"),))
 
     implementation = _implementation_identity()
     directory = _ensure_fresh_external_directory(Path(output_dir))
@@ -336,6 +351,8 @@ def record_run(
             api_key=key,
             client=recording_client,
             max_live_calls=max_live_calls,
+            stop_on_http_429=True,
+            stop_on_invalid_output=True,
         )
         with _private_umask():
             result = run_extraction_v2(
@@ -363,16 +380,24 @@ def record_run(
 
     implementation_drift = _implementation_identity() != implementation
     adapter_terminal = provider.last_terminal_transport_error if "provider" in locals() else None
+    adapter_invalid = provider.last_terminal_invalid_output if "provider" in locals() else None
     if implementation_drift:
         terminal = {"type": "ImplementationDrift"}
         status = "terminal_error"
     elif adapter_terminal is not None:
         terminal = _safe_terminal(adapter_terminal)
         status = "terminal_error"
+    elif adapter_invalid is not None:
+        terminal = _safe_terminal(adapter_invalid)
+        status = "incomplete"
     elif result is not None:
-        status = "budget_aborted" if result.budget_aborted else "complete"
         if result.budget_aborted:
+            status = "budget_aborted"
             terminal = {"type": "CallBudgetExceeded", "cap": max_live_calls}
+        elif result.exit_code != 0 or result.complete_chunk_count != len(chunks):
+            status = "incomplete"
+        else:
+            status = "complete"
     elif isinstance(terminal_exc, (KeyboardInterrupt, SystemExit)):
         status = "interrupted"
     else:
@@ -382,10 +407,12 @@ def record_run(
         _file_entry("attempts.jsonl", attempts_path.read_bytes())
         if attempts_path.is_file() else None
     )
+    policy = dict(_RECORDING_POLICY, max_total_post_attempts=max_live_calls)
     manifest: dict[str, Any] = {
         "format": RECORDING_FORMAT,
         "status": status,
         "inputs": {name: files[name] for name in _INPUT_FILES},
+        "selection": selection,
         "artifacts": {name: files[name] for name in ("extractions", "rejects") if name in files},
         "raw_responses": {
             "path": "raw_responses",
@@ -397,6 +424,7 @@ def record_run(
             "max_live_calls": max_live_calls,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "transport_policy": policy,
             "chunk_count": len(chunks),
             "chunk_ids": [chunk.get("chunk_id") for chunk in chunks],
             "schema_version": schema_module.SCHEMA_VERSION_V2,
@@ -428,7 +456,9 @@ def load_recording(recording_dir: Path) -> dict:
         raise RecordingManifestError("recording manifest is invalid") from exc
     if not isinstance(manifest, dict) or manifest.get("format") != RECORDING_FORMAT:
         raise RecordingManifestError("unsupported recording format")
-    if manifest.get("status") not in {"complete", "budget_aborted", "terminal_error", "interrupted"}:
+    if manifest.get("status") not in {
+        "complete", "incomplete", "budget_aborted", "terminal_error", "interrupted"
+    }:
         raise RecordingManifestError("invalid recording terminal status")
     if manifest.get("status") == "interrupted":
         raise MissingRawResponse("recording was interrupted and is not replayable")
@@ -437,8 +467,11 @@ def load_recording(recording_dir: Path) -> dict:
         raise RecordingManifestError("invalid recording settings")
     if type(settings.get("max_live_calls")) is not int or not 1 <= settings["max_live_calls"] <= 4:
         raise RecordingManifestError("invalid recorded call cap")
-    if type(settings.get("max_tokens")) is not int or not isinstance(settings.get("temperature"), (int, float)):
-        raise RecordingManifestError("invalid recorded generation settings")
+    if type(settings.get("max_tokens")) is not int or settings["max_tokens"] <= 0:
+        raise RecordingManifestError("invalid recorded token setting")
+    temperature = settings.get("temperature")
+    if type(temperature) not in (int, float) or not math.isfinite(temperature):
+        raise RecordingManifestError("invalid recorded temperature setting")
     if settings.get("schema_version") != schema_module.SCHEMA_VERSION_V2:
         raise RecordingManifestError("recorded V2 schema contract mismatch")
     if type(settings.get("ontology_version")) is not int:
@@ -447,6 +480,23 @@ def load_recording(recording_dir: Path) -> dict:
         raise RecordingManifestError("entity prompt contract mismatch")
     if settings.get("relation_prompt_filename") != prompts_module.RELATION_PROMPT_FILE_V2:
         raise RecordingManifestError("relation prompt contract mismatch")
+    policy = settings.get("transport_policy")
+    if not isinstance(policy, dict) or set(policy) != set(_RECORDING_POLICY):
+        raise RecordingManifestError("invalid recording transport policy")
+    if type(policy.get("max_total_post_attempts")) is not int:
+        raise RecordingManifestError("invalid total POST attempt cap")
+    if type(policy.get("http_transport_retries")) is not int:
+        raise RecordingManifestError("invalid HTTP transport retry setting")
+    if type(policy.get("stop_on_http_429")) is not bool:
+        raise RecordingManifestError("invalid HTTP 429 stop setting")
+    if type(policy.get("stop_on_invalid_output")) is not bool:
+        raise RecordingManifestError("invalid invalid-output stop setting")
+    expected_policy = dict(
+        _RECORDING_POLICY,
+        max_total_post_attempts=settings["max_live_calls"],
+    )
+    if settings.get("transport_policy") != expected_policy:
+        raise RecordingManifestError("recording transport policy mismatch")
 
     inputs = manifest.get("inputs")
     if not isinstance(inputs, dict) or set(inputs) != set(_INPUT_FILES):
@@ -457,6 +507,12 @@ def load_recording(recording_dir: Path) -> dict:
     chunks = _read_jsonl_bytes(verified_inputs["chunks"], label="chunks")
     if len(chunks) != settings.get("chunk_count") or [c.get("chunk_id") for c in chunks] != settings.get("chunk_ids"):
         raise RecordingManifestError("recorded chunk identity mismatch")
+    selection = manifest.get("selection")
+    if selection is not None:
+        try:
+            validate_selection(chunks, selection)
+        except ValueError as exc:
+            raise RecordingManifestError("recording selection mismatch") from exc
 
     # Check frozen generated schemas against the frozen ontology, not caller files.
     ontology = schema_module.load_ontology(directory / inputs["ontology"]["path"])
@@ -475,12 +531,25 @@ def load_recording(recording_dir: Path) -> dict:
     }
     if set(verified_artifacts) - {"extractions", "rejects"}:
         raise RecordingManifestError("unknown canonical artifact")
-    replayable_outputs = manifest.get("status") in {"complete", "budget_aborted"}
+    replayable_outputs = manifest.get("status") in {
+        "complete", "incomplete", "budget_aborted"
+    }
     if replayable_outputs and set(verified_artifacts) != {"extractions", "rejects"}:
         raise RecordingManifestError("canonical artifacts are incomplete")
     if manifest.get("status") == "terminal_error" and verified_artifacts:
         if set(verified_artifacts) != {"extractions", "rejects"}:
             raise RecordingManifestError("partial canonical artifact set")
+    recorded_result = manifest.get("result")
+    recorded_status = manifest["status"]
+    if recorded_status == "complete":
+        if not isinstance(recorded_result, dict):
+            raise RecordingManifestError("complete recording has no run result")
+        if recorded_result.get("exit_code") != 0 or recorded_result.get("budget_aborted") is not False:
+            raise RecordingManifestError("complete recording has a non-success result")
+        if recorded_result.get("complete_chunk_count") != len(chunks):
+            raise RecordingManifestError("complete recording has incomplete chunks")
+    elif recorded_status in {"incomplete", "budget_aborted"} and not isinstance(recorded_result, dict):
+        raise RecordingManifestError("controlled partial recording has no run result")
     raw_entry = manifest.get("raw_responses")
     if not isinstance(raw_entry, dict) or raw_entry.get("path") != "raw_responses":
         raise RecordingManifestError("invalid raw response location")
@@ -492,6 +561,9 @@ def load_recording(recording_dir: Path) -> dict:
     if raw_entry["attempt_count"] < 1:
         raise MissingRawResponse("recording contains no HTTP attempts")
 
+    policy_cap = settings["transport_policy"]["max_total_post_attempts"]
+    if raw_entry["attempt_count"] > settings["max_live_calls"] or raw_entry["attempt_count"] > policy_cap:
+        raise RecordingManifestError("recorded attempt count exceeds transport policy")
     _verify_implementation_identity(manifest.get("implementation"))
     manifest["_directory"] = directory
     manifest["_verified_inputs"] = verified_inputs
@@ -532,6 +604,8 @@ def run_replay_pipeline(
         api_key="offline-replay",
         client=replay_client,
         max_live_calls=settings["max_live_calls"],
+        stop_on_http_429=settings["transport_policy"]["stop_on_http_429"],
+        stop_on_invalid_output=settings["transport_policy"]["stop_on_invalid_output"],
     )
     active_provider = provider_wrapper(provider) if provider_wrapper is not None else provider
     if active_provider is None:
@@ -644,9 +718,15 @@ def replay_run(
         return report
 
     adapter_terminal = getattr(replay_provider, "last_terminal_transport_error", None)
+    adapter_invalid = getattr(replay_provider, "last_terminal_invalid_output", None)
     if adapter_terminal is not None:
         if manifest.get("status") != "terminal_error" or _safe_terminal(adapter_terminal) != recorded_terminal:
             raise ReplayMismatch("replay produced an unrecorded terminal error")
+    elif adapter_invalid is not None:
+        if manifest.get("status") != "incomplete" or _safe_terminal(adapter_invalid) != recorded_terminal:
+            raise ReplayMismatch("replay produced an unrecorded incomplete phase")
+    elif recorded_terminal is not None and manifest.get("status") not in {"budget_aborted"}:
+        raise ReplayMismatch("replay did not reproduce the recorded controlled stop")
     exact = _exact_comparison(manifest, output)
     if not exact["match"]:
         raise ReplayMismatch("canonical extraction or rejects bytes differ")

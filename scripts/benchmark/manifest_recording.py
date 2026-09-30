@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Record a bounded Manifest Auto smoke run or replay it fully offline."""
+"""Record a bounded Manifest Auto run or replay it fully offline.
+
+By default the recording uses the two pinned smoke chunks. Explicit
+``--chunk-id`` selection accepts only the two controlled problem chunks,
+each once, in caller order. The frozen dataset digest and selection are
+validated and stored together in ``recording.json``.
+"""
 
 from __future__ import annotations
 
@@ -11,9 +17,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.benchmark.dataset.manifest import CHUNKS_PATH, load_frozen_chunks  # noqa: E402
-from src.benchmark.dataset.smoke_chunks import SMOKE_CHUNK_IDS  # noqa: E402
-from src.benchmark.manifest_replay import record_run, replay_run  # noqa: E402
+from src.benchmark.dataset.manifest import CHUNKS_PATH  # noqa: E402
+from src.benchmark.two_chunk_experiment import (  # noqa: E402
+    load_recording_selection,
+    recording_exit_code,
+    verify_experiment_recording,
+)
+from src.benchmark.manifest_replay import load_recording, record_run, replay_run  # noqa: E402
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -22,6 +32,17 @@ def _parser() -> argparse.ArgumentParser:
 
     record = subcommands.add_parser("record", help="perform an explicitly enabled live recording")
     record.add_argument("--live", action="store_true", help="required acknowledgement of live API calls")
+    record.add_argument(
+        "--chunk-id",
+        action="append",
+        default=None,
+        dest="chunk_ids",
+        metavar="CHUNK_ID",
+        help=(
+            "repeat for each of c_ca129edd34052284 and c_8a84177f479aea1f; "
+            "caller order is preserved. Omit both flags for the pinned smoke chunks."
+        ),
+    )
     record.add_argument("--dataset", type=Path, default=CHUNKS_PATH)
     record.add_argument("--ontology", type=Path, default=REPO_ROOT / "ontology.yaml")
     record.add_argument("--prompts-dir", type=Path, default=REPO_ROOT / "prompts")
@@ -48,36 +69,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def _load_pinned_chunks(dataset: Path) -> list[dict]:
-    # The committed frozen dataset gets its full manifest/hash verification.
-    if dataset.resolve() == CHUNKS_PATH.resolve():
-        chunks, _manifest = load_frozen_chunks()
-    else:
-        # An explicit alternate dataset is useful only for isolated tests; the
-        # exact two pinned IDs and order remain non-negotiable.
-        chunks = []
-        for line in dataset.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                import json
-
-                row = json.loads(line)
-                if not isinstance(row, dict):
-                    raise ValueError("dataset rows must be objects")
-                chunks.append(row)
-    by_id = {chunk.get("chunk_id"): chunk for chunk in chunks}
-    if any(chunk_id not in by_id for chunk_id in SMOKE_CHUNK_IDS):
-        raise ValueError("dataset does not contain both pinned smoke chunks")
-    selected = [by_id[chunk_id] for chunk_id in SMOKE_CHUNK_IDS]
-    if [chunk["chunk_id"] for chunk in selected] != list(SMOKE_CHUNK_IDS):
-        raise ValueError("smoke chunk order mismatch")
-    return selected
-
-
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _parse_args(argv)
         if args.command == "record":
-            chunks = _load_pinned_chunks(args.dataset)
+            chunks, selection = load_recording_selection(
+                args.dataset,
+                tuple(args.chunk_ids) if args.chunk_ids is not None else None,
+            )
             manifest = record_run(
                 output_dir=args.output_dir,
                 chunks=chunks,
@@ -86,14 +85,14 @@ def main(argv: list[str] | None = None) -> int:
                 max_live_calls=args.allow_manifest_calls,
                 max_tokens=args.max_tokens,
                 temperature=args.temperature,
+                selection=selection,
             )
             count = manifest["raw_responses"]["attempt_count"]
             print(f"record status={manifest['status']} attempts={count} manifest=recording.json")
-            if manifest["status"] == "budget_aborted":
-                return 3
-            if manifest["status"] != "complete":
-                return 4
+            return recording_exit_code(manifest)
         else:
+            if args.compare_whitespace:
+                verify_experiment_recording(load_recording(args.recording_dir))
             report = replay_run(
                 recording_dir=args.recording_dir,
                 output_dir=args.output_dir,

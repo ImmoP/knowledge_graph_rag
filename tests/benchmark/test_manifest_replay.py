@@ -125,27 +125,62 @@ def test_schema_correction_attempt_is_recorded_and_replayed(tmp_path):
     assert report["attempt_count"] == 3
 
 
-def test_repeated_schema_failure_rejects_and_replays_exactly(tmp_path):
-    source, manifest, _ = _record(
+def test_repeated_schema_failure_stops_incomplete_and_replays_partial_artifacts(tmp_path):
+    source, manifest, requests = _record(
         tmp_path,
-        [{"wrong": []}, {"still_wrong": []}, {"assertions": []}],
+        [{"wrong": []}, {"still_wrong": []}, {"unused": []}],
     )
-    assert manifest["raw_responses"]["attempt_count"] == 3
-    rejects = (source / "extractions.rejects.jsonl").read_bytes()
-    rows = [json.loads(line) for line in rejects.splitlines()]
-    assert rows[0]["gate"] == "schema"
-    replay_run(recording_dir=source, output_dir=tmp_path / "replay")
-    assert (tmp_path / "replay" / "extractions.rejects.jsonl").read_bytes() == rejects
+    assert manifest["status"] == "incomplete"
+    assert manifest["terminal"] == {"type": "ManifestTerminalInvalidOutput"}
+    assert manifest["raw_responses"]["attempt_count"] == 2
+    assert len(requests) == 2
+    assert set(manifest["artifacts"]) == {"extractions", "rejects"}
+    report = replay_run(recording_dir=source, output_dir=tmp_path / "replay")
+    assert report["status"] == "matched"
+    assert (tmp_path / "replay" / "extractions.jsonl").read_bytes() == (
+        source / "extractions.jsonl"
+    ).read_bytes()
 
 
-def test_transient_http_retry_stream_replays_offline(tmp_path, monkeypatch):
+def test_recording_429_stops_after_exact_response_and_replays_partial_artifacts(
+    tmp_path, monkeypatch
+):
+    raw = b'{"error":{"type":"rate_limit","detail":"retain exactly"}}'
+    requests: list[httpx.Request] = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(429, content=raw)
+
+    monkeypatch.setattr("src.extract.pipeline_v2.time.sleep", lambda _seconds: None)
+    source = tmp_path / "recording"
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        manifest = record_run(
+            output_dir=source, chunks=[_chunk()], ontology_path=ONTOLOGY,
+            prompts_dir=PROMPTS, api_key="synthetic-test-key", client=client,
+        )
+    assert len(requests) == 1
+    assert manifest["status"] == "terminal_error"
+    assert manifest["terminal"] == {
+        "type": "ManifestTerminalTransportError", "status": 429, "transient": False
+    }
+    assert (source / "raw_responses" / "000001.bin").read_bytes() == raw
+    assert set(manifest["artifacts"]) == {"extractions", "rejects"}
+    report = replay_run(recording_dir=source, output_dir=tmp_path / "replay")
+    assert report["status"] == "matched"
+
+
+def test_transport_and_json_retries_share_four_post_cap(tmp_path, monkeypatch):
     responses = iter([
         httpx.Response(503, json={"error": {"type": "overloaded"}}),
+        httpx.Response(503, json={"error": {"type": "overloaded"}}),
+        httpx.Response(200, json=_http_body({"wrong": []})),
         httpx.Response(200, json=_http_body({"mentions": []})),
-        httpx.Response(200, json=_http_body({"assertions": []})),
     ])
+    requests: list[httpx.Request] = []
 
-    def respond(_request):
+    def respond(request):
+        requests.append(request)
         return next(responses)
 
     monkeypatch.setattr("src.extract.pipeline_v2.time.sleep", lambda _seconds: None)
@@ -155,9 +190,17 @@ def test_transient_http_retry_stream_replays_offline(tmp_path, monkeypatch):
             output_dir=source, chunks=[_chunk()], ontology_path=ONTOLOGY,
             prompts_dir=PROMPTS, api_key="synthetic-test-key", client=client,
         )
-    assert manifest["raw_responses"]["attempt_count"] == 3
-    report = replay_run(recording_dir=source, output_dir=tmp_path / "replay")
-    assert report["status"] == "matched"
+    assert len(requests) == 4
+    assert manifest["raw_responses"]["attempt_count"] == 4
+    assert manifest["status"] == "budget_aborted"
+    assert manifest["terminal"] == {"type": "CallBudgetExceeded", "cap": 4}
+    assert manifest["settings"]["transport_policy"] == {
+        "max_total_post_attempts": 4,
+        "http_transport_retries": 0,
+        "stop_on_http_429": True,
+        "stop_on_invalid_output": True,
+    }
+    assert replay_run(recording_dir=source, output_dir=tmp_path / "replay")["status"] == "matched"
 
 
 def test_nontransient_http_terminal_is_recorded_and_reproduced(tmp_path):
@@ -265,9 +308,3 @@ def test_cli_live_and_cap_guards_are_fail_closed(tmp_path):
     assert args.live is True and args.allow_manifest_calls == 1
 
 
-def test_cli_requires_exact_two_pinned_chunks(tmp_path):
-    cli = _load_cli()
-    dataset = tmp_path / "chunks.jsonl"
-    dataset.write_text(json.dumps(_chunk()) + "\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="both pinned"):
-        cli._load_pinned_chunks(dataset)

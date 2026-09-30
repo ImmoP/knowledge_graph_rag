@@ -158,6 +158,16 @@ class ManifestTerminalTransportError(ProviderTransportError, BudgetExceeded):
         if self.cause is not None:
             self.__cause__ = self.cause
 
+class ManifestTerminalInvalidOutput(BudgetExceeded):
+    """Recording-only controlled stop after the corrective JSON response fails."""
+
+    def __init__(self) -> None:
+        self.cumulative = 0.0
+        self.cap = 0.0
+        self.unit = "terminal invalid model output"
+        Exception.__init__(self, "corrective response was not valid for the required schema")
+
+
 
 @dataclass(frozen=True)
 class RequestedModel:
@@ -538,6 +548,8 @@ class ManifestAutoBenchmarkLLM(ManifestBenchmarkLLM):
         client: httpx.Client | None = None,
         max_live_calls: int = DEFAULT_MAX_LIVE_CALLS,
         call_counter: list[int] | None = None,
+        stop_on_http_429: bool = False,
+        stop_on_invalid_output: bool = False,
     ) -> None:
         if model != MANIFEST_AUTO_MODEL:
             raise ManifestConfigError(
@@ -559,11 +571,18 @@ class ManifestAutoBenchmarkLLM(ManifestBenchmarkLLM):
             max_live_calls=max_live_calls,
             call_counter=call_counter,
         )
+        if type(stop_on_http_429) is not bool:
+            raise ManifestConfigError("stop_on_http_429 must be a boolean")
+        self._stop_on_http_429 = stop_on_http_429
+        if type(stop_on_invalid_output) is not bool:
+            raise ManifestConfigError("stop_on_invalid_output must be a boolean")
+        self._stop_on_invalid_output = stop_on_invalid_output
         self.name = "manifest_auto_benchmark"
         # Drained by TimingProvider after each entity/relation request.
         # JSON correction can add two identities for one phase request.
         self.reported_models: list[str] = []
         self.last_terminal_transport_error: ManifestTerminalTransportError | None = None
+        self.last_terminal_invalid_output: ManifestTerminalInvalidOutput | None = None
 
     def _charge_live(self) -> None:
         # Clears stale transient state before each distinct POST attempt;
@@ -575,9 +594,38 @@ class ManifestAutoBenchmarkLLM(ManifestBenchmarkLLM):
         try:
             return super()._request(payload)
         except ProviderTransportError as exc:
+            if self._stop_on_http_429 and exc.status == 429:
+                rebuilt = ProviderTransportError(transient=False, status=exc.status, cause=exc.cause)
+                rebuilt.__cause__ = exc.__cause__
+                rebuilt.__suppress_context__ = exc.__suppress_context__
+                exc = rebuilt
             wrapped = ManifestTerminalTransportError(exc)
             self.last_terminal_transport_error = wrapped
             raise wrapped from exc
+
+    def generate_json(
+        self,
+        system: str,
+        user: str,
+        schema: dict,
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 0.0,
+    ) -> tuple[dict, Usage]:
+        try:
+            return super().generate_json(
+                system,
+                user,
+                schema,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+        except (LLMValidationError, ValueError):
+            if not self._stop_on_invalid_output:
+                raise
+            terminal = ManifestTerminalInvalidOutput()
+            self.last_terminal_invalid_output = terminal
+            raise terminal
 
     def _parse_response(self, body: Mapping[str, Any]) -> tuple[str, Usage, str]:
         # Deliberately no Terra/fixed-model equality check: Manifest owns

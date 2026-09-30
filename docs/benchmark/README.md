@@ -191,6 +191,132 @@ The evaluator never assigns gold labels and never computes
 precision/recall; a human review pass is required for scientific
 correctness.
 
+### 8. Controlled two-problem-chunk recording and offline diagnosis
+
+The recording CLI keeps the original two smoke chunks when `--chunk-id` is
+omitted. An explicit selection must contain **each** of
+`c_ca129edd34052284` and `c_8a84177f479aea1f` exactly once; either order is
+accepted and retained. Other IDs, duplicates, subsets and dataset drift fail
+before HTTP. Even `--dataset` pointing elsewhere must contain the same frozen
+dataset bytes with SHA-256
+`38182c6cdbb9f86abc6ce20ece7a3d9e1cb69ccac2576e2d6274e727c2f84985`.
+
+`recording.json` embeds `selection.source`, `selection.dataset_sha256` and
+ordered `selection.chunk_ids`; `settings.chunk_ids` and the checksummed input
+snapshot must agree. The dataset digest identifies the **whole** frozen
+dataset, not the selected two-row snapshot. Replay verifies both identities.
+
+Use the same Python environment for recording and replay: dependency versions
+and implementation file hashes are frozen. On the Ubuntu workstation the
+existing environment below contains the required packages; no installation or
+download is required. Run A, B and C in the same Bash shell:
+
+```bash
+cd /home/immo/migration-incoming/model-benchmark-exp
+PY=/home/immo/projects/knowledge_graph_rag/.venv/bin/python
+EXP=scripts/experiments/two_chunk_20260930T120000Z
+umask 077
+RUN_ROOT=$(mktemp -d "$HOME/manifest-two-chunk.XXXXXXXX")
+printf 'Private experiment root: %s\n' "$RUN_ROOT"
+```
+
+**A — offline preflight and focused tests (no key needed):**
+
+```bash
+env -u MANIFEST_API_KEY PYTHONPATH=. "$PY" "$EXP/record_two_chunk.py" \
+  --recordings-root "$RUN_ROOT" --run-id preflight \
+  --allow-manifest-calls 4
+env -u MANIFEST_API_KEY PYTHONPATH=. "$PY" -m pytest -q \
+  tests/benchmark tests/providers/test_manifest_benchmark_adapter.py \
+  tests/test_extract_v2_pipeline.py tests/test_extract_align.py \
+  tests/test_experimental_quote_repair.py tests/test_quote_repair_comparison.py
+```
+
+Preflight verifies dataset, chunk selection, ontology, prompt artifacts,
+schemas and recording dependency identity. It creates only private
+`preflight/preflight.json`, with zero POSTs; never a fake `recording.json`.
+The tests use technical mock transport responses, not scientific gold labels.
+
+**B — explicitly enabled live recording, at most four actual POST attempts:**
+
+```bash
+read -rsp 'MANIFEST_API_KEY: ' MANIFEST_API_KEY; printf '\n'
+export MANIFEST_API_KEY
+if PYTHONPATH=. "$PY" scripts/benchmark/manifest_recording.py record \
+  --live --allow-manifest-calls 4 \
+  --chunk-id c_ca129edd34052284 \
+  --chunk-id c_8a84177f479aea1f \
+  --output-dir "$RUN_ROOT/recording"; then
+  LIVE_RC=0
+else
+  LIVE_RC=$?
+fi
+unset MANIFEST_API_KEY
+printf 'Recording exit code: %s\n' "$LIVE_RC"
+```
+
+The dedicated runner also supports `--live --recordings-root "$RUN_ROOT"
+--run-id recording --allow-manifest-calls 4` and fixes the same ordered pair.
+Do **not** run both live commands: each invocation has its own budget. No
+automatic retry, resume or cache exists between invocations.
+
+New recordings freeze their stop policy: the first HTTP 429 stops immediately;
+other eligible transport retries and one JSON-correction attempt share the
+four-POST budget. The owned HTTP transport has zero hidden retries and no
+redirects. Exhausted corrective/schema-invalid output stops as `incomplete`.
+A nonzero result or incomplete chunk count is never labelled `complete`.
+Canonical V2 validation, evidence alignment and entity IDs are unchanged.
+
+Recording exit codes: `0` complete; `1` validation/setup/integrity failure;
+`2` CLI misuse; `3` POST budget exhausted; `4` incomplete/other terminal run;
+`5` HTTP 429. Partial raw attempts and available canonical artifacts are kept;
+do not rerun automatically after a nonzero exit. A secret-bearing response is
+never persisted, and an incomplete durable attempt cannot be replayed.
+
+**C — offline exact replay, isolated whitespace comparison and DPR diagnosis:**
+
+```bash
+env -u MANIFEST_API_KEY PYTHONPATH=. "$PY" "$EXP/compare_v2_whitespace.py" \
+  --recording-dir "$RUN_ROOT/recording" \
+  --output-dir "$RUN_ROOT/replay"
+```
+
+This command consumes an existing verified recording; it never generates
+model responses. Outputs:
+
+* `replay/extractions.jsonl`, `replay/extractions.rejects.jsonl` and
+  `replay/replay_report.json`: exact canonical V2 replay and byte/hash proof.
+* `replay/whitespace_comparison/`: separate `experimental-whitespace-v1`
+  artifacts and `comparison.json`, using the identical HTTP attempt stream.
+* `replay/dpr_diagnostic.json` and `replay/dpr_diagnostic.md`: both arms'
+  mentions/spans, literal occurrences, raw referenced IDs, relation quotes,
+  rejected candidates and quote containment. Textual alternatives are
+  displayed, **never assigned** to an entity.
+
+For separate replay and diagnosis commands instead of C:
+
+```bash
+env -u MANIFEST_API_KEY PYTHONPATH=. "$PY" scripts/benchmark/manifest_recording.py replay \
+  --recording-dir "$RUN_ROOT/recording" --output-dir "$RUN_ROOT/replay-separate" \
+  --compare-whitespace
+env -u MANIFEST_API_KEY PYTHONPATH=. "$PY" "$EXP/diagnose_dpr.py" \
+  --recording-dir "$RUN_ROOT/recording" --replay-dir "$RUN_ROOT/replay-separate"
+```
+
+`matched` means faithful replay, **not** a successful original extraction.
+Comparison and diagnosis retain `source_recording.status` and `complete`;
+missing phases remain missing. Interrupted, missing or tampered raw data fails
+closed. All recording/report paths are outside every Git tree, reject symlink
+components, and use private files. Replay/comparison require fresh directories;
+diagnosis cannot write into its source recording. Historical recordings and
+results are not rewritten: replay of an older implementation requires that
+older code and recorded environment.
+
+Development verification used socket-blocked Python processes and mock HTTP
+only. The broader historical provenance test also requires the existing local
+`data/raw/latex/2007.00808.tar.gz`; it is not fetched or manufactured.
+
+
 ## Safety and cost constraints
 
 * **Default mode is strictly offline.** The runner only makes a
