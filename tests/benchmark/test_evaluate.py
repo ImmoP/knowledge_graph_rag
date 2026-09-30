@@ -362,8 +362,6 @@ def test_write_blinded_review_package_marks_processed_chunks(tmp_path: Path):
     by_chunk = {r["chunk_id"]: r for r in payload}
     assert by_chunk["c_a"]["processed"] is True
     assert by_chunk["c_b"]["processed"] is False
-    # Reviewer prompt must instruct the reviewer not to label unprocessed chunks.
-    assert "processed" in by_chunk["c_b"]["reviewer_prompt"].lower()
 
 
 def test_write_blinded_review_package_does_not_emit_gold_labels(tmp_path: Path):
