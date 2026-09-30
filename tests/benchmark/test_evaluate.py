@@ -443,3 +443,82 @@ def test_evaluate_cli_dry_runs(tmp_path: Path):
     assert (out / "metrics_manifest.json").is_file()
     assert (out / "review_records.jsonl").is_file()
     assert (out / "review_key.json").is_file()
+
+
+def test_compute_metrics_separate_bucket_counters(tmp_path: Path):
+    """New counters split the existing chunks_complete field into four buckets."""
+    # Chunk a: complete with records (1 mention + 1 assertion)
+    # Chunk b: complete but empty (no records, no rejects)
+    # Chunk c: incomplete with records (1 mention) and 2 rejects
+    run = _write_run(
+        tmp_path / "r1", "r1",
+        mentions=[
+            _sample_mention("c_a", "m_a1"),
+            _sample_mention("c_c", "m_c1"),
+        ],
+        asserts=[_sample_assertion("c_a", "a_a1")],
+        chunk_statuses=[
+            _sample_status("c_a", complete=True),
+            _sample_status("c_b", complete=True),
+            _sample_status("c_c", complete=False),
+        ],
+        rejects=[
+            _sample_reject("c_a", "schema"),
+            _sample_reject("c_c", "alignment", phase="relation"),
+            _sample_reject("c_c", "ontology", phase="entity"),
+        ],
+    )
+    m = compute_metrics(
+        output_jsonl=run / "extractions.jsonl",
+        output_rejects=run / "extractions.rejects.jsonl",
+        metrics_path=run / "metrics.jsonl",
+        provider_name="stub",
+        requested_model="stub-1",
+        reported_model="stub-1",
+        dataset_sha256="deadbeef",
+    )
+    # Existing fields remain unchanged in meaning.
+    assert m.chunks_total == 3
+    assert m.chunks_complete == 2  # c_a, c_b
+    assert m.mentions_accepted == 2
+    assert m.assertions_accepted == 1
+    assert m.candidates_rejected == 3
+    # New counters separate complete-with-records, complete-empty, and incomplete-partial.
+    assert m.chunks_complete_with_accepted_records == 1  # c_a only
+    assert m.chunks_complete_empty == 1  # c_b only
+    assert m.chunks_incomplete_partial == 1  # c_c only
+    # Reject aggregation
+    assert dict(m.rejects_by_phase) == {"entity": 2, "relation": 1}
+    assert dict(m.rejects_by_phase_and_reason) == {
+        "entity/ontology error": 1,
+        "entity/schema error": 1,
+        "relation/alignment error": 1,
+    }
+    # JSON round-trip preserves the new fields.
+    d = metrics_to_dict(m)
+    assert "chunks_complete_with_accepted_records" in d
+    assert "chunks_complete_empty" in d
+    assert "chunks_incomplete_partial" in d
+    assert "rejects_by_phase" in d
+    assert "rejects_by_phase_and_reason" in d
+    assert json.dumps(d)  # serialisable
+
+
+def test_compute_metrics_counters_zero_when_no_runs(tmp_path: Path):
+    """Empty JSONL files produce all-zero new counters and no rejects."""
+    run = _write_run(tmp_path / "r1", "r1")
+    m = compute_metrics(
+        output_jsonl=run / "extractions.jsonl",
+        output_rejects=run / "extractions.rejects.jsonl",
+        metrics_path=None,
+        provider_name="stub",
+        requested_model="stub-1",
+        reported_model="stub-1",
+        dataset_sha256="deadbeef",
+    )
+    assert m.chunks_total == 0
+    assert m.chunks_complete_with_accepted_records == 0
+    assert m.chunks_complete_empty == 0
+    assert m.chunks_incomplete_partial == 0
+    assert dict(m.rejects_by_phase) == {}
+    assert dict(m.rejects_by_phase_and_reason) == {}

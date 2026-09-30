@@ -1,0 +1,608 @@
+{
+  "chunk_summaries": [
+    {
+      "bucket": "complete_empty",
+      "chunk_id": "c_7fdad3ec8f3e783b",
+      "doc_id": "W3120014137",
+      "entity_attempts": 1,
+      "entity_mentions": 0,
+      "entity_reject_count": 0,
+      "extraction_complete": true,
+      "reject_reasons": [],
+      "relation_assertions": 0,
+      "relation_attempts": 1,
+      "relation_reject_count": 0,
+      "section_path": [
+        "Method",
+        "Passage Reranking"
+      ]
+    },
+    {
+      "bucket": "incomplete_partial",
+      "chunk_id": "c_6914ed3f4c5362fb",
+      "doc_id": "W2949615363",
+      "entity_attempts": 1,
+      "entity_mentions": 2,
+      "entity_reject_count": 0,
+      "extraction_complete": false,
+      "reject_reasons": [
+        "ENDPOINT_NOT_CONTAINED"
+      ],
+      "relation_assertions": 1,
+      "relation_attempts": 1,
+      "relation_reject_count": 1,
+      "section_path": [
+        "Models",
+        "Neural Network Models"
+      ]
+    },
+    {
+      "bucket": "incomplete_partial",
+      "chunk_id": "c_ca129edd34052284",
+      "doc_id": "W2949615363",
+      "entity_attempts": 1,
+      "entity_mentions": 2,
+      "entity_reject_count": 0,
+      "extraction_complete": false,
+      "reject_reasons": [
+        "ZERO_OCCURRENCES"
+      ],
+      "relation_assertions": 1,
+      "relation_attempts": 1,
+      "relation_reject_count": 1,
+      "section_path": [
+        "Empirical Evaluation"
+      ]
+    },
+    {
+      "bucket": "complete_empty",
+      "chunk_id": "c_2a9f84f5fe0ce2ce",
+      "doc_id": "W2955868579",
+      "entity_attempts": 1,
+      "entity_mentions": 0,
+      "entity_reject_count": 0,
+      "extraction_complete": true,
+      "reject_reasons": [],
+      "relation_assertions": 0,
+      "relation_attempts": 1,
+      "relation_reject_count": 0,
+      "section_path": [
+        "Deep-Learning-Based Methods",
+        "Typical Deep-Learning Methods"
+      ]
+    },
+    {
+      "bucket": "incomplete_partial",
+      "chunk_id": "c_9c4a6e0f2cab05e3",
+      "doc_id": "W3214049768",
+      "entity_attempts": 1,
+      "entity_mentions": 2,
+      "entity_reject_count": 2,
+      "extraction_complete": false,
+      "reject_reasons": [
+        "INVALID_OCCURRENCE_INDEX"
+      ],
+      "relation_assertions": 0,
+      "relation_attempts": 1,
+      "relation_reject_count": 0,
+      "section_path": [
+        "Conclusion"
+      ]
+    },
+    {
+      "bucket": "incomplete_partial",
+      "chunk_id": "c_8a84177f479aea1f",
+      "doc_id": "W3120014137",
+      "entity_attempts": 1,
+      "entity_mentions": 3,
+      "entity_reject_count": 0,
+      "extraction_complete": false,
+      "reject_reasons": [
+        "ENDPOINT_NOT_CONTAINED"
+      ],
+      "relation_assertions": 2,
+      "relation_attempts": 1,
+      "relation_reject_count": 1,
+      "section_path": [
+        "Experiment Results",
+        "Runtime Efficiency"
+      ]
+    },
+    {
+      "bucket": "complete_empty",
+      "chunk_id": "c_c0de5074475c9c0f",
+      "doc_id": "W3119866685",
+      "entity_attempts": 1,
+      "entity_mentions": 0,
+      "entity_reject_count": 0,
+      "extraction_complete": true,
+      "reject_reasons": [],
+      "relation_assertions": 0,
+      "relation_attempts": 1,
+      "relation_reject_count": 0,
+      "section_path": [
+        "Designing Models with Data, Model, and Expert-Parallelism",
+        "Data Parallelism"
+      ]
+    },
+    {
+      "bucket": "complete_empty",
+      "chunk_id": "c_61090bb37bc1e7a9",
+      "doc_id": "W3119866685",
+      "entity_attempts": 1,
+      "entity_mentions": 0,
+      "entity_reject_count": 0,
+      "extraction_complete": true,
+      "reject_reasons": [],
+      "relation_assertions": 0,
+      "relation_attempts": 1,
+      "relation_reject_count": 0,
+      "section_path": [
+        "Pseudo Code for Switch Transformers"
+      ]
+    },
+    {
+      "bucket": "incomplete_partial",
+      "chunk_id": "c_abdfc58c76ee1139",
+      "doc_id": "W2955868579",
+      "entity_attempts": 1,
+      "entity_mentions": 4,
+      "entity_reject_count": 2,
+      "extraction_complete": false,
+      "reject_reasons": [
+        "INVALID_OCCURRENCE_INDEX"
+      ],
+      "relation_assertions": 5,
+      "relation_attempts": 1,
+      "relation_reject_count": 0,
+      "section_path": [
+        "New Trends",
+        "Multi-Passage Machine Reading Comprehension"
+      ]
+    },
+    {
+      "bucket": "complete_empty",
+      "chunk_id": "c_d285f0a62ff9479b",
+      "doc_id": "W3022373106",
+      "entity_attempts": 1,
+      "entity_mentions": 0,
+      "entity_reject_count": 0,
+      "extraction_complete": true,
+      "reject_reasons": [],
+      "relation_assertions": 0,
+      "relation_attempts": 1,
+      "relation_reject_count": 0,
+      "section_path": [
+        "Proposed Method",
+        "Residual-based Learning"
+      ]
+    }
+  ],
+  "confirmed_causes": [
+    {
+      "chunk_id": "c_6914ed3f4c5362fb",
+      "evidence_quote_present": true,
+      "evidence_quote_span": [
+        165,
+        279
+      ],
+      "kind": "endpoint_outside_evidence",
+      "offending_endpoint": "subject_ref",
+      "phase": "relation",
+      "reason": "ENDPOINT_NOT_CONTAINED"
+    },
+    {
+      "chunk_id": "c_ca129edd34052284",
+      "divergence_is_pure_whitespace": true,
+      "kind": "quote_not_in_chunk",
+      "literal": "with the Attentive and Impatient Readers performing best across both datasets.",
+      "phase": "relation",
+      "reason": "ZERO_OCCURRENCES",
+      "repair_status": "repaired",
+      "repaired_span": [
+        1201,
+        1279
+      ]
+    },
+    {
+      "chunk_id": "c_8a84177f479aea1f",
+      "evidence_quote_present": true,
+      "evidence_quote_span": [
+        258,
+        312
+      ],
+      "kind": "endpoint_outside_evidence",
+      "offending_endpoint": "object_ref",
+      "phase": "relation",
+      "reason": "ENDPOINT_NOT_CONTAINED"
+    }
+  ],
+  "counters": {
+    "n_chunks_complete_empty": 5,
+    "n_chunks_complete_with_records": 0,
+    "n_chunks_incomplete_partial": 5,
+    "n_chunks_total": 10,
+    "n_rejects_total": 7,
+    "rejects_by_phase": {
+      "entity": 4,
+      "relation": 3
+    },
+    "rejects_by_phase_and_reason": {
+      "entity/INVALID_OCCURRENCE_INDEX": 4,
+      "relation/ENDPOINT_NOT_CONTAINED": 2,
+      "relation/ZERO_OCCURRENCES": 1
+    }
+  },
+  "diagnosis_version": "manifest-auto-offline/v1",
+  "empty_chunk_excerpts": [
+    {
+      "assessment": "Manuell heuristisch, nicht wissenschaftlich bestätigt: Chunk ist technisch vollständig (kein Reject, keine akzeptierte Mention/Assertion); das Modell hat im Entity-Schritt keinen Datensatz/Methode/Task emittiert und im Relations-Schritt keine Relation. Inhaltlich könnten extrahierbare Erwähnungen vorhanden sein — eine belastbare Aussage erfordert eine verblindete Fachbewertung oder ein Gold Set.",
+      "char_length": 1448,
+      "chunk_id": "c_7fdad3ec8f3e783b",
+      "doc_id": "W3120014137",
+      "excerpt_head": "Given an initially retrieved passage list $\\mathbf{R}$ and top-N predictions of the reader $\\mathbf{A}^{[:N]}$, \\ours forms a reranked passage list $\\mathbf{R'}$ as follows.\n\\ours scans $\\mathbf{R}$ from the beginning of the list and appends to $\\mathbf{R'}$ every passage $p \\in \\mathbf{R}$ if $p$ contains any reader prediction $a \\in \\mathbf{A}^{[:N]}$ after string normalization (removing articles and punctuation) and tokenization. Then, the remaining passages are appended to $\\mathbf{R'}$ according to their original order.\n\nIntuitively, if the reader prediction is perfect, the retrieval accu",
+      "heuristic_surface_candidates": [],
+      "section_path": [
+        "Method",
+        "Passage Reranking"
+      ]
+    },
+    {
+      "assessment": "Manuell heuristisch, nicht wissenschaftlich bestätigt: Chunk ist technisch vollständig (kein Reject, keine akzeptierte Mention/Assertion); das Modell hat im Entity-Schritt keinen Datensatz/Methode/Task emittiert und im Relations-Schritt keine Relation. Inhaltlich könnten extrahierbare Erwähnungen vorhanden sein — eine belastbare Aussage erfordert eine verblindete Fachbewertung oder ein Gold Set.",
+      "char_length": 653,
+      "chunk_id": "c_2a9f84f5fe0ce2ce",
+      "doc_id": "W2955868579",
+      "excerpt_head": "\t\t\t\\makecell[l]{Hierarchical Attention Flow\\\\ (Zhu et al. 2018) [[CITE:zhu2018hierarchical]]}&Conventional&RNN&\\makecell[c]{Bidirectional\\\\One-Hop}&\\makecell[c]{Option\\\\ Selector}\\\\\n\t\t\t\\midrule\n\t\t\t\\makecell[l]{ELMo + improved Bi-DAF\\\\ (Peters et al. 2018) [[CITE:peters2018deep]]}& Contextual & RNN &\\makecell[c]{Bidirectional\\\\One-Hop}&\\makecell[c]{ Span\\\\ Extractor}\\\\\n\t\t\t\\midrule\n\t\t\tGPT (Radford et al. 2018)[[CITE:radford2018improving]]& Contextual&/ &/ &\\makecell[c]{Option\\\\ Selector}\\\\\n\t\t\t\\midrule\n\t\t\tBERT (Devlin et al. 2018) [[CITE:devlin2019bert]]& Contextual&/ &/ &\\makecell[c]{Span\\\\ Extr",
+      "heuristic_surface_candidates": [
+        "CITE",
+        "RNN",
+        "DAF",
+        "GPT",
+        "BERT",
+        "Hierarchical Attention Flow",
+        "One-Hop",
+        "Bi-DAF"
+      ],
+      "section_path": [
+        "Deep-Learning-Based Methods",
+        "Typical Deep-Learning Methods"
+      ]
+    },
+    {
+      "assessment": "Manuell heuristisch, nicht wissenschaftlich bestätigt: Chunk ist technisch vollständig (kein Reject, keine akzeptierte Mention/Assertion); das Modell hat im Entity-Schritt keinen Datensatz/Methode/Task emittiert und im Relations-Schritt keine Relation. Inhaltlich könnten extrahierbare Erwähnungen vorhanden sein — eine belastbare Aussage erfordert eine verblindete Fachbewertung oder ein Gold Set.",
+      "char_length": 411,
+      "chunk_id": "c_c0de5074475c9c0f",
+      "doc_id": "W3119866685",
+      "excerpt_head": "When training data parallel models, which is the standard for distributed training, then all cores are allocated to the data-parallel dimension or $n = N, m = 1$.\nThis has the advantage that no communication is needed until the entire forward and backward pass is finished and the gradients need to be then aggregated across all cores. \nThis corresponds to the left-most column of Figure \\ref{fig:core_layouts}.",
+      "heuristic_surface_candidates": [],
+      "section_path": [
+        "Designing Models with Data, Model, and Expert-Parallelism",
+        "Data Parallelism"
+      ]
+    },
+    {
+      "assessment": "Manuell heuristisch, nicht wissenschaftlich bestätigt: Chunk ist technisch vollständig (kein Reject, keine akzeptierte Mention/Assertion); das Modell hat im Entity-Schritt keinen Datensatz/Methode/Task emittiert und im Relations-Schritt keine Relation. Inhaltlich könnten extrahierbare Erwähnungen vorhanden sein — eine belastbare Aussage erfordert eine verblindete Fachbewertung oder ein Gold Set.",
+      "char_length": 162,
+      "chunk_id": "c_61090bb37bc1e7a9",
+      "doc_id": "W3119866685",
+      "excerpt_head": "\n\\end{lstlisting}\n\\caption{Pseudo code of the Switch Transformer layer in Mesh Tensorflow.}\n\\end{figure}\n\n\n\\clearpage\n\\bibliography{references}\n\n\n\\end{document}\n\n",
+      "heuristic_surface_candidates": [
+        "Switch Transformer",
+        "Mesh Tensorflow"
+      ],
+      "section_path": [
+        "Pseudo Code for Switch Transformers"
+      ]
+    },
+    {
+      "assessment": "Manuell heuristisch, nicht wissenschaftlich bestätigt: Chunk ist technisch vollständig (kein Reject, keine akzeptierte Mention/Assertion); das Modell hat im Entity-Schritt keinen Datensatz/Methode/Task emittiert und im Relations-Schritt keine Relation. Inhaltlich könnten extrahierbare Erwähnungen vorhanden sein — eine belastbare Aussage erfordert eine verblindete Fachbewertung oder ein Gold Set.",
+      "char_length": 206,
+      "chunk_id": "c_d285f0a62ff9479b",
+      "doc_id": "W3022373106",
+      "excerpt_head": "\nThrough the course of training, the neural model learns to encode the semantic patterns that are not captured by text surface forms. When training finishes, the two models will  work together, as \\CLEAR.\n\n",
+      "heuristic_surface_candidates": [
+        "CLEAR"
+      ],
+      "section_path": [
+        "Proposed Method",
+        "Residual-based Learning"
+      ]
+    }
+  ],
+  "generated_utc": "20260930T091300Z",
+  "hypotheses": [
+    {
+      "chunk_id": "c_9c4a6e0f2cab05e3",
+      "kind": "occurrence_index_invalid",
+      "note": "Belegbar: das Modell hat einen occurrence_index emittiert, der nicht in das Enumeratorergebnis des betroffenen surface_form passt. Hypothese: ohne gespeicherte Rohantwort ist nicht entscheidbar, ob falsche Nummerierung (z. B. 1-basiert statt 0-basiert) oder mehrfach vorkommender Text die Ursache ist. Die Rohantworten sind im Run-Output leer (raw_responses/ ist nicht befüllt worden); eine Anfrage an die Rohantwort ist außerhalb dieses Offline-Auftrags.",
+      "phase": "entity",
+      "reason": "INVALID_OCCURRENCE_INDEX"
+    },
+    {
+      "chunk_id": "c_9c4a6e0f2cab05e3",
+      "kind": "occurrence_index_invalid",
+      "note": "Belegbar: das Modell hat einen occurrence_index emittiert, der nicht in das Enumeratorergebnis des betroffenen surface_form passt. Hypothese: ohne gespeicherte Rohantwort ist nicht entscheidbar, ob falsche Nummerierung (z. B. 1-basiert statt 0-basiert) oder mehrfach vorkommender Text die Ursache ist. Die Rohantworten sind im Run-Output leer (raw_responses/ ist nicht befüllt worden); eine Anfrage an die Rohantwort ist außerhalb dieses Offline-Auftrags.",
+      "phase": "entity",
+      "reason": "INVALID_OCCURRENCE_INDEX"
+    },
+    {
+      "chunk_id": "c_abdfc58c76ee1139",
+      "kind": "occurrence_index_invalid",
+      "note": "Belegbar: das Modell hat einen occurrence_index emittiert, der nicht in das Enumeratorergebnis des betroffenen surface_form passt. Hypothese: ohne gespeicherte Rohantwort ist nicht entscheidbar, ob falsche Nummerierung (z. B. 1-basiert statt 0-basiert) oder mehrfach vorkommender Text die Ursache ist. Die Rohantworten sind im Run-Output leer (raw_responses/ ist nicht befüllt worden); eine Anfrage an die Rohantwort ist außerhalb dieses Offline-Auftrags.",
+      "phase": "entity",
+      "reason": "INVALID_OCCURRENCE_INDEX"
+    },
+    {
+      "chunk_id": "c_abdfc58c76ee1139",
+      "kind": "occurrence_index_invalid",
+      "note": "Belegbar: das Modell hat einen occurrence_index emittiert, der nicht in das Enumeratorergebnis des betroffenen surface_form passt. Hypothese: ohne gespeicherte Rohantwort ist nicht entscheidbar, ob falsche Nummerierung (z. B. 1-basiert statt 0-basiert) oder mehrfach vorkommender Text die Ursache ist. Die Rohantworten sind im Run-Output leer (raw_responses/ ist nicht befüllt worden); eine Anfrage an die Rohantwort ist außerhalb dieses Offline-Auftrags.",
+      "phase": "entity",
+      "reason": "INVALID_OCCURRENCE_INDEX"
+    }
+  ],
+  "minimal_fixes": [
+    {
+      "chunk_id": "c_ca129edd34052284",
+      "minimal_change": "Opt-in Whitespace-Reparatur über src/extract/experimental_quote_repair.repair_quote anwenden. Rekonstruktionsspan in der Diagnose vermerkt; danach greift die unveränderte V2-Validierung. Wissenschaftliche Bewertung bleibt offen.",
+      "phase": "relation",
+      "repaired_span": [
+        1201,
+        1279
+      ],
+      "type": "experimental_quote_repair"
+    },
+    {
+      "chunk_id": "c_6914ed3f4c5362fb",
+      "minimal_change": "Entweder den gewählten Beleg so erweitern, dass das Endpoint vollständig enthalten ist, oder die Relation verwerfen. Wissenschaftliche Tragfähigkeit muss extern bewertet werden.",
+      "phase": "relation",
+      "type": "endpoint_relax_or_drop"
+    },
+    {
+      "chunk_id": "c_8a84177f479aea1f",
+      "minimal_change": "Entweder den gewählten Beleg so erweitern, dass das Endpoint vollständig enthalten ist, oder die Relation verwerfen. Wissenschaftliche Tragfähigkeit muss extern bewertet werden.",
+      "phase": "relation",
+      "type": "endpoint_relax_or_drop"
+    },
+    {
+      "chunk_id": "c_9c4a6e0f2cab05e3",
+      "minimal_change": "Belege aus dem Run sichern (Rohantworten) und offline mit dem unveränderten V2-Aligner gegenprüfen. Erst danach entscheiden, ob die Indizierung semantisch korrigiert (z. B. 0- vs. 1-basiert) oder der Modell-Output gefiltert werden muss. Außerhalb dieses Offline-Auftrags.",
+      "phase": "entity",
+      "type": "occurrence_index_semantics"
+    },
+    {
+      "chunk_id": "c_9c4a6e0f2cab05e3",
+      "minimal_change": "Belege aus dem Run sichern (Rohantworten) und offline mit dem unveränderten V2-Aligner gegenprüfen. Erst danach entscheiden, ob die Indizierung semantisch korrigiert (z. B. 0- vs. 1-basiert) oder der Modell-Output gefiltert werden muss. Außerhalb dieses Offline-Auftrags.",
+      "phase": "entity",
+      "type": "occurrence_index_semantics"
+    },
+    {
+      "chunk_id": "c_abdfc58c76ee1139",
+      "minimal_change": "Belege aus dem Run sichern (Rohantworten) und offline mit dem unveränderten V2-Aligner gegenprüfen. Erst danach entscheiden, ob die Indizierung semantisch korrigiert (z. B. 0- vs. 1-basiert) oder der Modell-Output gefiltert werden muss. Außerhalb dieses Offline-Auftrags.",
+      "phase": "entity",
+      "type": "occurrence_index_semantics"
+    },
+    {
+      "chunk_id": "c_abdfc58c76ee1139",
+      "minimal_change": "Belege aus dem Run sichern (Rohantworten) und offline mit dem unveränderten V2-Aligner gegenprüfen. Erst danach entscheiden, ob die Indizierung semantisch korrigiert (z. B. 0- vs. 1-basiert) oder der Modell-Output gefiltert werden muss. Außerhalb dieses Offline-Auftrags.",
+      "phase": "entity",
+      "type": "occurrence_index_semantics"
+    }
+  ],
+  "reject_details": [
+    {
+      "chunk_id": "c_6914ed3f4c5362fb",
+      "chunk_text_excerpt": "\\paragraph{The Impatient Reader} The Attentive Reader is able to focus on the passages of a context document that are most likely to inform the answer to the query. We can go further by equipping the model with the ability to reread from the document as each query token is read. At each token $i$ of the query $q$ ...",
+      "diagnostic": {
+        "evidence_quote": "We can go further by\nequipping the model with the ability to reread from the document as each query\ntoken is read.",
+        "exact_quote_present": true,
+        "exact_quote_span": [
+          165,
+          279
+        ],
+        "object_ref": {
+          "id": "m_00fae178a6bd4bd7",
+          "kind": "mention"
+        },
+        "object_ref_contained_in_evidence": false,
+        "object_ref_resolved_span": [
+          37,
+          53
+        ],
+        "relation_span": [
+          165,
+          279
+        ],
+        "subject_ref": {
+          "id": "m_f262be7dc5fdf7f1",
+          "kind": "mention"
+        },
+        "subject_ref_contained_in_evidence": false,
+        "subject_ref_resolved_span": [
+          15,
+          31
+        ]
+      },
+      "offending_record": {
+        "candidate_id": null,
+        "chunk_id": "c_6914ed3f4c5362fb",
+        "offending_value": {
+          "evidence_quote": "We can go further by\nequipping the model with the ability to reread from the document as each query\ntoken is read.",
+          "object_ref": {
+            "id": "m_00fae178a6bd4bd7",
+            "kind": "mention"
+          },
+          "subject_ref": {
+            "id": "m_f262be7dc5fdf7f1",
+            "kind": "mention"
+          }
+        },
+        "reason": "ENDPOINT_NOT_CONTAINED"
+      },
+      "phase": "relation",
+      "reason": "ENDPOINT_NOT_CONTAINED",
+      "section_path": [
+        "Models",
+        "Neural Network Models"
+      ]
+    },
+    {
+      "chunk_id": "c_ca129edd34052284",
+      "chunk_text_excerpt": "All model hyperparameters were tuned on the respective validation sets of the two corpora.\\footnote{For the Deep LSTM Reader, we consider hidden layer sizes ${[64,128,\\underline{256}]}$, depths ${[1,\\underline{2},4]}$, initial learning rates ${[1\\ee{-}3,5\\ee{-}4,\\underline{1\\ee{-}4},5\\ee{-}5]}$, batch sizes ...",
+      "diagnostic": {
+        "diff_common_prefix": 8,
+        "diff_common_suffix": 69,
+        "diff_diverging_literal": " ",
+        "diff_diverging_original": "\n",
+        "diff_window": "Table \\ref{tab:main_results}, with the\nAttentive and Impatient Readers performing best across both datasets.\n\n\n\n",
+        "divergence_is_pure_whitespace": true,
+        "literal": "with the Attentive and Impatient Readers performing best across both datasets.",
+        "repair_status": "repaired",
+        "repaired_quote": "with the\nAttentive and Impatient Readers performing best across both datasets.",
+        "repaired_span": [
+          1201,
+          1279
+        ]
+      },
+      "offending_literal": "with the Attentive and Impatient Readers performing best across both datasets.",
+      "offending_record": {
+        "candidate_id": null,
+        "chunk_id": "c_ca129edd34052284",
+        "offending_value": "with the Attentive and Impatient Readers performing best across both datasets.",
+        "reason": "ZERO_OCCURRENCES"
+      },
+      "phase": "relation",
+      "reason": "ZERO_OCCURRENCES",
+      "section_path": [
+        "Empirical Evaluation"
+      ]
+    },
+    {
+      "chunk_id": "c_9c4a6e0f2cab05e3",
+      "chunk_text_excerpt": "In this review, we focused on the recent advances in biomedical question answering. We provided a review of general domain question answering using knowledge bases, texts or both, before moving on to biomedical question answering systems. We explored current state of the art biomedical QA systems and discussed ...",
+      "diagnostic": {
+        "note": "Entity-phase INVALID_OCCURRENCE_INDEX; raw model response is not persisted in this run, so the offending literal is recoverable only by re-running the cached response through the aligner. Offending value (occurrence_index field) is 1; the model emitted an index that does not address a valid occurrence of its surface_form in chunk_text."
+      },
+      "offending_record": {
+        "candidate_id": null,
+        "chunk_id": "c_9c4a6e0f2cab05e3",
+        "offending_value": 1,
+        "reason": "INVALID_OCCURRENCE_INDEX"
+      },
+      "phase": "entity",
+      "reason": "INVALID_OCCURRENCE_INDEX",
+      "section_path": [
+        "Conclusion"
+      ]
+    },
+    {
+      "chunk_id": "c_9c4a6e0f2cab05e3",
+      "chunk_text_excerpt": "In this review, we focused on the recent advances in biomedical question answering. We provided a review of general domain question answering using knowledge bases, texts or both, before moving on to biomedical question answering systems. We explored current state of the art biomedical QA systems and discussed ...",
+      "diagnostic": {
+        "note": "Entity-phase INVALID_OCCURRENCE_INDEX; raw model response is not persisted in this run, so the offending literal is recoverable only by re-running the cached response through the aligner. Offending value (occurrence_index field) is 2; the model emitted an index that does not address a valid occurrence of its surface_form in chunk_text."
+      },
+      "offending_record": {
+        "candidate_id": null,
+        "chunk_id": "c_9c4a6e0f2cab05e3",
+        "offending_value": 2,
+        "reason": "INVALID_OCCURRENCE_INDEX"
+      },
+      "phase": "entity",
+      "reason": "INVALID_OCCURRENCE_INDEX",
+      "section_path": [
+        "Conclusion"
+      ]
+    },
+    {
+      "chunk_id": "c_8a84177f479aea1f",
+      "chunk_text_excerpt": "The reranking step of \\ours only involves string processing, which can be easily paralleled and reduced to within seconds. We use Nvidia V100 GPUs for reader training and inference. The training of the generative reader takes 8 to 10 hours with 1 GPU, while it takes 12 to 16 hours with 8 GPUs for the DPR ...",
+      "diagnostic": {
+        "evidence_quote": "it takes 12 to 16 hours with 8 GPUs for the DPR reader",
+        "exact_quote_present": true,
+        "exact_quote_span": [
+          258,
+          312
+        ],
+        "object_ref": {
+          "id": "m_28e70c94eb305208",
+          "kind": "mention"
+        },
+        "object_ref_contained_in_evidence": false,
+        "object_ref_resolved_span": [
+          540,
+          543
+        ],
+        "relation_span": [
+          258,
+          312
+        ],
+        "subject_ref": {
+          "id": "W3120014137",
+          "kind": "document"
+        },
+        "subject_ref_contained_in_evidence": true,
+        "subject_ref_resolved_span": "document"
+      },
+      "offending_record": {
+        "candidate_id": null,
+        "chunk_id": "c_8a84177f479aea1f",
+        "offending_value": {
+          "evidence_quote": "it takes 12 to 16 hours with 8 GPUs for the DPR reader",
+          "object_ref": {
+            "id": "m_28e70c94eb305208",
+            "kind": "mention"
+          },
+          "subject_ref": {
+            "id": "W3120014137",
+            "kind": "document"
+          }
+        },
+        "reason": "ENDPOINT_NOT_CONTAINED"
+      },
+      "phase": "relation",
+      "reason": "ENDPOINT_NOT_CONTAINED",
+      "section_path": [
+        "Experiment Results",
+        "Runtime Efficiency"
+      ]
+    },
+    {
+      "chunk_id": "c_abdfc58c76ee1139",
+      "chunk_text_excerpt": "\\par Compared to MRC tasks, multi-passage MRC is far more challenging. For instance, although the DrQA model [[CITE:chen2017reading]] achieves exact match accuracy of 69.5 on SQuAD, when applied to an open-domain setting (using the whole Wikipedia corpus to answer the question), its performance drops dramatically. ...",
+      "diagnostic": {
+        "note": "Entity-phase INVALID_OCCURRENCE_INDEX; raw model response is not persisted in this run, so the offending literal is recoverable only by re-running the cached response through the aligner. Offending value (occurrence_index field) is None; the model emitted an index that does not address a valid occurrence of its surface_form in chunk_text."
+      },
+      "offending_record": {
+        "candidate_id": null,
+        "chunk_id": "c_abdfc58c76ee1139",
+        "offending_value": null,
+        "reason": "INVALID_OCCURRENCE_INDEX"
+      },
+      "phase": "entity",
+      "reason": "INVALID_OCCURRENCE_INDEX",
+      "section_path": [
+        "New Trends",
+        "Multi-Passage Machine Reading Comprehension"
+      ]
+    },
+    {
+      "chunk_id": "c_abdfc58c76ee1139",
+      "chunk_text_excerpt": "\\par Compared to MRC tasks, multi-passage MRC is far more challenging. For instance, although the DrQA model [[CITE:chen2017reading]] achieves exact match accuracy of 69.5 on SQuAD, when applied to an open-domain setting (using the whole Wikipedia corpus to answer the question), its performance drops dramatically. ...",
+      "diagnostic": {
+        "note": "Entity-phase INVALID_OCCURRENCE_INDEX; raw model response is not persisted in this run, so the offending literal is recoverable only by re-running the cached response through the aligner. Offending value (occurrence_index field) is None; the model emitted an index that does not address a valid occurrence of its surface_form in chunk_text."
+      },
+      "offending_record": {
+        "candidate_id": null,
+        "chunk_id": "c_abdfc58c76ee1139",
+        "offending_value": null,
+        "reason": "INVALID_OCCURRENCE_INDEX"
+      },
+      "phase": "entity",
+      "reason": "INVALID_OCCURRENCE_INDEX",
+      "section_path": [
+        "New Trends",
+        "Multi-Passage Machine Reading Comprehension"
+      ]
+    }
+  ],
+  "run_dir": "/home/immo/migration-incoming/manifest-auto-autopilot-live/20260930T083857Z-c69654"
+}

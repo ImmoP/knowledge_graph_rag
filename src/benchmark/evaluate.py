@@ -58,6 +58,12 @@ class ProviderMetrics:
     chunks_with_relation_ok: int = 0
     mentions_accepted: int = 0
     assertions_accepted: int = 0
+    chunks_complete_with_accepted_records: int = 0
+    chunks_complete_empty: int = 0
+    chunks_incomplete_partial: int = 0
+    rejects_by_phase: tuple[tuple[str, int], ...] = ()
+    rejects_by_phase_and_reason: tuple[tuple[str, int], ...] = ()
+
     candidates_rejected: int = 0
     schema_errors: int = 0
     evidence_errors: int = 0
@@ -176,6 +182,40 @@ def compute_metrics(
     total_duration = sum(call.get("duration_seconds", 0.0) for call in sink)
     total_input_tokens = sum(call.get("input_tokens") or 0 for call in sink)
     total_output_tokens = sum(call.get("output_tokens") or 0 for call in sink)
+    chunks_complete_with_accepted_records = sum(
+        1 for c in per_chunk
+        if c.complete
+        and (
+            c.entity_accepted_mention_count > 0
+            or c.relation_accepted_assertion_count > 0
+        )
+    )
+    chunks_complete_empty = sum(
+        1 for c in per_chunk
+        if c.complete
+        and c.entity_accepted_mention_count == 0
+        and c.relation_accepted_assertion_count == 0
+    )
+    chunks_incomplete_partial = sum(
+        1 for c in per_chunk
+        if not c.complete
+        and (
+            c.entity_accepted_mention_count > 0
+            or c.relation_accepted_assertion_count > 0
+        )
+    )
+    rejects_by_phase_counter: dict[str, int] = {}
+    rejects_by_phase_and_reason_counter: dict[str, int] = {}
+    for recs in reject_index.values():
+        for r in recs:
+            phase = r.get("phase") or "unknown"
+            reason = r.get("reason") or "unknown"
+            rejects_by_phase_counter[phase] = rejects_by_phase_counter.get(phase, 0) + 1
+            key = f"{phase}/{reason}"
+            rejects_by_phase_and_reason_counter[key] = (
+                rejects_by_phase_and_reason_counter.get(key, 0) + 1
+            )
+
 
     return ProviderMetrics(
         provider_name=provider_name,
@@ -189,6 +229,11 @@ def compute_metrics(
         chunks_with_relation_ok=sum(1 for c in per_chunk if c.relation_validation_ok),
         mentions_accepted=total_mentions,
         assertions_accepted=total_assertions,
+        chunks_complete_with_accepted_records=chunks_complete_with_accepted_records,
+        chunks_complete_empty=chunks_complete_empty,
+        chunks_incomplete_partial=chunks_incomplete_partial,
+        rejects_by_phase=tuple(sorted(rejects_by_phase_counter.items())),
+        rejects_by_phase_and_reason=tuple(sorted(rejects_by_phase_and_reason_counter.items())),
         candidates_rejected=candidates_rejected,
         schema_errors=schema_errors,
         evidence_errors=evidence_errors,
