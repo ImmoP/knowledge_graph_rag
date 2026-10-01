@@ -1,0 +1,205 @@
+{
+  "format": "table-extraction-v2-recordings-v1",
+  "provenance": {
+    "audit": "omp-repeat-probe/OFFLINE_AUDIT.md",
+    "dataset": "src/benchmark/dataset/benchmark_chunks.jsonl",
+    "historical_extractions_sha256": "6fa92e307a25fe6a2440e591686e6d901ce5da9b82450583f00c8c68b462404e",
+    "historical_metrics_sha256": "b69194b5b79893733cc534b3966bc7be29bf8882e88cd9200be96ba677342bb4"
+  },
+  "table_chunk": {
+    "chunk_id": "c_2a9f84f5fe0ce2ce",
+    "doc_id": "W2955868579",
+    "source_text_sha256": "52dad8902fe6070da3407674c20d183351e1faf5acd6d62f67cd99318882bc6f",
+    "request_sha256": "df227ff9b98a5b5f9bb2dc9bab93372b2e5c37731e117c1bdd2e0f20356c257e"
+  },
+  "table_recordings": [
+    {
+      "recording_id": "target-01",
+      "source_artifact": "omp-repeat-probe/runs_target/run_01/extractions.jsonl",
+      "source_artifact_sha256": "d3e50a0250412854e532b4d78c9295fb27b44454b4d5e90ff0d2989ee4c736cb",
+      "request_sha256": "df227ff9b98a5b5f9bb2dc9bab93372b2e5c37731e117c1bdd2e0f20356c257e",
+      "response_sha256": "3ed3ce328e8f23f9c7b057b1dfb09fe19e6fc7eec47fedb8543ee900669a5e60",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": [
+        ["method", "Hierarchical Attention Flow", "Hierarchical Attention Flow", 16, 43, "stated"],
+        ["method", "ELMo", "ELMo", 210, 214, "stated"],
+        ["method", "ELMo + improved Bi-DAF", "ELMo + improved Bi-DAF", 210, 232, "stated"],
+        ["method", "improved Bi-DAF", "improved Bi-DAF", 217, 232, "stated"],
+        ["method", "GPT", "GPT", 386, 389, "stated"],
+        ["method", "BERT", "BERT", 508, 512, "stated"]
+      ]
+    },
+    {
+      "recording_id": "target-02",
+      "source_artifact": "omp-repeat-probe/runs_target/run_02/extractions.jsonl",
+      "source_artifact_sha256": "bf6573cad3d211132ad66dc3af77165bd12b50e738e12d4942fe5f2632337bb3",
+      "request_sha256": "df227ff9b98a5b5f9bb2dc9bab93372b2e5c37731e117c1bdd2e0f20356c257e",
+      "response_sha256": "4a0466bb0cfa7ea85956dd8650cd33404d53b24cf08dd99098377e1dc5a47645",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": [
+        ["method", "Hierarchical Attention Flow", "Hierarchical Attention Flow", 16, 43, "stated"],
+        ["method", "ELMo", "ELMo", 210, 214, "stated"],
+        ["method", "ELMo + improved Bi-DAF", "ELMo + improved Bi-DAF", 210, 232, "stated"],
+        ["method", "GPT", "GPT", 386, 389, "stated"],
+        ["method", "BERT", "BERT", 508, 512, "stated"]
+      ]
+    },
+    {
+      "recording_id": "target-03",
+      "source_artifact": "omp-repeat-probe/runs_target/run_03/extractions.jsonl",
+      "source_artifact_sha256": "119f6029067bdf7df27fb407e2ee39c2803fe2be6d18f9889f62fccbbae98b43",
+      "request_sha256": "df227ff9b98a5b5f9bb2dc9bab93372b2e5c37731e117c1bdd2e0f20356c257e",
+      "response_sha256": "6f4704465e7bed617fcf1b8fbce33cb7ab1f859e0a1f7ad72c12979746ccf9e4",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": [
+        ["method", "Hierarchical Attention Flow", "Hierarchical Attention Flow", 16, 43, "stated"],
+        ["method", "ELMo", "ELMo", 210, 214, "stated"],
+        ["method", "ELMo + improved Bi-DAF", "ELMo + improved Bi-DAF", 210, 232, "stated"],
+        ["method", "Bi-DAF", "Bi-DAF", 226, 232, "stated"],
+        ["method", "GPT", "GPT", 386, 389, "stated"],
+        ["method", "BERT", "BERT", 508, 512, "stated"]
+      ]
+    },
+    {
+      "recording_id": "target-04",
+      "source_artifact": "omp-repeat-probe/runs_target/run_04/extractions.jsonl",
+      "source_artifact_sha256": "d85dd20b528dde1fb4e8afacd5624143fe31530d516ed52939559a4d3d46e496",
+      "request_sha256": "df227ff9b98a5b5f9bb2dc9bab93372b2e5c37731e117c1bdd2e0f20356c257e",
+      "response_sha256": "225b31d683274c54ba3d018ac5c1e3f986b20b4b3ebac7dd46c51717f39f2728",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": [
+        ["method", "Hierarchical Attention Flow", "Hierarchical Attention Flow", 16, 43, "stated"],
+        ["method", "ELMo", "ELMo", 210, 214, "stated"],
+        ["method", "ELMo + improved Bi-DAF", "ELMo + improved Bi-DAF", 210, 232, "stated"],
+        ["method", "Bi-DAF", "BiDAF", 226, 232, "stated"],
+        ["method", "GPT", "GPT", 386, 389, "stated"],
+        ["method", "BERT", "BERT", 508, 512, "stated"]
+      ]
+    },
+    {
+      "recording_id": "target-05",
+      "source_artifact": "omp-repeat-probe/runs_target/run_05/extractions.jsonl",
+      "source_artifact_sha256": "bf6573cad3d211132ad66dc3af77165bd12b50e738e12d4942fe5f2632337bb3",
+      "request_sha256": "df227ff9b98a5b5f9bb2dc9bab93372b2e5c37731e117c1bdd2e0f20356c257e",
+      "response_sha256": "9fabe281f784b65e64825489b58be5d72f94a32986b664876e219faa35a85a0b",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": [
+        ["method", "Hierarchical Attention Flow", "Hierarchical Attention Flow", 16, 43, "stated"],
+        ["method", "ELMo", "ELMo", 210, 214, "stated"],
+        ["method", "ELMo + improved Bi-DAF", "ELMo + improved Bi-DAF", 210, 232, "stated"],
+        ["method", "GPT", "GPT", 386, 389, "stated"],
+        ["method", "BERT", "BERT", 508, 512, "stated"]
+      ]
+    }
+  ],
+  "successful_empty_recordings": [
+    {
+      "recording_id": "control-01",
+      "chunk_id": "c_c0de5074475c9c0f",
+      "request_sha256": "ea8cd0d8d0616663d620439633112faa6abe2ce974a3e80ff24ef0a8f938b2e8",
+      "request_identity": "byte_verified",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": []
+    },
+    {
+      "recording_id": "control-02",
+      "chunk_id": "c_c0de5074475c9c0f",
+      "request_sha256": "ea8cd0d8d0616663d620439633112faa6abe2ce974a3e80ff24ef0a8f938b2e8",
+      "request_identity": "byte_verified",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": []
+    },
+    {
+      "recording_id": "control-03",
+      "chunk_id": "c_c0de5074475c9c0f",
+      "request_sha256": "ea8cd0d8d0616663d620439633112faa6abe2ce974a3e80ff24ef0a8f938b2e8",
+      "request_identity": "byte_verified",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": []
+    },
+    {
+      "recording_id": "control-04",
+      "chunk_id": "c_c0de5074475c9c0f",
+      "request_sha256": "ea8cd0d8d0616663d620439633112faa6abe2ce974a3e80ff24ef0a8f938b2e8",
+      "request_identity": "byte_verified",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": []
+    },
+    {
+      "recording_id": "control-05",
+      "chunk_id": "c_c0de5074475c9c0f",
+      "request_sha256": "ea8cd0d8d0616663d620439633112faa6abe2ce974a3e80ff24ef0a8f938b2e8",
+      "request_identity": "byte_verified",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "mentions": []
+    },
+    {
+      "recording_id": "historical-target-empty",
+      "chunk_id": "c_2a9f84f5fe0ce2ce",
+      "request_sha256": null,
+      "request_identity": "not_recorded",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "parsed_ok": true,
+      "reject_count": 0,
+      "attempt_count": 1,
+      "input_tokens": 2144,
+      "output_tokens": 7,
+      "mentions": []
+    }
+  ],
+  "domain_questions": [
+    {
+      "question_id": "compound-entity-status",
+      "question": "Is 'ELMo + improved Bi-DAF' a standalone entity in addition to its nested names?",
+      "status": "unresolved",
+      "automatic_decision": null
+    },
+    {
+      "question_id": "canonical-spelling",
+      "question": "Should the canonical form for surface 'Bi-DAF' be 'Bi-DAF' or 'BiDAF'?",
+      "status": "unresolved",
+      "automatic_decision": null
+    }
+  ]
+}

@@ -50,6 +50,7 @@ raw responses into git.
 | `scripts/benchmark/run_smoke.py` | Two-chunk limited live comparison; refuses without an explicit switch. |
 | `scripts/benchmark/evaluate.py` | Consumes a run directory and emits metrics + blinded review. |
 | `src/providers/adapters/manifest_openai.py` | Experimental adapter for the Manifest gateway. NOT registered in the production provider registry. |
+| `src/benchmark/offline_diagnostics.py` | Optionaler, rein lesender Shadow-Bericht über verifizierte Recording-Artefakte. |
 | `tests/providers/test_manifest_benchmark_adapter.py` | Adapter mock tests (success / 401 / 429 / 503 / schema fail / model-id mismatch / call cap / cache isolation / no-secret-log). |
 | `tests/benchmark/test_dataset.py` | Deterministic selector tests. |
 | `tests/benchmark/test_runner_smoke.py` | Runner and smoke-script tests. |
@@ -292,6 +293,36 @@ model responses. Outputs:
   mentions/spans, literal occurrences, raw referenced IDs, relation quotes,
   rejected candidates and quote containment. Textual alternatives are
   displayed, **never assigned** to an entity.
+
+
+Optional kann derselbe verifizierte Replay-Lauf einen separaten
+Shadow-Diagnosebericht schreiben:
+
+```bash
+env -u MANIFEST_API_KEY PYTHONPATH=. "$PY" scripts/benchmark/manifest_recording.py replay \
+  --recording-dir "$RUN_ROOT/recording" \
+  --output-dir "$RUN_ROOT/replay-with-diagnostics" \
+  --offline-diagnostics
+```
+
+`offline_diagnostics.json` erfasst erfolgreiche Entity-Leerantworten,
+überlappende kanonische Mentions, `canonical_form`-Konflikte sowie die
+Provenienz und SHA-256-Identitäten der verifizierten Inputs, Attempts und
+kanonischen Artefakte. Der Modus erzeugt keine Provider-Aufrufe, plant keine
+Retries und verändert weder Recording noch `extractions.jsonl` oder
+`extractions.rejects.jsonl`. Fehlende oder nicht passende Raw-Antworten führen
+zum Abbruch ohne Diagnosebericht.
+
+**Historische Recordings bleiben an ihre Originalimplementierung
+gebunden.** Replay verifiziert Eingaben, Prompt- und Schema-Snapshots,
+Implementierungs-Hashes und Plattform-Provenienz gegen den im
+Recording-Manifest eingefrorenen Stand. Bei Abweichung schlägt
+`load_recording(...)` mit `RecordingManifestError` fehl. Eine
+automatische Migration auf neue Schema-, Prompt- oder
+Ontologie-Versionen findet **nicht** statt; Anpassungen sind nur
+durch eine neue, separat aufgezeichnete Aufzeichnung möglich. Der
+Schattenbericht darf nur eigene technische Beobachtungen liefern,
+nie eine nachträgliche Bewertung der historischen Extraktion.
 
 For separate replay and diagnosis commands instead of C:
 

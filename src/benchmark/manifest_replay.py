@@ -42,6 +42,7 @@ EXTRACTIONS_FILENAME = "extractions.jsonl"
 REJECTS_FILENAME = "extractions.rejects.jsonl"
 REPLAY_REPORT_FILENAME = "replay_report.json"
 EMPTY_REVIEW_FILENAME = "empty_chunk_review.json"
+OFFLINE_DIAGNOSTICS_FILENAME = "offline_diagnostics.json"
 _MAX_RECORDING_CHUNKS = 2
 _RECORDING_POLICY = {
     "max_total_post_attempts": None,
@@ -62,6 +63,7 @@ _IMPLEMENTATION_PATHS = (
     "requirements.txt",
     "src/benchmark/empty_chunk_review.py",
     "src/benchmark/manifest_comparison.py",
+    "src/benchmark/offline_diagnostics.py",
     "src/benchmark/manifest_recording.py",
     "src/benchmark/manifest_replay.py",
     "src/benchmark/two_chunk_experiment.py",
@@ -569,6 +571,7 @@ def load_recording(recording_dir: Path) -> dict:
     manifest["_verified_inputs"] = verified_inputs
     manifest["_verified_artifacts"] = verified_artifacts
     manifest["_manifest_sha256"] = sha256_bytes(manifest_path.read_bytes())
+    manifest["_verified_attempts"] = attempts_bytes
     manifest["_chunks"] = chunks
     return manifest
 
@@ -674,7 +677,11 @@ def _write_empty_review(manifest: dict, output_dir: Path, exact: dict[str, Any])
 
 
 def replay_run(
-    *, recording_dir: Path, output_dir: Path, whitespace_comparison: bool = False
+    *,
+    recording_dir: Path,
+    output_dir: Path,
+    whitespace_comparison: bool = False,
+    offline_diagnostics: bool = False,
 ) -> dict:
     """Replay a verified recording offline and require byte-identical artifacts."""
     manifest = load_recording(recording_dir)
@@ -753,6 +760,18 @@ def replay_run(
     }
     private_write(output / REPLAY_REPORT_FILENAME, _json_bytes(report))
     _write_empty_review(manifest, output, exact)
+    if offline_diagnostics:
+        from src.benchmark.offline_diagnostics import build_offline_diagnostics
+
+        diagnostics = build_offline_diagnostics(manifest)
+        diagnostics_bytes = _json_bytes(diagnostics)
+        private_write(output / OFFLINE_DIAGNOSTICS_FILENAME, diagnostics_bytes)
+        report["offline_diagnostics"] = {
+            "path": OFFLINE_DIAGNOSTICS_FILENAME,
+            "sha256": sha256_bytes(diagnostics_bytes),
+            "size": len(diagnostics_bytes),
+        }
+        private_write(output / REPLAY_REPORT_FILENAME, _json_bytes(report))
     if whitespace_comparison:
         from src.benchmark.manifest_comparison import compare_whitespace
 

@@ -55,6 +55,11 @@ def _parser() -> argparse.ArgumentParser:
     replay.add_argument("--recording-dir", type=Path, required=True)
     replay.add_argument("--output-dir", type=Path, required=True)
     replay.add_argument("--compare-whitespace", action="store_true")
+    replay.add_argument(
+        "--offline-diagnostics",
+        action="store_true",
+        help="write a deterministic shadow report from verified recording artifacts",
+    )
     return parser
 
 
@@ -97,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
                 recording_dir=args.recording_dir,
                 output_dir=args.output_dir,
                 whitespace_comparison=args.compare_whitespace,
+                offline_diagnostics=args.offline_diagnostics,
             )
             if report["status"] == "matched":
                 extractions = report["exact"]["files"]["extractions"]["actual_sha256"]
