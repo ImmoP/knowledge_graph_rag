@@ -381,3 +381,23 @@ only. The broader historical provenance test also requires the existing local
 * GPT-5.6 Sol is not wired in yet; the adapter and runner are ready
   for it (`openai/gpt-5.6-sol-subscription` from `~/.omp/agent/models.yml`)
   but no smoke comparison has been written.
+
+## Scope-2 Pilot (`ai_reviewed_provisional_scope2`)
+
+The Scope-2 pilot is a deliberately tiny offline gate covering exactly two
+frozen chunks from the historical Manifest auto-routing run
+`20260930T083857Z-c69654`:
+
+* `c_61090bb37bc1e7a9` — positive reference: `method`
+  `Switch Transformer` at byte offsets `[46, 64)`.
+* `c_c0de5074475c9c0f` — negative control: empty under the restricted
+  ontology.
+
+Three withheld chunks (`c_2a9f84f5fe0ce2ce`, `c_7fdad3ec8f3e783b`,
+`c_d285f0a62ff9479b`) are excluded and never appear in any gate output.
+Scope is `ai_reviewed_provisional_scope2`, `human_gold=false`, no
+automatic gold import, no global precision/recall/F1 metrics, no model
+ranking.  All four historical artifact hashes are pinned and verified
+byte-by-byte before any report is emitted.  See
+`docs/benchmark/ai-reviewed-provisional-scope2.md` for full commands,
+provenance and methodology limits.
