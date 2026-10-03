@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import sys
 import zipfile
@@ -27,11 +28,20 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = REPO_ROOT / "src" / "benchmark" / "scope2_pilot.py"
 PILOT_ROOT = Path(
-    "/home/immo/migration-incoming/pilot/kg_rag_ai_pilot_scope2_20261001"
+    os.environ.get(
+        "KG_RAG_SCOPE2_PILOT_ROOT",
+        Path.home() / "migration-incoming" / "pilot" / "kg_rag_ai_pilot_scope2_20261001",
+    )
 )
 DATASET_PATH = REPO_ROOT / "src" / "benchmark" / "dataset" / "benchmark_chunks.jsonl"
 HISTORICAL_ROOT = Path(
-    "/home/immo/migration-incoming/manifest-auto-autopilot-live/20260930T083857Z-c69654"
+    os.environ.get(
+        "KG_RAG_SCOPE2_HISTORICAL_ROOT",
+        Path.home()
+        / "migration-incoming"
+        / "manifest-auto-autopilot-live"
+        / "20260930T083857Z-c69654",
+    )
 )
 
 
